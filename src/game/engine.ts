@@ -215,10 +215,11 @@ function acceptOrder(state: GameState): GameState {
   return maybeTriggerEvent(clampState(next), 'delivery', 0.26);
 }
 
-function completeOrder(state: GameState, pushing = false): GameState {
-  const order = state.activeOrder;
-  if (!order || state.gameOver || (!pushing && ridingBlockReason(state))) return state;
-  const foot = pushingCosts(state), costs = deliveryCosts(order, state.bike);
+export function completeDelivery(state: GameState, order: DeliveryOrder, pushing = false): GameState {
+  if (state.gameOver || state.pendingEventId || state.cultivation.trial) return state;
+  const costs = deliveryCosts(order, state.bike);
+  if (!pushing && (state.bikeBattery <= 0 || state.bike.condition <= 0 || state.bikeBattery < costs.battery || state.bike.condition < costs.wear)) return state;
+  const foot = pushingCosts({ ...state, activeOrder: order });
   if (pushing && state.energy < foot.energy) return state;
   let next = state, variance = 0;
   if (!pushing) [variance, next] = randomInt(next, -4, 14);
@@ -230,12 +231,18 @@ function completeOrder(state: GameState, pushing = false): GameState {
   // All requirements are checked before RNG, time, payment or order state can change.
   next = advanceTime({ ...next, energy: Math.max(0, next.energy - energyCost),
     bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
-    bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) }, activeOrder: null }, actualMinutes);
+    bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) },
+    activeOrder: state.activeOrder?.id === order.id ? null : state.activeOrder }, actualMinutes);
   if (next.gameOver) return next;
   next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
     reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
   next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
+}
+
+function completeOrder(state: GameState, pushing = false): GameState {
+  const order = state.activeOrder;
+  return order ? completeDelivery(state, order, pushing) : state;
 }
 
 function upgradeBike(state: GameState, id: BikeUpgrade): GameState {
