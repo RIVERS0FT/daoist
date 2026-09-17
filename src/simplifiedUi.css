@@ -17,4 +17,38 @@
 .start-help[open] summary{border-bottom:1px solid #40523f}
 .start-help-body{display:grid;gap:10px;padding:13px 15px 15px;color:#aab5a3;font-size:11px;line-height:1.75}
 .start-help-body p{margin:0}
-@media(max-width:760px){.game-identity h1{max-width:9rem}.help-list summary{min-height:44px;display:flex;align-items:center}}
+
+/* Keep the in-game header focused on the current character and scan-friendly state groups. */
+.status-bar{grid-template-columns:minmax(150px,auto) minmax(155px,auto) minmax(470px,1fr) auto;gap:18px;padding-inline:24px}
+.game-identity{padding-right:18px;border-right:1px solid #384336}
+.game-identity>div{min-width:0}
+.game-identity h1{margin:0;line-height:1.15}
+.realm-button{padding-bottom:0}
+.game-shell .clock-block{padding:0;border-right:0;min-width:0}
+.game-shell .clock-block small{display:block;margin-top:5px;color:#7f8d80;font-size:9px;white-space:nowrap}
+.status-meters{align-items:stretch;gap:6px;padding:5px;border:1px solid #303d32;border-radius:11px;background:#11191466}
+.status-meter{min-height:42px;padding:6px 8px;border-radius:8px}
+.status-meter:nth-child(4){margin-left:3px;border-left:1px solid #394739;border-radius:0 8px 8px 0;padding-left:11px}
+.mode-chip{min-height:36px;padding:8px 11px}
+
+@media(max-width:1100px){
+  .status-bar{grid-template-columns:minmax(0,1fr) auto;row-gap:10px;padding-inline:18px}
+  .game-identity{padding-right:0;border-right:0}
+  .game-shell .clock-block{text-align:right;padding:0;border:0}
+  .status-meters{grid-column:1/-1}
+  .mode-chip{display:none}
+}
+@media(max-width:760px){
+  .game-identity h1{max-width:9rem}
+  .help-list summary{min-height:44px;display:flex;align-items:center}
+  .status-meters{padding:4px;gap:3px}
+  .status-meter{min-height:38px;padding:5px 6px}
+  .status-meter:nth-child(4){margin-left:0;padding-left:7px}
+}
+@media(max-width:520px){
+  .status-bar{row-gap:7px}
+  .game-identity h1{max-width:8rem}
+  .status-meters{border-radius:9px}
+  .status-meter{min-height:34px;padding:3px 5px}
+  .status-meter:nth-child(4){border-left:0;padding-left:5px}
+}
