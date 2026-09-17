@@ -16,6 +16,11 @@ interface GameStore {
   reset: () => Promise<void>;
 }
 
+function saveVersion(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || !('version' in value)) return undefined;
+  return (value as { version?: unknown }).version;
+}
+
 export const useGameStore = create<GameStore>((set, get) => {
   const commit = (game: GameState) => {
     set({ game });
@@ -30,7 +35,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       const migrated = migrateGameState(saved);
       const game = migrated ?? get().game;
       set({ game, hydrated: true });
-      if (migrated && saved?.version !== 2) await saveGame(game);
+      if (migrated && saveVersion(saved) !== 2) await saveGame(game);
     },
     act: (action) => commit(runAction(get().game, action)),
     socialize: (npcId) => commit(socializeNpc(get().game, npcId)),
