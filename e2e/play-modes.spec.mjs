@@ -6,6 +6,7 @@ const scene = { title: '桥下的纸鹤', description: '纸鹤反复落在同一
 ] };
 async function ready(page) {
   await page.goto('./'); await expect(page.getByRole('heading', { name: '外卖修仙', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: '奇遇', exact: true }).click();
 }
 async function configure(page) {
   await page.getByRole('button', { name: /^AI 生成剧情/ }).click();
@@ -55,6 +56,12 @@ test('AI scene choices persist across reload and finish offline after mode switc
   await page.getByRole('button', { name: /^生成下一段奇遇/ }).click();
   await expect(page.getByRole('heading', { name: scene.title, exact: true })).toBeVisible();
   await expect.poll(async () => (await saved(page))?.play?.scene?.title).toBe(scene.title);
+  await expect(page.getByRole('region', { name: '当前自由奇遇' })).toBeFocused();
+  const bounds = await page.locator('.drawer-body').boundingBox();
+  const heading = await page.getByRole('heading', { name: scene.title, exact: true }).boundingBox();
+  expect(heading.y).toBeGreaterThanOrEqual(bounds.y);
+  expect(heading.y + heading.height).toBeLessThan(bounds.y + bounds.height);
+  await page.screenshot({ path: info.outputPath('map-ai-scene.png'), fullPage: true });
   await page.reload(); await expect(page.getByRole('heading', { name: scene.title, exact: true })).toBeVisible(); expect(generations).toBe(1);
   await page.getByRole('button', { name: /^经典剧情/ }).click();
   await page.getByRole('button', { name: /^到此为止/ }).click();
@@ -72,6 +79,7 @@ test('AI service error transparently falls back to authored choices', async ({ p
   await expect(page.getByRole('status')).toContainText('503');
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
+  await page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: '跑单', exact: true }).click();
   await expect(page.getByRole('button', { name: /^接一个新订单/ })).toBeEnabled();
 });
 test('unconfigured generation is honest and classic fallback remains playable', async ({ page }) => {

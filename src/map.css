@@ -1,0 +1,163 @@
+/* Map-first shell. The original panels keep their gameplay behavior. */
+html, body, #root { height: 100%; }
+body { overflow: hidden; }
+.game-shell { --ink: #e9e7da; --muted: #a5ad9e; --gold: #d8bc80; --edge: #39483d; display: flex; flex-direction: column; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background: #141e19; color: var(--ink); }
+.game-shell button { -webkit-tap-highlight-color: transparent; }
+.game-shell button:focus-visible, .game-shell summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.game-shell button:disabled { transform: none; }
+.game-shell .eyebrow { font-size: 10px; letter-spacing: .16em; color: #b9ac86; }
+.status-bar { position: relative; z-index: 30; flex: 0 0 auto; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: max(16px, env(safe-area-inset-top)) 28px 16px; background: #151d19; border-bottom: 1px solid #4a4c3a; box-shadow: 0 6px 24px #050b0733; }
+.game-identity { display: flex; align-items: center; gap: 12px; }
+.game-seal { display: grid; place-items: center; width: 40px; height: 43px; border: 1px solid #a99061; border-radius: 8px 2px; background: #282a1e; color: var(--gold); font: 25px Georgia, 'Songti SC', serif; }
+.game-shell h1 { font-size: 21px; letter-spacing: .12em; line-height: 1.3; white-space: nowrap; }
+.realm-button { display: flex; align-items: center; gap: 10px; border: 0; padding: 5px 0; background: none; color: #c7b58a; font-size: 11px; cursor: pointer; min-height: 26px; }
+.realm-button span { font-size: 10px; color: #8b9888; }
+.game-shell .clock-block { text-align: left; padding: 0 22px 0 0; border-right: 1px solid #384336; }
+.game-shell .clock-block strong { font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.game-shell .clock-block > span { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); }
+.status-meters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.status-meter { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.status-meter > svg { color: #a0aa8c; flex: 0 0 auto; }
+.status-meter span, .status-meter strong { display: block; white-space: nowrap; }
+.status-meter span { color: #9faa99; font-size: 10px; margin-bottom: 4px; }
+.status-meter strong { color: #e8e7d8; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.status-meter.low strong, .status-meter.low > svg { color: #e8ad96; }
+.mode-chip { display: flex; align-items: center; gap: 7px; border: 1px solid #4c5140; border-radius: 24px; padding: 10px 12px; background: #222b21; color: #d0c7a7; font-size: 11px; cursor: pointer; white-space: nowrap; min-height: 40px; }
+.mode-dot { width: 5px; height: 5px; border-radius: 50%; background: #abbc83; }
+.storage-alert { flex: 0 0 auto; z-index: 31; padding: 8px 16px; color: #ffdab7; background: #4e3426; font-size: 12px; overflow-wrap: anywhere; }
+.storage-alert button { margin-left: 10px; border: 1px solid #ae805a; padding: 6px; color: inherit; background: none; cursor: pointer; }
+.map-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: radial-gradient(ellipse at 52% 40%, #253327, #111c17 80%); }
+.map-title { position: absolute; z-index: 3; top: 22px; left: 30px; pointer-events: none; }
+.map-title h2 { font: 29px Georgia, 'Songti SC', serif; letter-spacing: .16em; margin: 6px 0 0; }
+.map-title h2 span { font: 11px system-ui, sans-serif; letter-spacing: .07em; color: #909f8c; margin-left: 18px; }
+.map-viewport { position: absolute; inset: 84px 0 116px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #4c5d49 transparent; cursor: grab; user-select: none; touch-action: pan-x pan-y; outline-offset: -3px; }
+.map-viewport:active { cursor: grabbing; }
+.map-world { position: relative; margin-inline: auto; flex: none; }
+.city-artwork { width: 100%; height: 100%; position: absolute; inset: 0; pointer-events: none; }
+.map-land { fill: #1b291e; }
+.map-gridlines { color: #76916b; opacity: .12; }
+.map-park { fill: #293b25; stroke: #526146; stroke-width: 1; }
+.mountain-contours { stroke: #6c7c50; stroke-width: 1; opacity: .45; }
+.river-bank { fill: none; stroke: #3a5744; stroke-width: 88; }
+.map-river { fill: none; stroke: #213d39; stroke-width: 74; }
+.river-current { fill: none; stroke: #65948a; stroke-width: 1; opacity: .3; stroke-dasharray: 120 24; }
+.city-blocks { fill: #2d3c2b; stroke: #52604a; stroke-width: 1; color: #b9ab70; }
+.city-blocks g > rect + rect { stroke: none; opacity: .27; }
+.side-streets { stroke: #596346; stroke-width: 4; opacity: .35; }
+.street-borders { stroke: #40503b; stroke-width: 27; stroke-linejoin: round; }
+.streets { stroke: #202e21; stroke-width: 23; stroke-linejoin: round; }
+.street-centers { stroke: #7d8260; stroke-width: 1; stroke-dasharray: 7 10; opacity: .35; }
+.map-trees { fill: #394e2d; stroke: #5c7047; stroke-width: 1; opacity: .75; }
+.district-labels { fill: #8b9b74; font: 16px Georgia, 'Songti SC', serif; letter-spacing: .18em; opacity: .6; }
+.delivery-line { stroke: #e5c47d; stroke-width: 3; stroke-dasharray: 8 6; filter: drop-shadow(0 0 5px #d4a96266); }
+.map-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 5px; transform: translate(-50%, -39%); width: 144px; min-height: 84px; border: 0; padding: 0; background: none; color: #e2dcc0; cursor: pointer; z-index: 1; }
+.pin-emblem { display: grid; place-items: center; position: relative; flex: none; width: 50px; height: 50px; margin-bottom: 3px; border: 1px solid #87966c; border-radius: 15px; background: #253324; color: #c8c39a; box-shadow: 0 5px 12px #030d0744; transition: transform .18s, background .18s; }
+.pin-emblem::before { content: ''; position: absolute; inset: -4px; border: 1px solid #73806650; border-radius: 18px; }
+.map-pin strong { font-size: 14px; font-weight: 500; letter-spacing: .03em; text-shadow: 0 2px 4px #09140a, 0 0 6px #09140a; line-height: 1.3; }
+.map-pin small { font-size: 10px; color: #a6b099; line-height: 1.4; text-shadow: 0 1px 4px #09140a; }
+.map-pin:hover .pin-emblem, .map-pin:focus-visible .pin-emblem { transform: translateY(-3px); background: #3f4a30; }
+.map-pin:focus-visible { border-radius: 10px; outline-offset: 5px; }
+.mystic-pin .pin-emblem { border-color: #7c8888; color: #bdc6c9; background: #2b3833; }
+.map-pin.selected .pin-emblem { color: #242d1c; background: #d6bd7d; border-color: #e9dbaa; box-shadow: 0 0 24px #d9b56425; }
+.map-pin.selected .pin-emblem::before { border-color: #b69d64; }
+.map-pin.selected strong { color: #f2dfaa; }
+.route-pin { position: absolute; right: -8px; top: -8px; width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; background: #ebcd85; color: #27301d; font-size: 10px; border: 2px solid #27321e; }
+.map-tools { position: absolute; right: 28px; top: 22px; z-index: 4; display: flex; gap: 12px; align-items: flex-start; }
+.map-tools button { border: 1px solid #536048; background: #1d2b22f5; color: #cbd0bb; cursor: pointer; min-width: 44px; min-height: 44px; display: flex; justify-content: center; align-items: center; }
+.place-list-button { border-radius: 10px; padding: 0 12px; gap: 8px; font-size: 12px; }
+.zoom-tools { display: flex; flex-direction: column; border: 1px solid #536048; border-radius: 10px; overflow: hidden; }
+.game-shell .zoom-tools button { border: 0; border-bottom: 1px solid #3f4f3c; }
+.game-shell .zoom-tools button:last-child { border-bottom: 0; }
+.map-caption { position: absolute; bottom: 131px; left: 30px; z-index: 2; display: flex; align-items: center; gap: 7px; color: #919f88; font-size: 10px; pointer-events: none; }
+.legend-dot { width: 5px; height: 5px; border: 1px solid #c2c296; display: inline-block; transform: rotate(45deg); }
+.legend-dot.mystic { border-color: #a8c3c0; margin-left: 12px; }
+.map-help { margin-left: 16px; color: #b0b99e; }
+.map-compass { position: absolute; top: 222px; right: 37px; display: flex; align-items: center; flex-direction: column; gap: 9px; color: #94a47b; font-size: 10px; pointer-events: none; }
+.map-task { position: absolute; z-index: 4; right: 28px; bottom: 22px; width: 284px; background: #19231bf5; border: 1px solid #4e5842; border-radius: 13px; padding: 15px 17px; box-shadow: 0 8px 22px #07100944; }
+.map-task > strong { display: block; font-size: 14px; font-weight: 500; margin: 7px 0; overflow-wrap: anywhere; }
+.map-task p { font-size: 11px; line-height: 1.6; color: var(--muted); margin: 0 0 8px; }
+.map-task button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 0; border-top: 1px solid #3b4833; padding: 9px 0 0; min-height: 36px; color: #d4bd80; background: none; font-size: 12px; cursor: pointer; }
+.map-task.requires-attention { border-color: #a58e62; }
+.nav-dock { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: max(28px, env(safe-area-inset-left)); z-index: 60; display: flex; gap: 4px; padding: 7px; background: #172019f5; border: 1px solid #5a6047; border-radius: 17px; box-shadow: 0 8px 28px #0005; max-width: calc(100% - 24px); }
+.nav-button { position: relative; min-height: 62px; width: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 7px 4px; border: 1px solid transparent; border-radius: 11px; color: #adb8a0; background: transparent; cursor: pointer; font-size: 11px; }
+.nav-button[aria-pressed=true], .nav-button[aria-expanded=true] { color: #e7d29c; background: #333b28; border-color: #5d6747; }
+.nav-button:hover { color: #e7d29c; background: #2c3726; }
+.nav-indicator { position: absolute; top: 8px; right: 11px; width: 5px; height: 5px; border-radius: 50%; background: #e0bd77; }
+.more-button { border-left: 1px solid #3b4833; }
+.more-navigation { position: absolute; left: 0; bottom: calc(100% + 10px); width: 242px; max-width: calc(100vw - 24px); background: #1d2820; border: 1px solid #60694b; padding: 13px; border-radius: 13px; box-shadow: 0 6px 24px #0006; }
+.more-navigation > span { display: block; margin: 0 0 8px 8px; }
+.more-navigation button { display: flex; gap: 11px; align-items: center; width: 100%; border: 0; border-radius: 6px; background: none; color: #d9dccb; min-height: 44px; font-size: 12px; padding: 8px; cursor: pointer; text-align: left; }
+.more-navigation button:hover { background: #35412c; }
+.nav-badge { margin-left: auto; color: #e1c88b; font-size: 10px; }
+.game-drawer { position: absolute; z-index: 20; top: 18px; bottom: 110px; right: 28px; width: 434px; max-width: calc(100% - 24px); border: 1px solid #677055; border-radius: 18px; background: #19231efc; box-shadow: 0 14px 52px #0007; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.game-drawer:focus { outline: none; }
+.drawer-heading { display: flex; justify-content: space-between; align-items: center; flex: 0 0 auto; gap: 12px; padding: 17px 19px; border-bottom: 1px solid #3c4a38; background: #212c22; }
+.drawer-heading h2 { font-family: Georgia, 'Songti SC', serif; font-size: 22px; letter-spacing: .06em; margin: 6px 0 0; }
+.drawer-close { display: grid; place-items: center; width: 44px; height: 44px; flex: none; background: #2c3629; border: 1px solid #515d44; border-radius: 12px; color: #d2d6be; cursor: pointer; }
+.drawer-body { overflow: auto; overscroll-behavior: contain; min-height: 0; padding: 18px; scrollbar-width: thin; scrollbar-color: #5b684b transparent; scroll-padding: 15px; }
+.game-shell .game-drawer .panel { padding: 0; border: 0; border-radius: 0; margin: 0; background: transparent; }
+.game-shell .game-drawer .section-heading { flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.game-shell .game-drawer .section-heading h2, .game-shell .game-drawer .section-heading h3 { margin: 0; font-size: 15px; line-height: 1.5; }
+.game-shell .game-drawer .section-heading span { color: #a4ad96; font-size: 11px; }
+.game-shell .panel-note, .place-intro p, .settings-save p, .resolved-event p { font-size: 13px; line-height: 1.8; color: #bac3ae; margin: 0 0 17px; }
+.place-intro { border-bottom: 1px solid #384a35; margin-bottom: 17px; }
+.place-intro > span { color: #d3bd87; font-size: 11px; }
+.place-intro p { margin-top: 6px; }
+.pending-link { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; margin-bottom: 14px; width: 100%; min-height: 44px; border: 1px solid #897750; border-radius: 9px; background: #393426; color: #eddaab; font-size: 12px; cursor: pointer; text-align: left; }
+.game-shell .action-button { background: #2b3628; border-color: #566047; min-height: 70px; padding: 13px; font-size: 13px; }
+.game-shell .action-button:hover:not(:disabled) { background: #35412d; border-color: #a4a16d; }
+.game-shell .action-button small { color: #b2bea3; font-size: 11px; line-height: 1.6; }
+.game-shell .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.game-shell .order-card { background: #141f19; border-color: #556249; padding: 16px; }
+.game-shell .order-card h3 { font: 21px Georgia, 'Songti SC', serif; margin: 10px 0; }
+.game-shell .order-card p { color: #bac5b0; line-height: 1.7; }
+.info-row { display: flex; justify-content: space-between; gap: 14px; padding: 16px 0; color: #d4c9a2; font-size: 12px; }
+.cultivation-summary { text-align: center; border-bottom: 1px solid #3d4b3b; margin-bottom: 17px; padding: 2px 0 17px; }
+.cultivation-summary > span { color: #b9c8af; font-size: 13px; }
+.cultivation-summary > strong { display: block; color: #e1cea0; font: 40px Georgia, serif; margin: 10px 0; }
+.cultivation-summary small { font: 12px system-ui, sans-serif; }
+.cultivation-summary p { margin: 0; color: #9eaf98; font-size: 12px; }
+.game-shell .game-drawer .npc-grid, .game-shell .game-drawer .ending-grid { grid-template-columns: 1fr; gap: 13px; }
+.game-shell .npc-card { padding: 16px; border-color: #4b5b42; background: #202d22; }
+.game-shell .npc-card.unmet { opacity: 1; background: #1b271f; }
+.game-shell .npc-card-head p { color: #a8b399; font-size: 11px; margin-top: 5px; }
+.game-shell .npc-bio { min-height: 0; color: #b1bba6; font-size: 12px; line-height: 1.8; }
+.game-shell .npc-unknown { color: #a0ad96; font-size: 11px; line-height: 1.7; }
+.game-shell .relationship-metrics { font-size: 11px; color: #b5bea7; gap: 7px; }
+.game-shell .social-button { min-height: 44px; border-color: #5d694b; background: #2c3827; color: #e6dfc5; font-size: 13px; }
+.game-shell .social-button small { color: #b3bd9f; }
+.game-shell .ending-grid button { border-color: #5e6448; background: #253022; min-height: 130px; }
+.game-shell .ending-grid button > p { color: #bac0a6; font-size: 12px; }
+.game-shell .ending-grid button > span { color: #c1b57e; font-size: 11px; }
+.game-shell .ending-note { color: #b0b99e; font-size: 12px; }
+.game-shell .log-list li { grid-template-columns: 1fr; gap: 5px; padding: 13px 0; border-color: #3c4b36; }
+.game-shell .log-list time { color: #a2ad92; font-size: 11px; }
+.game-shell .log-list p { color: #c3ccb8; font-size: 12px; line-height: 1.8; }
+.game-shell .log-list .mystic p { color: #c9b9d2; }.game-shell .log-list .bad p { color: #d7ae95; }
+.game-shell .event-panel { padding: 16px; margin: 0; background: #28252b; border-color: #7e7281; }
+.game-shell .event-panel h2 { font-size: 23px; }.game-shell .event-panel p { color: #e2d8cc; font-size: 14px; }
+.game-shell .event-choices { flex-direction: column; }.game-shell .event-choices button { width: 100%; text-align: left; font-size: 13px; line-height: 1.6; }
+.game-shell .event-choices button small { color: #c3b6c5; font-size: 11px; }
+.game-shell .gameover { margin: 0; padding: 18px; }.game-shell .gameover h3 { font-size: 23px; line-height: 1.6; }.game-shell .gameover p { font-size: 13px; line-height: 1.7; }
+.last-result { margin-top: 20px; padding: 14px 0 0; border-top: 1px solid #3e4c36; }
+.last-result > span { color: #a0af91; font-size: 10px; }.last-result p { color: #c1c8b3; font-size: 12px; line-height: 1.7; margin: 7px 0; }
+.place-directory > button { display: flex; align-items: center; gap: 13px; width: 100%; background: #253222; border: 1px solid #4e6046; border-radius: 10px; color: #c7cea9; padding: 12px; margin-bottom: 9px; cursor: pointer; }
+.place-directory > button > span { flex: 1; text-align: left; }.place-directory strong { display: block; font-size: 13px; font-weight: 500; }.place-directory small { display: block; font-size: 11px; margin-top: 5px; color: #a0b196; }
+.resolved-event { text-align: center; padding: 15px 0; }.resolved-event > svg { color: #c6b784; margin-bottom: 18px; }.resolved-event h3 { font-size: 20px; font-family: Georgia, 'Songti SC', serif; }
+.primary-button { width: 100%; padding: 13px; color: #e8d4a6; background: #38422a; border: 1px solid #73825a; border-radius: 9px; cursor: pointer; }
+.settings-save { margin-top: 20px; border-top: 1px solid #48503c; padding-top: 18px; }.settings-save h3 { font-size: 15px; }.game-shell .reset-button { color: #e2b9a6; border-color: #806757; min-height: 44px; }
+.game-shell .game-drawer .play-mode-switch, .game-shell .game-drawer .exploration-form, .game-shell .game-drawer .generated-choices { grid-template-columns: 1fr; }
+.game-shell .play-mode-panel .intent-field { grid-column: auto; }
+.game-shell .play-mode-switch button { padding: 12px; background: #283227; border-color: #536045; }.game-shell .play-mode-switch button[aria-pressed=true] { background: #3c402b; border-color: #c6bb7d; box-shadow: none; }
+.game-shell .play-mode-switch strong { font-size: 13px; }.game-shell .play-mode-switch span { font-size: 11px; color: #bfcaad; }
+.game-shell .ai-settings summary, .game-shell .scene-memories summary { line-height: 1.7; min-height: 40px; padding-top: 8px; }
+.game-shell .clues { margin-top: 0; margin-bottom: 14px; }.game-shell .clues summary { cursor: pointer; min-height: 36px; font-size: 13px; color: #b5c29f; }.game-shell .clues li { color: #a8b699; overflow-wrap: anywhere; font-size: 12px; }
+.game-shell .play-controls button { font-size: 12px; }.game-shell .explore-button { background: #3a452d; border-color: #6f7952; font-size: 13px; }
+.night-map .map-stage { background: radial-gradient(ellipse at 52% 40%, #1c2b27, #101a17 80%); }.night-map .map-land { fill: #17241f; }.night-map .city-blocks { fill: #243128; color: #e2c17a; }.night-map .city-blocks g > rect + rect { opacity: .55; }.night-map .map-river { stroke: #1b3132; }
+.game-shell[data-weather=rain] .map-stage::after, .game-shell[data-weather=storm] .map-stage::after { content: ''; pointer-events: none; position: absolute; inset: 0; background: repeating-linear-gradient(110deg, transparent 0 55px, #a0c3c109 55px 56px, transparent 56px 110px); z-index: 2; }
+@media (max-width: 1100px) { .status-bar { gap: 16px; padding-inline: 20px; grid-template-columns: auto auto 1fr; }.mode-chip { display: none; }.status-meters { gap: 10px; }.status-meter { gap: 5px; }.game-shell .clock-block { padding-right: 15px; }.game-identity { gap: 8px; } }
+@media (max-width: 780px) { .status-bar { grid-template-columns: minmax(0, 1fr) auto; gap: 9px; padding: 12px 16px; }.status-meters { grid-column: 1 / -1; border-top: 1px solid #344231; padding-top: 9px; }.game-shell .clock-block { border: 0; padding: 0; text-align: right; }.game-shell h1 { font-size: 20px; }.game-seal { width: 35px; height: 38px; font-size: 23px; }.map-title { top: 19px; left: 18px; }.map-title h2 span { display: none; }.map-task { width: 240px; right: 18px; }.map-tools { right: 18px; gap: 7px; }.game-drawer { right: 18px; }.nav-dock { left: 18px; }.nav-button { width: 53px; }.map-caption { left: 18px; }.map-help { display: none; } }
+@media (max-width: 520px) { .status-bar { padding: max(9px, env(safe-area-inset-top)) 12px 10px; }.game-identity { gap: 7px; }.game-shell h1 { font-size: 18px; }.realm-button { font-size: 10px; gap: 8px; min-height: 24px; }.realm-button span { font-size: 9px; }.game-seal { width: 30px; height: 34px; font-size: 20px; }.game-shell .clock-block strong { font-size: 12px; }.game-shell .clock-block > span { font-size: 10px; }.status-meters { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; }.status-meter { gap: 7px; }.status-meter span { font-size: 9px; margin-bottom: 2px; }.status-meter strong { font-size: 12px; }.status-meter > svg { width: 16px; height: 16px; }.map-title { left: 14px; top: 16px; }.map-title > .eyebrow { font-size: 8px; }.map-title h2 { font-size: 25px; }.map-tools { top: 16px; right: 12px; gap: 8px; }.map-tools button { min-width: 42px; min-height: 44px; }.place-list-button { padding-inline: 10px; }.map-viewport { inset: 88px 0 170px; }.map-caption { top: 70px; bottom: auto; left: 15px; font-size: 0; gap: 0; }.map-caption .legend-dot { display: none; }.map-caption .map-help { display: block; font-size: 10px; margin: 0; }.map-compass { display: none; }.map-task { left: 12px; right: 12px; bottom: 86px; width: auto; padding: 10px 13px; }.map-task > .eyebrow { font-size: 8px; }.map-task > strong { font-size: 12px; margin-block: 4px; }.map-task p { display: none; }.map-task button { font-size: 11px; min-height: 33px; padding-top: 6px; }.nav-dock { bottom: max(12px, env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); padding: 5px; gap: 1px; border-radius: 13px; }.nav-button { width: 45px; min-height: 53px; font-size: 10px; gap: 4px; padding: 4px 2px; border-radius: 8px; }.nav-button > svg { width: 20px; height: 20px; }.nav-indicator { right: 6px; top: 6px; }.game-drawer { top: 12px; bottom: 87px; right: 12px; left: 12px; width: auto; max-width: none; border-radius: 13px; }.drawer-heading { padding: 13px; }.drawer-heading h2 { font-size: 20px; }.drawer-body { padding: 13px; }.game-shell .action-grid { grid-template-columns: 1fr; }.map-pin { width: 134px; }.map-pin strong { font-size: 13px; }.game-shell .npc-card { padding: 12px; }.storage-alert { font-size: 11px; padding: 7px 12px; } }
+@media (max-height: 520px) { .status-bar { padding-block: 7px; }.status-meter > svg { display: none; }.map-title { top: 10px; }.map-viewport { inset-block: 62px 78px; }.map-caption, .map-compass { display: none; }.map-task { bottom: 13px; }.map-task p { display: none; }.map-tools { top: 10px; }.nav-dock { bottom: 10px; }.nav-button { min-height: 50px; }.game-drawer { top: 10px; bottom: 80px; }.drawer-heading { padding-block: 8px; }.drawer-heading h2 { font-size: 18px; } }
+
+.status-meter > div { min-width: 0; }.status-meter strong { overflow: hidden; text-overflow: ellipsis; }.more-navigation { max-height: min(320px, calc(100dvh - 245px)); overflow-y: auto; overscroll-behavior: contain; }
