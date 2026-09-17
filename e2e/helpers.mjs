@@ -18,7 +18,17 @@ export async function menu(page) {
   await expect(page.locator('.start-screen')).toBeVisible();
 }
 export async function readStore(page) {
-  return page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); const s = useGameStore.getState(); await s.flushSaves(); return { id: s.activeSlotId, game: s.game, play: s.play }; });
+  // Clicking a save starts an IndexedDB read. Wait for the slot transition, not a fixed delay.
+  await expect(page.locator('.game-shell')).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts');
+    const s = useGameStore.getState(); return s.screen === 'playing' && !s.slotBusy;
+  })).toBe(true);
+  return page.evaluate(async () => {
+    const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts');
+    await useGameStore.getState().flushSaves();
+    const s = useGameStore.getState(); return { id: s.activeSlotId, game: s.game, play: s.play };
+  });
 }
 export async function disk(page) {
   return page.evaluate(() => new Promise((resolve, reject) => {

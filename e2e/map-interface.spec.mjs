@@ -3,7 +3,7 @@ import { newGame, continueRecent, replaceWorld } from './helpers.mjs';
 async function ready(page) { await page.goto('./'); await newGame(page); }
 const nav = (page, label) => page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: label, exact: true });
 async function world(page) {
-  return page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); const s = useGameStore.getState(); return JSON.parse(JSON.stringify({ version: 4, game: s.game, play: s.play })); });
+  return page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); await useGameStore.getState().flushSaves(); const s = useGameStore.getState(); return JSON.parse(JSON.stringify({ version: 4, game: s.game, play: s.play })); });
 }
 async function restore(page, change) {
   const session = await world(page); change(session); await replaceWorld(page, session);
