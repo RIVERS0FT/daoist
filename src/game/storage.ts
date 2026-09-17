@@ -16,13 +16,13 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function loadGame(): Promise<GameState | null> {
+export async function loadGame(): Promise<unknown | null> {
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const request = tx.objectStore(STORE_NAME).get(SAVE_KEY);
-      request.onsuccess = () => resolve((request.result as GameState | undefined) ?? null);
+      request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error);
     });
   } catch {
