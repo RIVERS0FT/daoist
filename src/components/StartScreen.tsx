@@ -7,7 +7,7 @@ import '../start.css';
 
 export function StartScreen() {
   const { slots, slotBusy, loadBlocked, saveError, newGame, openSlot } = useGameStore();
-  const [creating, setCreating] = useState(false), [name, setName] = useState(''), [mode, setMode] = useState<PlayMode>('classic');
+  const [creating, setCreating] = useState(false), [playerName, setPlayerName] = useState(''), [mode, setMode] = useState<PlayMode>('classic');
   const latest = slots.find((slot) => slot.session);
   return <main className="start-screen" aria-label="游戏开始页面">
     <div className="start-content">
@@ -18,14 +18,14 @@ export function StartScreen() {
           <button className={latest ? 'start-secondary' : 'start-primary'} type="button" disabled={slotBusy || loadBlocked} onClick={() => setCreating((value) => !value)}>新建存档<span aria-hidden="true">＋</span></button>
         </div>
         {saveError && <p className="start-warning" role="alert">{saveError}</p>}
-        {creating && <form className="new-save-form" onSubmit={(event) => { event.preventDefault(); void newGame(name, mode); }}>
+        {creating && <form className="new-save-form" onSubmit={(event) => { event.preventDefault(); void newGame(playerName, mode); }}>
           <h2>写下新的一世</h2>
-          <label>存档名称<input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} placeholder={`第 ${slots.length + 1} 段仙途`} disabled={slotBusy} autoComplete="off" /></label>
+          <label>玩家名称<input value={playerName} onChange={(event) => setPlayerName(event.target.value)} maxLength={32} placeholder="例如：林川" disabled={slotBusy} autoComplete="off" required /></label>
           <fieldset disabled={slotBusy}><legend>剧情模式 · 开局后不可更改</legend>
             <label className={`mode-option ${mode === 'classic' ? 'selected' : ''}`}><input type="radio" name="story-mode" value="classic" checked={mode === 'classic'} onChange={() => setMode('classic')} /><span><strong>经典剧情</strong><small>人工编写的随机事件、人物分支与多结局；无需 AI，不发送 AI 请求。</small></span></label>
             <label className={`mode-option ${mode === 'generative' ? 'selected' : ''}`}><input type="radio" name="story-mode" value="generative" checked={mode === 'generative'} onChange={() => setMode('generative')} /><span><strong>AI 生成式剧情</strong><small>保留原有故事，额外生成奇遇与选择。需配置 AI 服务并授权；不可用时使用人工回退。</small></span></label>
           </fieldset>
-          <p className="start-note">每个存档独立记录模式和进度。开始新的仙途不会覆盖已有存档。</p>
+          <p className="start-note">玩家名称会显示在游戏顶部状态栏。每个存档独立记录玩家、模式和进度；开始新的仙途不会覆盖已有存档。</p>
           <button className="start-primary" type="submit" disabled={slotBusy || loadBlocked}>{slotBusy ? '正在创建…' : '开始这一世'}</button>
         </form>}
         <div className="save-list-heading"><h2>我的仙途</h2><span>{slots.length} 个存档</span></div>
@@ -33,7 +33,7 @@ export function StartScreen() {
         <div className="save-list">{slots.map((slot) => <article className="save-card" key={slot.id}>
           <div className="save-card-title"><h3>{slot.name}</h3><span>{slot.session?.play.mode === 'generative' ? 'AI 生成式' : slot.session ? '经典剧情' : '受保护'}</span></div>
           {slot.session ? <><p>第 {slot.session.game.day} 天 · {formatTime(slot.session.game.minute)} · {realmName(slot.session.game.realmLevel)}{slot.session.game.gameOver ? ' · 本世结束' : ''}</p><p>¥{Math.round(slot.session.game.money)} · 已送 {slot.session.game.completedOrders} 单</p><small>自动保存于 {new Date(slot.updatedAt).toLocaleString('zh-CN')}</small></> : <p className="start-warning">{slot.error}</p>}
-          <button className="start-secondary" type="button" disabled={slotBusy || loadBlocked || !slot.session} onClick={() => { void openSlot(slot.id); }} aria-label={`进入存档：${slot.name}`}>进入这段仙途<Icon name="arrow" size={16} /></button>
+          <button className="start-secondary" type="button" disabled={slotBusy || loadBlocked || !slot.session} onClick={() => { void openSlot(slot.id); }} aria-label={`进入玩家存档：${slot.name}`}>进入这段仙途<Icon name="arrow" size={16} /></button>
         </article>)}</div>
         <footer className="start-footer"><Icon name="leaf" size={16} /><span>每次行动自动保存，无需手动操作。存档仅保存在当前浏览器；清理网站数据会删除本机进度。</span></footer>
       </section>
