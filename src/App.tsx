@@ -1,17 +1,17 @@
 import { StartScreen } from './components/StartScreen';
-import { bikeStats, deliveryEstimate } from './game/bike';
+import { deliveryEstimate } from './game/bike';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CityMap } from './components/CityMap';
 import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, JournalPanel, LifePanel, RelationshipsPanel } from './components/GamePanels';
 import { Icon } from './components/Icon';
 import { PlayModePanel } from './components/PlayModePanel';
+import { StatusBar } from './components/StatusBar';
 import { MAP_PLACES, PANEL_TITLES } from './game/cityMap';
 import type { MapPlace, PanelId, PlaceId } from './game/cityMap';
 import { EVENT_MAP } from './game/content';
-import { formatTime, phaseFor, realmName } from './game/engine';
+import { formatTime } from './game/engine';
 import { useGameStore } from './game/store';
 
-const WEATHER = { clear: '晴', cloudy: '多云', rain: '雨', storm: '雷暴' } as const;
 const NAV = [
   { id: null, label: '地图', icon: 'map' }, { id: 'delivery', label: '跑单', icon: 'bike' },
   { id: 'cultivation', label: '修炼', icon: 'moon' }, { id: 'relationships', label: '人物', icon: 'users' },
@@ -72,22 +72,9 @@ export default function App() {
   }, [panel, more, closePanel]);
   if (!hydrated) return <main className="loading">正在读取本地存档…</main>;
   if (screen === 'start') return <StartScreen />;
-  const meters = [
-    { label: '金钱', value: `¥${Math.round(game.money).toLocaleString('zh-CN')}`, icon: 'wallet', danger: game.money < 100 },
-    { label: '灵气', value: Math.round(game.qi), icon: 'spark', danger: false },
-    { label: '精力', value: `${Math.round(game.energy)}/100`, icon: 'leaf', danger: game.energy < 25 },
-    { label: '健康', value: `${Math.round(game.health)}/100`, icon: 'heart', danger: game.health < 35 },
-    { label: '压力', value: `${Math.round(game.stress)}/100`, icon: 'clock', danger: game.stress > 70 },
-    { label: '电量', value: `${Math.round(game.bikeBattery)}/${bikeStats(game.bike).capacity}`, icon: 'battery', danger: game.bikeBattery < 20 },
-  ];
   const latest = game.log[0];
   return <main className={`game-shell ${night ? 'night-map' : 'day-map'}`} data-weather={game.weather}>
-    <header className="status-bar" role="banner" aria-label="顶部状态栏">
-      <div className="game-identity"><span className="game-seal" aria-hidden="true">道</span><div><h1>外卖修仙</h1><button type="button" className="realm-button" onClick={() => openNav('character')}>{realmName(game.realmLevel)}<span>查看状态 ›</span></button></div></div>
-      <div className="clock-block"><strong>第 {game.day} 天 · {formatTime(game.minute)}</strong><span>{phaseFor(game.minute)} · {WEATHER[game.weather]}</span><small className={`save-indicator ${saveStatus}`} aria-live="polite">{saveStatus === 'saving' ? '自动保存中…' : saveStatus === 'error' ? '自动保存失败' : '进度已自动保存'}</small></div>
-      <div className="status-meters">{meters.map((item) => <div className={`status-meter ${item.danger ? 'low' : ''}`} key={item.label}><Icon name={item.icon} size={18} /><div><span>{item.label}</span><strong>{item.value}</strong></div></div>)}</div>
-      <button type="button" className="mode-chip" onClick={() => openNav('settings')} aria-label={`游玩模式：${play.mode === 'classic' ? '经典剧情' : 'AI 生成剧情'}，打开设置`}><span className="mode-dot" />{play.mode === 'classic' ? '经典剧情' : 'AI 生成剧情'}</button>
-    </header>
+    <StatusBar game={game} mode={play.mode} playerName={currentSlot?.name ?? '未命名骑手'} saveStatus={saveStatus} onOpenCharacter={() => openNav('character')} onOpenSettings={() => openNav('settings')} />
     {saveError && <div className="storage-alert" role="alert">{saveError}<button type="button" onClick={() => openNav('settings')}>打开设置</button></div>}
     <section className="map-stage" aria-label="城市地图主界面">
       <CityMap key={activeSlotId} panelOpen={Boolean(panel)} order={game.activeOrder} position={game.position} selected={selected} onOrder={() => { setPlace(null); openPanel('delivery'); }} onPlace={openPlace} onPlaces={() => openNav('places')} />
@@ -105,7 +92,7 @@ export default function App() {
           {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
           {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'journal' && <JournalPanel />}
           {panel === 'exploration' && <PlayModePanel />}
-          {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>本机存档 · {currentSlot?.name}</h3><p>每次行动自动保存。返回开始页可继续其他存档或新建仙途，不覆盖当前进度。</p><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
+          {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>本机存档 · 玩家 {currentSlot?.name ?? '未命名骑手'}</h3><p>每次行动自动保存。返回开始页可继续其他存档或新建仙途，不覆盖当前进度。</p><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
           {panel === 'endings' && <EndingResult onReset={resetGame} />}
           {panel === 'event' && (event ? <EventPanel /> : <div className="resolved-event"><Icon name="book" size={28} /><h3>这一页，已经写下。</h3><p>{latest?.text}</p><button type="button" className="primary-button" onClick={() => openNav(game.activeOrder ? 'delivery' : null)}>{game.activeOrder ? '继续配送' : '返回地图'}</button></div>)}
           {panel === 'places' && <div className="place-directory"><p className="panel-note">这里只列出常驻功能地标。取餐与送达点仅在当前订单中显示；点击地点只查看功能，不移动玩家。</p>{MAP_PLACES.map((item) => <button key={item.id} type="button" onClick={() => openPlace(item)}><Icon name={item.icon} /><span><strong>{item.name}</strong><small>{item.subtitle}</small></span><Icon name="arrow" size={16} /></button>)}</div>}
