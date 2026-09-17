@@ -1,4 +1,6 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { deliveryCosts, deliveryEstimate } from '../game/bike';
+import { deliveryOffers } from '../game/deliveryBoard';
 import { clusterLandmarks } from '../game/mapCamera';
 import { createMapController } from '../map/controller';
 import type { MapController, CameraStatus } from '../map/controller';
@@ -7,6 +9,7 @@ import { MAP_PLACES, PLACE_MAP } from '../game/cityMap';
 import { MAP_HEIGHT, MAP_WIDTH, orderMapPoints, playerMapPoint } from '../game/deliveryLocations';
 import type { MapPoint } from '../game/deliveryLocations';
 import type { MapPlace, PlaceId } from '../game/cityMap';
+import { useGameStore } from '../game/store';
 import type { DeliveryOrder, PlayerPosition } from '../game/types';
 import { Icon } from './Icon';
 
@@ -42,7 +45,7 @@ const MapArtwork = memo(function MapArtwork({ order, player }: { order: Delivery
     <g className="street-centers" fill="none">{STREETS.map((d) => <path key={d} d={d} />)}</g>
     <g className="map-trees">{Array.from({ length: 32 }, (_, i) => <g key={i} transform={`translate(${55 + i % 8 * 65} ${48 + Math.floor(i / 8) * 30})`}><circle r="10" /><circle cy="-5" r="7" /></g>)}</g>
     <g className="district-labels"><text x="100" y="460">老 城 商 圈</text><text x="200" y="1250">西 城</text><text x="990" y="340">文 昌 学 城</text><text x="900" y="940">中 心 街 区</text><text x="1840" y="550">东 城</text><text x="2180" y="970">东 城 新 城</text><text x="1770" y="1450">滨 江 港 区</text><text x="1000" y="1360">城 南 园 区</text><text x="380" y="1520">南 站 物 流 区</text><text x="2070" y="100">青 云 山</text><text x="1600" y="940" transform="rotate(-78 1600 940)">清 河</text></g>
-    {route && <path className="delivery-line" d={`M${player.x} ${player.y}L${route.pickup.x} ${route.pickup.y}L${route.dropoff.x} ${route.dropoff.y}`} fill="none" />}
+    {route && <path className="delivery-line" d={`M${player.x} ${player.y}L${route.dropoff.x} ${route.dropoff.y}`} fill="none" />}
   </svg>;
 });
 interface CityMapProps {
@@ -52,6 +55,13 @@ interface CityMapProps {
 export function CityMap({ order, position, selected, panelOpen, onPlace, onPlaces, onOrder }: CityMapProps) {
   const viewport = useRef<HTMLDivElement>(null), world = useRef<HTMLDivElement>(null), controller = useRef<MapController | null>(null);
   const [status, setStatus] = useState<CameraStatus>({ scale: .65, minimum: .04, following: true, wheel: 'zoom' });
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const game = useGameStore((state) => state.game);
+  const playBusy = useGameStore((state) => Boolean(state.play.pending || state.play.scene || state.slotBusy || state.loadBlocked));
+  const acceptDeliveryOffer = useGameStore((state) => state.acceptDeliveryOffer);
+  const offers = playBusy ? [] : deliveryOffers(game);
+  const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) ?? null;
+  const selectedCosts = selectedOffer ? deliveryCosts(selectedOffer, game.bike) : null;
   const player = playerMapPoint(position), route = order ? orderMapPoints(order) : null;
   const groups = clusterLandmarks(MAP_PLACES, status.scale);
   useLayoutEffect(() => {
@@ -75,7 +85,7 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onPlace
       <div className="camera-menu" aria-label="地图视角控制">
         <p>单指拖动、双指捏合；从图钉上拖动不会打开地点。缩放只改变视角。</p>
         <div className="camera-menu-buttons"><button type="button" onClick={() => controller.current?.fitWorld()}>显示全图</button>
-          <button type="button" disabled={!route} onClick={() => { if (route) controller.current?.fit([player, route.pickup, route.dropoff]); }}>查看整单路线</button></div>
+          <button type="button" disabled={!route} onClick={() => { if (route) controller.current?.fit([player, route.dropoff]); }}>查看当前配送</button></div>
         <div className="camera-directions" aria-label="无需拖动的地图平移">{[['向左平移',80,0,'←'],['向上平移',0,80,'↑'],['向下平移',0,-80,'↓'],['向右平移',-80,0,'→']].map(([label,x,y,glyph]) => <button type="button" key={label} aria-label={String(label)} onClick={() => controller.current?.pan(Number(x), Number(y))}>{glyph}</button>)}</div>
         <label>滚轮行为<select aria-label="滚轮行为" value={status.wheel} onChange={e => controller.current?.setWheel(e.target.value as 'zoom' | 'pan')}><option value="zoom">鼠标：滚动缩放</option><option value="pan">触控板：滚动平移</option></select></label>
         <p>触控板捏合缩放；方向键平移，+/− 缩放，Home 定位玩家。点击“定位玩家”恢复跟随。</p>
@@ -92,13 +102,32 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onPlace
           return <button type="button" className={`map-pin ${selected === place.id ? 'selected' : ''} ${place.panel === 'cultivation' || place.panel === 'exploration' ? 'mystic-pin' : ''}`} key={place.id} data-map-x={place.x} data-map-y={place.y} style={{ left: place.x, top: place.y }} aria-label={`${place.name}，${place.subtitle}`} onClick={() => onPlace(place)}>
           <span className="pin-emblem"><Icon name={place.icon} size={25} /></span><strong>{place.name}</strong><small>{place.subtitle}</small>
         </button>; })}
-        {route && ([['pickup', route.pickup, '取', '取餐点'], ['dropoff', route.dropoff, '送', '送达点']] as const).map(([kind, point, badge, label]) => <button type="button" key={kind} className={`map-pin delivery-pin ${kind}`} data-location-id={point.id} data-map-x={point.x} data-map-y={point.y} data-testid={`delivery-${kind}`} style={{ left: point.x, top: point.y }} aria-label={`${label}：${point.name}`} onClick={onOrder}>
-          <span className="pin-emblem"><b className="route-pin">{badge}</b></span><strong>{point.name}</strong><small>{point.district} · 当前订单</small>
-        </button>)}
+        {offers.map((offer) => {
+          const point = orderMapPoints(offer).dropoff;
+          return <button type="button" key={offer.id} className={`map-pin delivery-pin offer ${selectedOfferId === offer.id ? 'selected' : ''}`} data-offer-id={offer.id} data-location-id={point.id} data-map-x={point.x} data-map-y={point.y} data-testid="delivery-offer" style={{ left: point.x, top: point.y }} aria-label={`配送任务：${offer.merchant} 到 ${point.name}，${offer.distanceKm.toFixed(1)} 公里，收入 ${offer.reward} 元`} onClick={() => setSelectedOfferId(offer.id)}>
+            <span className="pin-emblem"><b className="route-pin">单</b></span><strong>{point.name}</strong><small>{point.district} · ¥{offer.reward}</small>
+          </button>;
+        })}
+        {route && <button type="button" className="map-pin delivery-pin dropoff" data-location-id={route.dropoff.id} data-map-x={route.dropoff.x} data-map-y={route.dropoff.y} data-testid="delivery-dropoff" style={{ left: route.dropoff.x, top: route.dropoff.y }} aria-label={`配送终点：${route.dropoff.name}`} onClick={onOrder}>
+          <span className="pin-emblem"><b className="route-pin">送</b></span><strong>{route.dropoff.name}</strong><small>{route.dropoff.district} · 当前配送</small>
+        </button>}
         <div className="player-marker" role="img" aria-label={`玩家位置：${player.name}`} data-testid="player-marker" data-location-id={player.id} style={{ left: player.x, top: player.y }}><strong>你在这里</strong><span><Icon name="bike" size={21} /></span></div>
       </div>
     </div>
-    <div className="map-caption"><span className="legend-dot" />生活地标<span className="legend-dot mystic" />修行奇遇<span className="map-help">取送点随任务出现 · 单指平移，双指缩放</span></div>
+    {selectedOffer && !panelOpen && <aside className="delivery-offer-card" data-testid="delivery-offer-card" aria-label="配送任务详情">
+      <button type="button" className="delivery-offer-close" aria-label="关闭配送任务详情" onClick={() => setSelectedOfferId(null)}><Icon name="close" size={16} /></button>
+      <span className="eyebrow">{selectedOffer.strange ? '异常配送任务' : '配送任务'}</span>
+      <h3>{selectedOffer.customer}</h3>
+      <p className="delivery-offer-merchant">取餐 {selectedOffer.merchant} · 取餐已并入配送执行</p>
+      <div className="delivery-offer-meta"><span>{selectedOffer.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(selectedOffer, game.bike)} 分钟</span><strong>¥{selectedOffer.reward}</strong></div>
+      <div className="delivery-requirements" aria-label="配送要求">
+        <span>骑行电量：需 {selectedCosts?.battery ?? 0} / 当前 {Math.round(game.bikeBattery)}</span>
+        <span>车辆耐久：需 {selectedCosts?.wear ?? 0} / 当前 {Math.round(game.bike.condition)}</span>
+      </div>
+      {selectedCosts && (game.bikeBattery < selectedCosts.battery || game.bike.condition < selectedCosts.wear) && <p className="delivery-offer-warning">当前车辆不足以完整骑行；仍可接单后选择推车，或先补给。</p>}
+      <button type="button" className="primary-button delivery-accept-button" onClick={() => { acceptDeliveryOffer(selectedOffer.id); setSelectedOfferId(null); }}>接取任务 · 2 分钟</button>
+    </aside>}
+    <div className="map-caption"><span className="legend-dot" />生活地标<span className="legend-dot mystic" />修行奇遇<span className="map-help">配送任务随行动刷新 · 点击“单”查看要求</span></div>
     <div className="map-compass" aria-hidden="true"><span>北</span><svg viewBox="0 0 40 52" width="28" height="36"><path d="M20 2 32 44 20 35 8 44Z" fill="none" stroke="currentColor" /><path d="M20 2V35L8 44Z" fill="currentColor" /></svg></div>
   </>;
 }
