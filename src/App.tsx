@@ -1,3 +1,5 @@
+import { StartScreen } from './components/StartScreen';
+import { bikeStats, deliveryEstimate } from './game/bike';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CityMap } from './components/CityMap';
 import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, JournalPanel, LifePanel, RelationshipsPanel } from './components/GamePanels';
@@ -23,7 +25,10 @@ const MORE = [
 export default function App() {
   const game = useGameStore((s) => s.game), play = useGameStore((s) => s.play);
   const hydrated = useGameStore((s) => s.hydrated), hydrate = useGameStore((s) => s.hydrate);
-  const initAiSettings = useGameStore((s) => s.initAiSettings), reset = useGameStore((s) => s.reset);
+  const initAiSettings = useGameStore((s) => s.initAiSettings), returnToStart = useGameStore((s) => s.returnToStart);
+  const screen = useGameStore((s) => s.screen), activeSlotId = useGameStore((s) => s.activeSlotId);
+  const saveStatus = useGameStore((s) => s.saveStatus), slotBusy = useGameStore((s) => s.slotBusy);
+  const currentSlot = useGameStore((s) => s.slots.find((slot) => slot.id === s.activeSlotId));
   const saveError = useGameStore((s) => s.saveError), loadBlocked = useGameStore((s) => s.loadBlocked);
   const [panel, setPanel] = useState<PanelId | null>(null), [more, setMore] = useState(false);
   const [place, setPlace] = useState<MapPlace | null>(null), [selected, setSelected] = useState<PlaceId>('station');
@@ -45,16 +50,19 @@ export default function App() {
   }, []);
   const openNav = (next: PanelId | null) => { setPlace(null); if (next === null || panel === next) closePanel(); else openPanel(next); };
   const openPlace = (next: MapPlace) => { setPlace(next); setSelected(next.id); openPanel(next.panel); };
-  const resetGame = () => {
-    if (window.confirm('确定重新开局？当前本地存档会被覆盖。')) { void reset(); closePanel(); setSelected('station'); }
-  };
+  const resetGame = () => { void returnToStart(); };
+  useEffect(() => { setPanel(null); setPlace(null); setMore(false); setSelected('station'); }, [activeSlotId]);
+  useEffect(() => {
+    const guard = (event: BeforeUnloadEvent) => { const state = useGameStore.getState(); if (state.saveStatus === 'saving' || state.saveStatus === 'error') { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', guard); return () => window.removeEventListener('beforeunload', guard);
+  }, []);
   useEffect(() => { void hydrate(); initAiSettings(import.meta.env.VITE_NARRATIVE_AI_ENDPOINT as string | undefined); }, [hydrate, initAiSettings]);
   useEffect(() => {
-    if (!hydrated || loadBlocked) return;
+    if (!hydrated || loadBlocked || screen !== 'playing') return;
     if (game.gameOver) openPanel('endings');
     else if (game.pendingEventId) openPanel('event');
     else if (play.pending || play.scene) openPanel('exploration');
-  }, [hydrated, loadBlocked, game.gameOver, game.pendingEventId, play.pending?.id, play.scene?.id, openPanel]);
+  }, [hydrated, loadBlocked, screen, activeSlotId, game.gameOver, game.pendingEventId, play.pending?.id, play.scene?.id, openPanel]);
   useEffect(() => { if (panel) drawer.current?.focus({ preventScroll: true }); }, [panel]);
   useEffect(() => { if (more) document.querySelector<HTMLButtonElement>('#more-navigation button')?.focus({ preventScroll: true }); }, [more]);
   useEffect(() => {
@@ -62,19 +70,20 @@ export default function App() {
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, [panel, more, closePanel]);
   if (!hydrated) return <main className="loading">正在读取本地存档…</main>;
+  if (screen === 'start') return <StartScreen />;
   const meters = [
     { label: '金钱', value: `¥${Math.round(game.money).toLocaleString('zh-CN')}`, icon: 'wallet', danger: game.money < 100 },
     { label: '灵气', value: Math.round(game.qi), icon: 'spark', danger: false },
     { label: '精力', value: `${Math.round(game.energy)}/100`, icon: 'leaf', danger: game.energy < 25 },
     { label: '健康', value: `${Math.round(game.health)}/100`, icon: 'heart', danger: game.health < 35 },
     { label: '压力', value: `${Math.round(game.stress)}/100`, icon: 'clock', danger: game.stress > 70 },
-    { label: '电量', value: `${Math.round(game.bikeBattery)}%`, icon: 'battery', danger: game.bikeBattery < 20 },
+    { label: '电量', value: `${Math.round(game.bikeBattery)}/${bikeStats(game.bike).capacity}`, icon: 'battery', danger: game.bikeBattery < 20 },
   ];
   const latest = game.log[0];
   return <main className={`game-shell ${night ? 'night-map' : 'day-map'}`} data-weather={game.weather}>
     <header className="status-bar" role="banner" aria-label="顶部状态栏">
       <div className="game-identity"><span className="game-seal" aria-hidden="true">道</span><div><h1>外卖修仙</h1><button type="button" className="realm-button" onClick={() => openNav('character')}>{realmName(game.realmLevel)}<span>查看状态 ›</span></button></div></div>
-      <div className="clock-block"><strong>第 {game.day} 天 · {formatTime(game.minute)}</strong><span>{phaseFor(game.minute)} · {WEATHER[game.weather]}</span></div>
+      <div className="clock-block"><strong>第 {game.day} 天 · {formatTime(game.minute)}</strong><span>{phaseFor(game.minute)} · {WEATHER[game.weather]}</span><small className={`save-indicator ${saveStatus}`} aria-live="polite">{saveStatus === 'saving' ? '自动保存中…' : saveStatus === 'error' ? '自动保存失败' : '进度已自动保存'}</small></div>
       <div className="status-meters">{meters.map((item) => <div className={`status-meter ${item.danger ? 'low' : ''}`} key={item.label}><Icon name={item.icon} size={18} /><div><span>{item.label}</span><strong>{item.value}</strong></div></div>)}</div>
       <button type="button" className="mode-chip" onClick={() => openNav('settings')} aria-label={`游玩模式：${play.mode === 'classic' ? '经典剧情' : 'AI 生成剧情'}，打开设置`}><span className="mode-dot" />{play.mode === 'classic' ? '经典剧情' : 'AI 生成剧情'}</button>
     </header>
@@ -84,7 +93,7 @@ export default function App() {
       {!panel && <aside className={`map-task ${pendingPanel ? 'requires-attention' : ''}`}>
         <span className="eyebrow">{pendingPanel ? '有一段故事等你继续' : game.activeOrder ? '当前配送' : '今日行程'}</span>
         <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.activeOrder ? `${game.activeOrder.merchant} → ${game.activeOrder.customer}` : '下一站，去哪里？'}</strong>
-        <p>{pendingPanel ? '可以浏览地图，处理完当前故事后再行动。' : game.activeOrder ? `${game.activeOrder.distanceKm.toFixed(1)} km · 预计 ${game.activeOrder.estimatedMinutes} 分钟 · 路线为区域示意` : '白天奔走在人间，夜晚修一程仙途。'}</p>
+        <p>{pendingPanel ? '可以浏览地图，处理完当前故事后再行动。' : game.activeOrder ? `${game.activeOrder.distanceKm.toFixed(1)} km · 预计 ${deliveryEstimate(game.activeOrder, game.bike)} 分钟 · 路线为区域示意` : '白天奔走在人间，夜晚修一程仙途。'}</p>
         <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : game.activeOrder ? '查看配送' : '前往接单'}<Icon name="arrow" size={17} /></button>
       </aside>}
       {panel && <section ref={drawer} className="game-drawer" tabIndex={-1} aria-labelledby="drawer-heading">
@@ -95,7 +104,7 @@ export default function App() {
           {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
           {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'journal' && <JournalPanel />}
           {panel === 'exploration' && <PlayModePanel />}
-          {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>本机存档</h3><p>行动自动保存；地图浏览不改动进度。重新开局会覆盖这一世，请谨慎操作。</p><button className="reset-button" type="button" onClick={resetGame}>重新开局</button></div></>}
+          {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>本机存档 · {currentSlot?.name}</h3><p>每次行动自动保存。返回开始页可继续其他存档或新建仙途，不覆盖当前进度。</p><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
           {panel === 'endings' && <EndingResult onReset={resetGame} />}
           {panel === 'event' && (event ? <EventPanel /> : <div className="resolved-event"><Icon name="book" size={28} /><h3>这一页，已经写下。</h3><p>{latest?.text}</p><button type="button" className="primary-button" onClick={() => openNav(game.activeOrder ? 'delivery' : null)}>{game.activeOrder ? '继续配送' : '返回地图'}</button></div>)}
           {panel === 'places' && <div className="place-directory"><p className="panel-note">点击地点查看对应功能，不消耗时间。所有地点均为游戏中的虚构区域。</p>{MAP_PLACES.map((item) => <button key={item.id} type="button" onClick={() => openPlace(item)}><Icon name={item.icon} /><span><strong>{item.name}</strong><small>{item.subtitle}</small></span><Icon name="arrow" size={16} /></button>)}</div>}
@@ -104,7 +113,7 @@ export default function App() {
       </section>}
     </section>
     <nav className="nav-dock" aria-label="游戏导航">
-      {more && <div className="more-navigation" id="more-navigation"><span className="eyebrow">更多旅途记录</span>{MORE.map((item) => <button type="button" key={item.id} onClick={() => openNav(item.id)}><Icon name={item.icon} size={18} /><span>{PANEL_TITLES[item.id]}</span>{item.id === 'endings' && game.day >= 30 && <b className="nav-badge">可查看</b>}</button>)}</div>}
+      {more && <div className="more-navigation" id="more-navigation"><span className="eyebrow">更多旅途记录</span>{MORE.map((item) => <button type="button" key={item.id} onClick={() => openNav(item.id)}><Icon name={item.icon} size={18} /><span>{PANEL_TITLES[item.id]}</span>{item.id === 'endings' && game.day >= 30 && <b className="nav-badge">可查看</b>}</button>)}<button type="button" disabled={slotBusy} onClick={resetGame}><Icon name="book" size={18} /><span>存档 / 返回开始页</span></button></div>}
       {NAV.map((item) => <button type="button" key={item.label} ref={item.id === null ? mapNav : undefined} className="nav-button" aria-label={item.label} aria-pressed={panel === item.id} onClick={() => openNav(item.id)}><Icon name={item.icon} /><span>{item.label}</span>{item.id === 'delivery' && game.activeOrder && <i className="nav-indicator" />}{item.id === 'exploration' && (play.pending || play.scene) && <i className="nav-indicator" />}</button>)}
       <button type="button" className="nav-button more-button" id="more-navigation-button" aria-label="更多导航" aria-expanded={more} aria-controls="more-navigation" onClick={() => setMore((v) => !v)}><Icon name="more" /><span>更多</span></button>
     </nav>

@@ -21,23 +21,33 @@ function started(focus = 'city') {
   return play.beginExploration(s, focus, focus === 'social' ? 'lin_xiaoman' : undefined, '遇见一段新的故事');
 }
 function generated(focus = 'city') { const s = started(focus); return play.receiveGeneratedScene(s, s.play.pending.id, focus === 'social' ? social : city); }
-const snapshot = (store) => ({ version: 3, game: store.getState().game, play: store.getState().play });
-async function storeWith(deps = {}) {
-  const store = createGameStore({ load: async () => null, save: async () => {}, ...deps });
-  await store.getState().hydrate(); return store;
+const snapshot = (store) => ({ version: 4, game: store.getState().game, play: store.getState().play });
+async function storeWith(deps = {}, mode = 'classic') {
+  const rows = new Map();
+  const store = createGameStore({
+    list: deps.list ?? (async () => structuredClone([...rows.values()])),
+    save: async (slot, revision) => {
+      await deps.save?.(slot, revision);
+      const next = structuredClone({ ...slot, revision: (revision ?? 0) + 1 }); rows.set(slot.id, next); return next;
+    },
+    ...(deps.generate ? { generate: deps.generate } : {}), ...(deps.test ? { test: deps.test } : {}),
+  });
+  await store.getState().hydrate();
+  if (mode !== null) await store.getState().newGame('测试仙途', mode);
+  return store;
 }
 function deferred() { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; }
 
-test('new sessions default to classic and mode switches preserve the complete world', () => {
-  const s = play.createSession(12345), next = play.switchMode(s, 'generative');
-  assert.equal(s.play.mode, 'classic'); assert.strictEqual(s.game, next.game);
-  assert.deepEqual(play.switchMode(next, 'classic').game, s.game);
+test('mode is chosen at creation and no runtime switching API remains', () => {
+  const s = play.createSession(12345), next = play.createSession(12345, 'generative');
+  assert.equal(s.play.mode, 'classic'); assert.equal(next.play.mode, 'generative'); assert.deepEqual(s.game, next.game);
+  assert.equal(play.switchMode, undefined);
 });
 test('v1 save migrates without losing money, time, flags or delivery progress', () => {
   const old = { ...play.createSession(42).game, version: 1, day: 18, minute: 920, money: 779, completedOrders: 36, flags: { old_coin: true } };
   delete old.relationships; delete old.endingId;
   const migrated = play.migrateSession(old);
-  assert.equal(migrated.version, 3); assert.equal(migrated.play.mode, 'classic');
+  assert.equal(migrated.version, 4); assert.equal(migrated.play.mode, 'classic');
   for (const key of ['day', 'minute', 'money', 'completedOrders']) assert.equal(migrated.game[key], old[key]);
   assert.deepEqual(migrated.game.flags, old.flags); assert.equal(Object.keys(migrated.game.relationships).length, 5);
 });
@@ -132,7 +142,7 @@ test('minimal generation context omits the save, log, endpoint and wallet', () =
 });
 test('mode alone cannot alter available endings', () => {
   const s = play.createSession(1); s.game.day = 30;
-  assert.deepEqual(availableEndings(s.game), availableEndings(play.switchMode(s, 'generative').game));
+  assert.deepEqual(availableEndings(s.game), availableEndings({ ...play.createSession(1, 'generative').game, day: 30 }));
   assert.ok(availableEndings(s.game).length > 0);
 });
 test('classic store never invokes AI, including after event choices', async () => {
@@ -140,45 +150,80 @@ test('classic store never invokes AI, including after event choices', async () =
   await store.getState().explore('city'); store.getState().chooseEvent('depart'); store.getState().act('rest'); await store.getState().testAi();
   assert.equal(calls, 0); assert.equal(store.getState().play.mode, 'classic');
 });
-test('switching mode cancels pending AI and ignores late data', async () => {
-  const wait = deferred(); const store = await storeWith({ generate: () => wait.promise });
-  store.getState().setMode('generative'); const running = store.getState().explore('city');
-  store.getState().setMode('classic'); const expected = structuredClone(snapshot(store));
+test('returning to the menu cancels AI, saves fallback, and ignores late data', async () => {
+  const wait = deferred(), store = await storeWith({ generate: () => wait.promise }, 'generative');
+  const running = store.getState().explore('city');
+  await store.getState().returnToStart(); const expected = structuredClone(snapshot(store));
   wait.resolve({ ok: true, data: city }); await running;
-  assert.deepEqual(snapshot(store), expected); assert.equal(expected.game.minute, 435); assert.equal(expected.play.scene.source, 'authored');
+  assert.deepEqual(snapshot(store), expected); assert.equal(expected.game.minute, 435);
+  assert.equal(expected.play.scene.source, 'authored'); assert.equal(expected.play.mode, 'generative');
+  assert.equal(store.getState().screen, 'start');
 });
-test('reset protects the new world even when encounter IDs are reused', async () => {
-  const wait = deferred(); const store = await storeWith({ generate: () => wait.promise });
-  store.getState().setMode('generative'); const running = store.getState().explore('city');
-  await store.getState().reset(); const expected = structuredClone(snapshot(store));
+test('a new slot cannot receive a previous slot response even when encounter IDs repeat', async () => {
+  const wait = deferred(), store = await storeWith({ generate: () => wait.promise }, 'generative');
+  const oldId = store.getState().activeSlotId, running = store.getState().explore('city');
+  await store.getState().returnToStart(); await store.getState().newGame('新的经典仙途', 'classic');
+  const expected = structuredClone(snapshot(store));
   wait.resolve({ ok: true, data: city }); await running; assert.deepEqual(snapshot(store), expected);
+  assert.notEqual(store.getState().activeSlotId, oldId); assert.equal(store.getState().slots.length, 2);
 });
 test('double click cannot duplicate requests or exploration charges', async () => {
   const wait = deferred(); let calls = 0;
-  const store = await storeWith({ generate: () => { calls++; return wait.promise; } });
-  store.getState().setMode('generative'); const running = store.getState().explore('city');
+  const store = await storeWith({ generate: () => { calls++; return wait.promise; } }, 'generative');
+  const running = store.getState().explore('city');
   await store.getState().explore('city'); store.getState().act('sleep'); store.getState().chooseEnding('city-lights');
   assert.equal(calls, 1); assert.equal(store.getState().game.minute, 435);
-  wait.resolve({ ok: true, data: city }); await running;
-  assert.equal(store.getState().play.scene.source, 'ai');
+  wait.resolve({ ok: true, data: city }); await running; assert.equal(store.getState().play.scene.source, 'ai');
 });
-test('service failure and explicit fallback are playable without retries', async () => {
-  let calls = 0; const store = await storeWith({ generate: async () => { calls++; throw new Error('down'); } });
-  store.getState().setMode('generative'); await store.getState().explore('city');
-  assert.equal(store.getState().aiStatus, 'fallback'); assert.equal(store.getState().play.scene.source, 'authored');
+test('service failure is playable without retries and does not change locked mode', async () => {
+  let calls = 0; const store = await storeWith({ generate: async () => { calls++; throw new Error('down'); } }, 'generative');
+  await store.getState().explore('city'); assert.equal(store.getState().aiStatus, 'fallback');
+  assert.equal(store.getState().play.scene.source, 'authored'); assert.equal(store.getState().play.mode, 'generative');
   store.getState().chooseEvent('depart'); assert.equal(store.getState().game.minute, 440); assert.equal(calls, 1);
 });
-test('writes are serialized and relay tokens never enter saved data', async () => {
+test('writes are serialized per slot and relay tokens never enter saved data', async () => {
   const written = []; let active = 0, maxActive = 0;
-  const store = await storeWith({ save: async (value) => { active++; maxActive = Math.max(active, maxActive); await new Promise((r) => setTimeout(r, 1)); written.push(structuredClone(value)); active--; } });
+  const store = await storeWith({ save: async (value) => { active++; maxActive = Math.max(active, maxActive); await new Promise((r) => setTimeout(r, 1)); written.push(structuredClone(value)); active--; } }, 'generative');
   store.getState().configureAi({ endpoint: 'https://relay.example/narrative', consent: true }, 'secret-relay-password');
-  await store.getState().explore('city'); store.getState().chooseEvent('depart'); await store.getState().reset();
-  assert.equal(maxActive, 1); assert.equal(written.at(-1).game.minute, 420); assert.ok(!JSON.stringify(written).includes('secret-relay-password'));
+  store.getState().act('upgrade-bike-speed'); store.getState().act('upgrade-bike-battery');
+  await store.getState().returnToStart(); await store.getState().newGame('新存档', 'classic');
+  assert.equal(maxActive, 1); assert.equal(written.at(-1).session.game.minute, 420); assert.ok(!JSON.stringify(written).includes('secret-relay-password'));
+  const first = store.getState().slots.find((slot) => slot.id !== store.getState().activeSlotId);
+  assert.equal(first.session.game.bike.speed, 1); assert.equal(first.session.game.bike.battery, 1);
 });
-test('unknown version blocks automatic writes until an explicit reset', async () => {
-  const written = []; const store = await storeWith({ load: async () => ({ version: 99, priceless: true }), save: async (v) => { written.push(v); } });
-  assert.equal(store.getState().loadBlocked, true); store.getState().act('sleep'); await store.getState().explore('city');
-  assert.equal(written.length, 0); await store.getState().reset(); assert.equal(written.length, 1);
+test('unreadable slots remain protected while new games use independent IDs', async () => {
+  const written = [], bad = { version: 1, id: 'future', name: 'Future', createdAt: 0, updatedAt: 0, revision: 1, session: null, error: 'future version' };
+  const store = await storeWith({ list: async () => [bad], save: async (value) => { written.push(value); } }, null);
+  await store.getState().openSlot('future'); assert.equal(store.getState().screen, 'start'); assert.equal(written.length, 0);
+  store.getState().act('sleep'); await store.getState().explore('city'); assert.equal(written.length, 0);
+  await store.getState().newGame('新一世', 'classic'); assert.equal(written.length, 1); assert.notEqual(written[0].id, 'future');
+});
+test('no gameplay or network request is permitted before choosing a save', async () => {
+  let calls = 0; const store = await storeWith({ generate: async () => { calls++; } }, null);
+  const before = snapshot(store); store.getState().act('accept-order'); await store.getState().explore('city'); await store.getState().testAi();
+  assert.deepEqual(snapshot(store), before); assert.equal(calls, 0); assert.equal(store.getState().setMode, undefined);
+});
+test('multiple slots preserve distinct modes, vehicle levels and money after switching', async () => {
+  const store = await storeWith(), firstId = store.getState().activeSlotId;
+  store.getState().act('upgrade-bike-speed'); await store.getState().returnToStart();
+  await store.getState().newGame('AI仙途', 'generative'); assert.equal(store.getState().game.bike.speed, 0);
+  assert.equal(store.getState().game.money, 1263); await store.getState().returnToStart();
+  await store.getState().openSlot(firstId); assert.equal(store.getState().play.mode, 'classic');
+  assert.equal(store.getState().game.bike.speed, 1); assert.equal(store.getState().game.money, 1083);
+  assert.equal(store.getState().slots.length, 2);
+});
+test('save failure keeps the current game and never silently leaves unsaved progress', async () => {
+  const store = await storeWith({ save: async (_slot, revision) => { if (revision !== null) throw new Error('disk full'); } });
+  store.getState().act('upgrade-bike-speed'); await store.getState().flushSaves();
+  assert.equal(store.getState().saveStatus, 'error'); await store.getState().returnToStart();
+  assert.equal(store.getState().screen, 'playing'); assert.equal(store.getState().game.bike.speed, 1);
+  await store.getState().returnToStart(true); assert.equal(store.getState().screen, 'start');
+  assert.equal(store.getState().slots[0].session.game.bike.speed, 0);
+});
+test('creation double click cannot duplicate a slot', async () => {
+  const store = await storeWith({}, null), first = store.getState().newGame('一', 'classic');
+  await store.getState().newGame('二', 'generative'); await first; assert.equal(store.getState().slots.length, 1);
+  assert.equal(store.getState().play.mode, 'classic');
 });
 test('200 exploration cycles retain bounded state and memory', () => {
   let s = play.createSession(7654);

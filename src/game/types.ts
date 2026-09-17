@@ -43,6 +43,9 @@ export interface LogEntry {
   tone?: 'normal' | 'good' | 'bad' | 'mystic';
 }
 
+export type BikeUpgrade = 'speed' | 'battery' | 'durability' | 'efficiency';
+export interface BikeState { version: 1; speed: number; battery: number; durability: number; efficiency: number; condition: number }
+
 export interface GameState {
   version: 2;
   day: number;
@@ -55,6 +58,7 @@ export interface GameState {
   stress: number;
   reputation: number;
   bikeBattery: number;
+  bike: BikeState;
   qi: number;
   insight: number;
   karma: number;
@@ -125,4 +129,4 @@ export interface EndingDefinition {
   condition: (state: GameState) => boolean;
 }
 
-export type GameAction = 'accept-order' | 'complete-order' | 'eat' | 'rest' | 'sleep' | 'charge-bike' | 'meditate-1h' | 'meditate-3h' | 'study' | 'breakthrough';
+export type GameAction = 'accept-order' | 'complete-order' | 'eat' | 'rest' | 'sleep' | 'charge-bike' | 'meditate-1h' | 'meditate-3h' | 'study' | 'breakthrough' | 'repair-bike' | 'push-order' | 'cancel-order' | `upgrade-bike-${BikeUpgrade}`;

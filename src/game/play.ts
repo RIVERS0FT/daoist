@@ -4,21 +4,23 @@ import { authoredScene, initialPlay, isRecord, PROFILES, sceneText, validRequest
 import type { PlayMode, PlayState, SceneFocus, SceneMemory, SceneRequest } from './generation';
 import type { GameState, NpcId, NumericStatKey, RelationshipField } from './types';
 
-export interface PlaySession { version: 3; game: GameState; play: PlayState }
-export function createSession(seed?: number): PlaySession { return { version: 3, game: createInitialState(seed), play: initialPlay() }; }
+export interface PlaySession { version: 4; game: GameState; play: PlayState }
+export function createSession(seed?: number, mode: PlayMode = 'classic'): PlaySession { return { version: 4, game: createInitialState(seed), play: { ...initialPlay(), mode: mode === 'generative' ? 'generative' : 'classic' } }; }
 export function sessionBusy(s: PlaySession): boolean { return Boolean(s.game.gameOver || s.game.pendingEventId || s.play.pending || s.play.scene); }
 function log(game: GameState, text: string, id: string): GameState {
   return { ...game, log: [{ id, day: game.day, minute: game.minute, text, tone: 'normal' as const }, ...game.log].slice(0, 80) };
 }
 const integer = (value: unknown, fallback: number, max = 999999999) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(0, Math.floor(value))) : fallback;
 
-/** v3 wraps the unchanged, published v2 world; older saves keep all authored progress. */
+/** v4 adds vehicles while retaining the v2 world and v3 scenes, relationships and routes. */
 export function migrateSession(raw: unknown): PlaySession | null {
   if (!isRecord(raw)) return null;
-  const world = raw.version === 3 ? raw.game : raw;
+  if (![1, 2, 3, 4].includes(Number(raw.version))) return null;
+  const enveloped = raw.version === 3 || raw.version === 4;
+  const world = enveloped ? raw.game : raw;
   const game = migrateGameState(world);
   if (!game || !Number.isInteger(game.day) || game.day < 1 || !Number.isInteger(game.minute) || game.minute < 0 || game.minute >= 1440 || !Array.isArray(game.log) || !isRecord(game.flags)) return null;
-  if (raw.version !== 3) return { version: 3, game, play: initialPlay() };
+  if (!enveloped) return { version: 4, game, play: initialPlay() };
   const p = isRecord(raw.play) ? raw.play : {};
   const play = initialPlay();
   play.mode = p.mode === 'generative' ? 'generative' : 'classic';
@@ -40,7 +42,7 @@ export function migrateSession(raw: unknown): PlaySession | null {
   }
   const pending = validRequest(p.pending, game);
   if (!play.scene && pending?.id === `encounter-${play.sequence}`) play.pending = pending;
-  const session: PlaySession = { version: 3, game, play };
+  const session: PlaySession = { version: 4, game, play };
   if (game.gameOver || game.pendingEventId || game.activeOrder) return { ...session, play: { ...play, pending: null, scene: null } };
   // A browser reload never repeats the paid exploration or silently reissues an AI call.
   if (play.pending) return fallbackExploration(session);
@@ -68,12 +70,6 @@ export function receiveGeneratedScene(s: PlaySession, expectedId: string, raw: u
   if (s.play.mode !== 'generative' || s.play.pending?.id !== expectedId || s.game.gameOver || s.game.pendingEventId || s.game.activeOrder) return s;
   const scene = validateScene(raw, s.play.pending);
   return scene ? { ...s, play: { ...s.play, pending: null, scene } } : fallbackExploration(s);
-}
-export function switchMode(s: PlaySession, mode: PlayMode): PlaySession {
-  if (mode !== 'classic' && mode !== 'generative') return s;
-  const next = { ...s, play: { ...s.play, mode } };
-  // Keep an already generated scene locally playable. Only unresolved network work falls back.
-  return next.play.pending ? fallbackExploration(next) : next;
 }
 export function sceneChoiceBlocked(game: GameState, approach: keyof typeof PROFILES): boolean {
   const p = PROFILES[approach];

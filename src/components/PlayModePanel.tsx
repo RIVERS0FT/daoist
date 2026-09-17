@@ -39,17 +39,10 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
   }, [play.scene?.id, settingsOnly]);
 
   return <section className="panel play-mode-panel" aria-label="游玩模式与自由奇遇">
-    <div className="section-heading"><h2>选择你的游玩方式</h2><span>同一世界 · 随时切换 · 保留进度</span></div>
-    <div className="play-mode-switch" role="group" aria-label="游玩模式">
-      <button type="button" aria-pressed={play.mode === 'classic'} disabled={store.loadBlocked} onClick={() => store.setMode('classic')}>
-        <strong>经典剧情</strong><span>非 AI · 人工故事与随机事件 · 不发送 AI 请求</span>
-      </button>
-      <button type="button" aria-pressed={play.mode === 'generative'} disabled={store.loadBlocked} onClick={() => store.setMode('generative')}>
-        <strong>AI 生成剧情</strong><span>原创奇遇与可选分支 · 保留原有 NPC 和多结局</span>
-      </button>
-    </div>
-    <p className="play-explanation">{play.mode === 'classic' ? '按原有故事跑单、修炼、经营关系，也可以探索人工编写的自由奇遇。切换模式不会重置这一世。' : '选择一个方向，让 AI 根据当前虚构世界与最近的奇遇记忆生成下一段故事。实际时间、资源和关系影响由本地规则结算，AI 不能直接改写主线或结局。'}</p>
-    <details className="ai-settings" open={settingsOnly || undefined}>
+    <div className="section-heading"><h2>{settingsOnly ? '剧情与服务设置' : '自由奇遇'}</h2></div>
+    <div className="mode-locked"><strong>{play.mode === 'classic' ? '经典剧情' : 'AI 生成式剧情'}</strong><span>剧情模式已在创建存档时确定，本局不可切换。体验另一种模式，请返回开始页新建存档。</span></div>
+    <p className="play-explanation">{play.mode === 'classic' ? '按原有故事跑单、修炼、经营关系，也可以探索人工编写的自由奇遇。本局始终使用经典剧情。' : '选择一个方向，让 AI 根据当前虚构世界与最近的奇遇记忆生成下一段故事。实际时间、资源和关系影响由本地规则结算，AI 不能直接改写主线或结局。'}</p>
+    {play.mode === 'generative' && <details className="ai-settings" open={settingsOnly || undefined}>
       <summary>AI 服务设置 · {aiSettings.endpoint ? '已配置地址' : '尚未配置服务'}</summary>
       <form onSubmit={(event) => { event.preventDefault(); store.configureAi({ endpoint, consent }, token); }}>
         <label>生成服务地址（relay，不是模型供应商地址）<input type="url" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://your-relay.example/narrative" maxLength={2048} autoComplete="off" /></label>
@@ -58,7 +51,7 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
         <p>模型密钥只放在 relay 服务端。游戏不上传整份存档；不要在行动意图里填写真实个人资料或密钥。保存地址不代表模型已经连接。旧的仅返回对白的接口需升级为 scene-v1。</p>
         <div className="play-controls"><button type="submit">保存接入设置</button><button type="button" disabled={play.mode !== 'generative' || !aiSettings.endpoint || !aiSettings.consent || Boolean(play.pending) || store.aiStatus === 'checking'} onClick={() => { void store.testAi(); }}>测试连接</button></div>
       </form>
-    </details>
+    </details>}
     {play.mode === 'generative' && (!aiSettings.endpoint || !aiSettings.consent) && <p className="play-warning">AI 尚未就绪：请配置 relay 并保存授权。现在仍可探索，但会明确回退到经典剧情。</p>}
     {!settingsOnly && <div className="exploration-form">
       <label>奇遇方向<select value={effectiveFocus} onChange={(event) => setFocus(event.target.value as SceneFocus)} disabled={busy}>
@@ -71,13 +64,13 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
       </button>
     </div>}
     <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式没有 AI 网络请求。' : '等待主动探索。')}</p>
-    {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>不等待，改用经典剧情（不重复收费）</button>}
+    {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>取消本次生成，使用人工回退（模式不变）</button>}
     {store.saveError && <p className="play-warning" role="alert">{store.saveError}</p>}
     {!settingsOnly && play.scene && <section ref={sceneElement} tabIndex={-1} className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
       <div className="eyebrow">{play.scene.source === 'ai' ? 'AI 生成奇遇' : '经典人工奇遇'} · {FOCUS_LABELS[play.scene.focus]}{play.scene.npcId ? ` · ${NPC_MAP.get(play.scene.npcId)?.name}` : ''}</div>
       <h3>{play.scene.title}</h3><p>{play.scene.description}</p>
-      {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">这是切换前已经保存的 AI 场景，完成本段无需联网；后续采用经典剧情。</p>}
-      <div className="generated-choices">{play.scene.choices.map((choice) => <button type="button" key={choice.id} disabled={sceneChoiceBlocked(game, choice.approach) || store.loadBlocked} onClick={() => store.chooseEvent(choice.id)}>
+      {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">这是旧档保留的 AI 场景，完成本段无需联网；后续采用经典剧情。</p>}
+      <div className="generated-choices">{play.scene.choices.map((choice) => <button type="button" key={choice.id} disabled={sceneChoiceBlocked(game, choice.approach) || store.loadBlocked || store.slotBusy || store.saveStatus !== 'saved'} onClick={() => store.chooseEvent(choice.id)}>
         <strong>{choice.label}</strong><small>{profileSummary(choice.approach, Boolean(play.scene?.npcId))}</small>
       </button>)}</div>
     </section>}
