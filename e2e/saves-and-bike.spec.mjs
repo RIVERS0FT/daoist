@@ -16,6 +16,8 @@ test('start page requires a player name, offers creation-only modes and has no m
   await expect(playerName).toHaveAttribute('required', '');
   await page.getByRole('button', { name: '开始这一世', exact: true }).click();
   await expect(page.locator('.start-screen')).toBeVisible(); await expect(page.locator('.game-shell')).toHaveCount(0);
+  await playerName.fill('   '); await page.getByRole('button', { name: '开始这一世', exact: true }).click();
+  await expect(page.locator('.start-warning')).toContainText('请输入玩家名称'); await expect(page.locator('.game-shell')).toHaveCount(0);
   await playerName.fill('起名测试');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('start-page.png'), fullPage: true });
