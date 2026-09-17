@@ -24,7 +24,7 @@ test('available delivery tasks appear on the map while browsing never moves the 
   await ready(page); const before = await readStore(page);
   await expect(page.getByTestId('delivery-offer')).toHaveCount(4); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
-  await expect(page.getByRole('button', { name: '定位配送终点' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '定位配送终点' })).toHaveCount(0);
   const mountain = page.getByRole('button', { name: /^青云山脚，/ });
   await mountain.focus(); await page.keyboard.press('Enter'); await nav(page, '地图').click();
   await page.getByRole('button', { name: '放大地图' }).click(); await page.getByRole('button', { name: '缩小地图' }).click();
@@ -43,11 +43,8 @@ test('active delivery keeps only its destination pin; completion persists the ri
   await expect(page.getByTestId('delivery-pickup')).toHaveCount(0);
   await expect(page.getByTestId('delivery-dropoff')).toHaveAttribute('data-location-id', order.dropoffId);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
-  await page.getByRole('button', { name: '定位配送终点' }).click();
-  await expect(page.getByTestId('delivery-dropoff')).toBeInViewport();
-  const pin = await page.getByTestId('delivery-dropoff').boundingBox(), card = await page.locator('.map-task').boundingBox();
-  expect(pin.x < card.x + card.width && pin.x + pin.width > card.x && pin.y < card.y + card.height && pin.y + pin.height > card.y).toBe(false);
-  const before = await readStore(page); await page.getByTestId('delivery-dropoff').click();
+  await expect(page.getByRole('button', { name: '定位配送终点' })).toHaveCount(0);
+  const before = await readStore(page); await page.getByRole('button', { name: '查看配送', exact: true }).click();
   await expect(page.locator('#drawer-heading')).toHaveText('配送任务'); expect((await readStore(page)).game).toEqual(before.game);
   await nav(page, '地图').click(); await page.screenshot({ path: info.outputPath('expanded-map-order.png'), fullPage: true });
   const arrived = await finish(page); expect(arrived.game.position.locationId).toBe(order.dropoffId);
