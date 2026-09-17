@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { newGame, readStore } from './helpers.mjs';
 
+async function zoomOutFully(page) {
+  const button = page.getByRole('button', { name: '缩小地图', exact: true });
+  for (let i = 0; i < 20 && await button.isEnabled(); i += 1) await button.click();
+}
+
 async function clickableOffer(page) {
   const offers = page.getByTestId('delivery-offer');
   const find = async () => {
@@ -17,9 +22,7 @@ async function clickableOffer(page) {
   };
   let offer = await find();
   if (!offer) {
-    await page.locator('.camera-access summary').click();
-    await page.getByRole('button', { name: '显示全图', exact: true }).click();
-    await page.locator('.camera-access summary').click();
+    await zoomOutFully(page);
     offer = await find();
   }
   expect(offer, 'at least one map delivery task should be pointer-accessible').not.toBeNull();

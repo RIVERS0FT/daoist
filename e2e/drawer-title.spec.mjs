@@ -17,8 +17,9 @@ test('drawer titles do not repeat the player name and keep place context', async
   expect(await page.locator('#drawer-heading').evaluate((element) => getComputedStyle(element).marginTop)).toBe('0px');
 
   await page.getByRole('button', { name: '关闭面板，返回地图' }).click();
-  await page.getByRole('button', { name: '地点', exact: true }).click();
-  await page.locator('.place-directory').getByRole('button', { name: /青云山脚/ }).click();
+  const mountain = page.getByRole('button', { name: /^青云山脚，/ });
+  await mountain.focus();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.drawer-heading .eyebrow')).toBeVisible();
   await expect(page.locator('.drawer-heading .eyebrow')).toHaveText('青云山脚');
   await expect(page.locator('#drawer-heading')).toHaveText('夜间修行');

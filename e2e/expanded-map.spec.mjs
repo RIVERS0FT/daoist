@@ -25,8 +25,8 @@ test('available delivery tasks appear on the map while browsing never moves the 
   await expect(page.getByTestId('delivery-offer')).toHaveCount(4); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
   await expect(page.getByRole('button', { name: '定位配送终点' })).toBeDisabled();
-  await page.getByRole('button', { name: '地点', exact: true }).click();
-  await page.locator('.place-directory').getByRole('button', { name: /青云山脚/ }).click(); await nav(page, '地图').click();
+  const mountain = page.getByRole('button', { name: /^青云山脚，/ });
+  await mountain.focus(); await page.keyboard.press('Enter'); await nav(page, '地图').click();
   await page.getByRole('button', { name: '放大地图' }).click(); await page.getByRole('button', { name: '缩小地图' }).click();
   await page.getByRole('button', { name: '定位玩家' }).click();
   await expect(page.getByTestId('player-marker')).toBeInViewport();

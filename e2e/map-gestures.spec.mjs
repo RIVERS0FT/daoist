@@ -6,6 +6,7 @@ const nav=(page,label)=>page.getByRole('navigation',{name:'游戏导航'}).getBy
 async function ready(page){await page.goto('./');await newGame(page);await expect.poll(async()=>Number((await camera(page)).scale)).toBe(.65);}
 async function wheelAt(page,x,y,deltaY,extra={}){await page.getByTestId('map-viewport').dispatchEvent('wheel',{clientX:x,clientY:y,deltaY,deltaMode:0,cancelable:true,...extra});}
 async function pointer(page,type,id,x,y){await page.getByTestId('map-viewport').dispatchEvent(type,{pointerId:id,pointerType:'touch',clientX:x,clientY:y,button:0,bubbles:true});}
+async function zoomOutFully(page){const button=page.getByRole('button',{name:'缩小地图',exact:true});for(let i=0;i<20&&await button.isEnabled();i++)await button.click();}
 async function pointerAccessibleCluster(page){
  const clusters=page.locator('.landmark-cluster');
  for(let index=0;index<await clusters.count();index+=1){
@@ -56,13 +57,13 @@ test('native Chromium touch input actually pinches the map rather than the page'
  await expect.poll(async()=>(await camera(page)).scale).toBeGreaterThan(.85);
  expect(await page.evaluate(()=>visualViewport.scale)).toBe(1);expect(await readStore(page)).toEqual(g);await cdp.detach();
 });
-test('accessible controls fit the whole city and trackpad preference pans without zooming',async({page},info)=>{
- await ready(page);const g=await readStore(page);await page.locator('.camera-access summary').click();await page.getByRole('button',{name:'显示全图',exact:true}).click();
+test('remaining map controls fit the city and keyboard navigation stays UI-only',async({page},info)=>{
+ await ready(page);const g=await readStore(page);await zoomOutFully(page);
  const r=await rect(page);await expect.poll(async()=>(await camera(page)).scale*2400).toBeLessThanOrEqual(r.width);
- await page.getByLabel('滚轮行为',{exact:true}).selectOption('pan');await page.locator('.camera-access summary').click();
+ await expect(page.locator('.camera-access')).toHaveCount(0);await expect(page.getByRole('button',{name:'地点',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'放大地图',exact:true}).click();await page.getByRole('button',{name:'定位玩家',exact:true}).click();
- const a=await camera(page);await wheelAt(page,r.x+r.width/2,r.y+r.height/2,50,{deltaX:30});await page.waitForTimeout(130);
- const b=await camera(page);expect(b.scale).toBe(a.scale);expect(await readStore(page)).toEqual(g);
+ const a=await camera(page);const v=page.getByTestId('map-viewport');await v.focus();await page.keyboard.press('ArrowRight');const b=await camera(page);
+ await expect(v).toHaveAttribute('data-following','false');expect(b.scale).toBe(a.scale);expect(await readStore(page)).toEqual(g);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('camera-overview.png'),fullPage:true});
 });
@@ -78,7 +79,7 @@ test('map gestures do not capture panel scroll and stored player restores indepe
 
 test('overview combines nearby landmarks into clickable groups without changing game state',async({page},info)=>{
  await ready(page);const before=await readStore(page);
- await page.locator('.camera-access summary').click();await page.getByRole('button',{name:'显示全图',exact:true}).click();await page.locator('.camera-access summary').click();
+ await zoomOutFully(page);
  await expect(page.locator('.landmark-cluster').first()).toBeVisible();
  const boxes=await page.locator('.map-pin:not(.delivery-pin)').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
  for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
