@@ -1,14 +1,40 @@
 import { expect, test } from '@playwright/test';
 import { newGame, readStore } from './helpers.mjs';
 
+async function clickableOffer(page) {
+  const offers = page.getByTestId('delivery-offer');
+  const find = async () => {
+    for (let index = 0; index < await offers.count(); index += 1) {
+      const offer = offers.nth(index);
+      const hit = await offer.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return Boolean(target && (target === element || element.contains(target)));
+      });
+      if (hit) return offer;
+    }
+    return null;
+  };
+  let offer = await find();
+  if (!offer) {
+    await page.locator('.camera-access summary').click();
+    await page.getByRole('button', { name: '显示全图', exact: true }).click();
+    await page.locator('.camera-access summary').click();
+    offer = await find();
+  }
+  expect(offer, 'at least one map delivery task should be pointer-accessible').not.toBeNull();
+  return offer;
+}
+
 test('delivery tasks are chosen from map and pickup is merged into one delivery action', async ({ page }) => {
   await page.goto('/Daoist-Delivery/');
   await newGame(page, 'classic', '地图骑手');
 
   const offers = page.getByTestId('delivery-offer');
   await expect(offers).toHaveCount(4);
-  const firstId = await offers.first().getAttribute('data-offer-id');
-  await offers.first().click();
+  const offer = await clickableOffer(page);
+  const selectedId = await offer.getAttribute('data-offer-id');
+  await offer.click();
 
   const card = page.getByTestId('delivery-offer-card');
   await expect(card).toBeVisible();
@@ -20,7 +46,7 @@ test('delivery tasks are chosen from map and pickup is merged into one delivery 
   await expect(page.getByTestId('delivery-dropoff')).toHaveCount(1);
   await expect(page.getByTestId('delivery-pickup')).toHaveCount(0);
   const state = await readStore(page);
-  expect(state.game.activeOrder?.id).toBe(firstId);
+  expect(state.game.activeOrder?.id).toBe(selectedId);
   expect(state.game.minute).toBe(7 * 60 + 2);
 
   await page.getByTestId('delivery-dropoff').click();
