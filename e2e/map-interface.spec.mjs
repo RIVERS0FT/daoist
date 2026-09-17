@@ -11,6 +11,30 @@ async function restore(page, change) {
 async function resolvePendingEvent(page) {
   if ((await world(page)).game.pendingEventId) await page.locator('.event-choices button:enabled').first().click();
 }
+async function pointerAccessibleOffer(page) {
+  const offers = page.getByTestId('delivery-offer');
+  const find = async () => {
+    for (let index = 0; index < await offers.count(); index += 1) {
+      const offer = offers.nth(index);
+      const hit = await offer.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return Boolean(target && (target === element || element.contains(target)));
+      });
+      if (hit) return offer;
+    }
+    return null;
+  };
+  let offer = await find();
+  if (!offer) {
+    await page.locator('.camera-access summary').click();
+    await page.getByRole('button', { name: '显示全图', exact: true }).click();
+    await page.locator('.camera-access summary').click();
+    offer = await find();
+  }
+  expect(offer, 'at least one map delivery task should be pointer-accessible after browsing the map').not.toBeNull();
+  return offer;
+}
 test('map landing keeps status at top and navigation at bottom left without external calls', async ({ page }, info) => {
   const outside = [], errors = [];
   page.on('request', (request) => { if (!request.url().startsWith('http://127.0.0.1:4173/')) outside.push(request.url()); });
@@ -18,6 +42,7 @@ test('map landing keeps status at top and navigation at bottom left without exte
   await ready(page);
   await expect(page.locator('.game-drawer')).toHaveCount(0);
   await expect(page.getByTestId('map-viewport')).toBeVisible();
+  await expect(page.getByTestId('delivery-offer')).toHaveCount(4);
   await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { name: '测试仙途', exact: true })).toBeVisible();
   const header = await page.getByRole('banner', { name: '顶部状态栏' }).boundingBox();
   const dock = await page.getByRole('navigation', { name: '游戏导航' }).boundingBox();
@@ -52,13 +77,19 @@ test('navigation and map browsing never advance time, change saves or invoke AI'
   await page.keyboard.press('Escape'); await expect(nav(page, '更多导航')).toBeFocused();
   await nav(page, '修炼').click(); await page.screenshot({ path: info.outputPath('map-cultivation.png'), fullPage: true });
 });
-test('delivery action creates schematic pickup/dropoff pins and clears them on completion', async ({ page }, info) => {
-  await ready(page); await nav(page, '跑单').click(); await page.getByRole('button', { name: /^接一个新订单/ }).click();
+test('map task preview accepts the exact order and active route has only a dropoff pin', async ({ page }, info) => {
+  await ready(page);
+  const offers = page.getByTestId('delivery-offer'); await expect(offers).toHaveCount(4);
+  const offer = await pointerAccessibleOffer(page);
+  const selectedId = await offer.getAttribute('data-offer-id');
+  await offer.click();
+  await expect(page.getByTestId('delivery-offer-card')).toBeVisible();
+  await page.getByRole('button', { name: '接取任务 · 2 分钟', exact: true }).click();
   await resolvePendingEvent(page);
-  const accepted = await world(page); expect(accepted.game.activeOrder).not.toBeNull();
-  await expect(page.locator('.delivery-line')).toHaveCount(1); await expect(page.locator('.route-pin')).toHaveCount(2);
-  await nav(page, '地图').click(); await page.screenshot({ path: info.outputPath('map-delivery-route.png'), fullPage: true });
-  await nav(page, '跑单').click(); await page.getByRole('button', { name: /^完成配送/ }).click();
+  const accepted = await world(page); expect(accepted.game.activeOrder).not.toBeNull(); expect(accepted.game.activeOrder.id).toBe(selectedId);
+  await expect(page.locator('.delivery-line')).toHaveCount(1); await expect(page.getByTestId('delivery-pickup')).toHaveCount(0); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(1);
+  await page.screenshot({ path: info.outputPath('map-delivery-route.png'), fullPage: true });
+  await page.getByTestId('delivery-dropoff').click(); await page.getByRole('button', { name: /^执行配送/ }).click();
   expect((await world(page)).game.activeOrder).toBeNull(); await expect(page.locator('.delivery-line')).toHaveCount(0);
   expect((await world(page)).game.completedOrders).toBe(1);
 });
@@ -66,6 +97,7 @@ test('pending stories can be closed, reopened and cannot be bypassed from map pa
   await ready(page); await restore(page, (s) => { s.game.pendingEventId = 'old-lady-1'; });
   await expect(page.locator('.event-panel')).toBeVisible();
   await page.getByRole('button', { name: '关闭面板，返回地图' }).click(); await expect(page.getByRole('button', { name: '继续处理', exact: true })).toBeVisible();
+  await expect(page.getByTestId('delivery-offer')).toHaveCount(0);
   await nav(page, '修炼').click(); await expect(page.getByRole('button', { name: /^吐纳一小时/ })).toBeDisabled();
   await page.getByRole('button', { name: '有待处理的内容，点击继续' }).click();
   await page.locator('.event-choices button:enabled').first().click();

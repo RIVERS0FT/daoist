@@ -1,18 +1,19 @@
-# Architecture v0.8
+# Architecture v0.9
 
 ## Stack and module boundaries
 
 React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub Actions builds and deploys the static app to Pages. A separate Node relay is optional; classic gameplay requires no backend or model service.
 
 - `types.ts`, `engine.ts`: the v2 world plus versioned vehicle, position and cultivation data; deterministic actions, one game clock, resource limits, vehicles and authored events.
+- `deliveryBoard.ts`: derived deterministic delivery candidates for the current world, exact map-offer acceptance and the 2-minute acceptance transition. It does not add a save schema and never sends candidate data to AI.
 - `cultivation.ts`: manuals, items, recipes, preparation, breakthrough previews/settlement and the inner foundation trial. Receives the clock as an argument, avoiding engine cycles. Exact rules live in `CULTIVATION.md`.
 - `events.ts`, `npcEvents.ts`, `content.ts`, `npcs.ts`, `endings.ts`: data-driven story choices, relationship routes, eligibility, weights, repeat suppression and canonical endings. No story rules in React.
 - `generation.ts`, `play.ts`: allowlisted AI action profiles, strict scene validation, authored fallback, session transitions, memories and migration.
-- `store.ts`: the only UI write entry. Owns slot identity, pending locks, request cancellation and serial autosave. `cultivate` waits for the preceding save before accepting another costly command.
+- `store.ts`: the only UI write entry. Owns slot identity, pending locks, request cancellation and serial autosave. Map offer acceptance enters through `acceptDeliveryOffer(offerId)`; `cultivate` waits for the preceding save before accepting another costly command.
 - `storage.ts`: IndexedDB transactions, revision/mode checks, migration backups and transaction-completion acknowledgement.
 - `deliveryLocations.ts`: stable delivery IDs, local atlas coordinates and position validation; `cityMap.ts`: permanent functional landmarks only.
 - `mapCamera.ts`, `map/controller.ts`: pure camera math and a DOM pointer/transform controller, respectively. Neither writes gameplay state.
-- `App.tsx` and panels: accessible views and command dispatch. Cultivation has its own panel, while generated scenes remain in `PlayModePanel`.
+- `App.tsx` and panels: accessible views and command dispatch. Cultivation has its own panel, while generated scenes remain in `PlayModePanel`. `CityMap` renders derived delivery offers and free previews; it does not generate canonical world effects itself.
 
 ## Persistence and migrations
 
@@ -25,6 +26,8 @@ SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session: Play
 
 The database stays `daoist-delivery`, version 1, object store `saves`; slots use `slot:<id>`. The envelope version is separate from the world version. v1/v2 raw worlds migrate to classic sessions; v3/v4 preserve their mode, scenes, memories and progress. v5 requires valid cultivation data and a valid fixed mode. Unknown future versions, malformed counters, unknown stable IDs or unsupported realm levels are rejected without overwriting originals.
 
+Delivery-board candidates are intentionally not persisted. They are a pure local derivation from canonical world state. The same unchanged saved world therefore reconstructs the same visible tasks after reload, while a successful action that changes time/history/world state yields a new candidate set. Existing save versions do not change for v0.9.
+
 The first legacy import atomically creates `slot:legacy-autosave` and `meta:legacy-import`; the original `autosave` remains untouched. Before the first write upgrading an existing pre-v5 slot, the same transaction adds its exact raw record at `backup:pre-v5:<id>` if absent, then writes the upgraded slot. Later writes never overwrite this backup. Unknown slots remain visible as protected entries.
 
 Old worlds retain money, time, RNG seed, orders, vehicle upgrades, location, NPC relationships, flags and endings. Missing positions start at the station, never a guessed historical address. Missing cultivation gets the baseline manual with proficiency appropriate to the existing realm; no rare items or invented history. Stable IDs must never be renamed or reused. The v5 envelope causes older clients to reject new data rather than silently discard fields.
@@ -33,13 +36,13 @@ Each state transition captures the slot ID and queues a write. Every transaction
 
 ## Session, simulation and AI lifecycle
 
-The start page is mandatory. Only `newGame(name, mode)` chooses classic/generative mode; there is no runtime switching API. Each slot owns its independent world. Browsing menus does not advance game time. All actual gameplay uses the store, with shared locks for authored events, generated scenes, pending requests, game over and the inner trial.
+The start page is mandatory. Only `newGame(name, mode)` chooses classic/generative mode; there is no runtime switching API. Each slot owns its independent world. Browsing menus and previewing a delivery task do not advance game time. All actual gameplay uses the store, with shared locks for authored events, generated scenes, pending requests, game over and the inner trial.
 
 Exploration pays 15 minutes and 2 energy before requesting a scene. Classic mode selects a seeded authored scene with recent suppression and makes zero AI calls. Generative mode requires explicit consent and a configured safe relay. `validateScene` accepts only bounded prose and 2–4 distinct allowlisted approaches and adds a resource-free timed exit. AI cannot write stats, items, routes, flags, ending IDs or player positions. Scene choices are persisted before use and settle only once. Reloading a paid pending request uses authored fallback without recharging or automatically requesting again. Full scenes and the latest 12 resolved memories are saved.
 
 The network gate combines AbortController and revision tickets. Menu return, slot changes or configuration changes abort pending work and invalidate late results; a result must match both slot and request ID. HTTP timeouts are 20 seconds, responses at most 32 KiB, no automatic network retries, no redirecting tokens, credentials omitted and no referrer. All model prose renders as text. Fallback is visibly authored, never labelled model success.
 
-The relay owns provider keys, upstream URL, authentication, exact allowed origins, concurrency and budgets. Browser settings contain only public relay URL and consent; the optional access token stays in page memory. Neither save data nor source contains provider credentials. Minimal fictional requests contain time/weather/realm, optional known non-estranged NPC context and recent scene memories, never coordinates, cultivation inventory, full logs or real personal information. v0.8 only expands the relay's allowed realmLevel to 10; an old relay rejecting foundation requests still leads to visible authored fallback.
+The relay owns provider keys, upstream URL, authentication, exact allowed origins, concurrency and budgets. Browser settings contain only public relay URL and consent; the optional access token stays in page memory. Neither save data nor source contains provider credentials. Minimal fictional requests contain time/weather/realm, optional known non-estranged NPC context and recent scene memories, never coordinates, cultivation inventory, full logs, delivery-board candidates or real personal information. v0.8 only expands the relay's allowed realmLevel to 10; an old relay rejecting foundation requests still leads to visible authored fallback.
 
 ## Cultivation and time
 
@@ -51,11 +54,15 @@ The inner trial is not travel or combat. Its stage-bound choices persist before 
 
 ## Delivery geography and map interface
 
-The fictional atlas is 2400×1600 with 24 pickup and 40 dropoff addresses. New orders preserve stable pickup/dropoff IDs and existing address text. Old names still resolve deterministically; unknown old text has a safe location fallback without altering any order cost. Route pixels are schematic, never substituted for the order's distance.
+The fictional atlas is 2400×1600 with 24 pickup and 40 dropoff addresses. Orders preserve stable pickup/dropoff IDs and existing address text. Old names still resolve deterministically; unknown old text has a safe location fallback without altering any order cost. Route pixels are schematic, never substituted for the order's distance.
 
-Only the current order renders pickup/dropoff markers and its line. Ten functional landmarks remain permanent; task addresses are not listed in the permanent directory. The player marker reflects `game.position = { version: 1, locationId }`. Only successful riding or explicit pushing commits the destination, after resource/clock/survival checks and before post-delivery events. Accepting, rejecting, cancelling or looking around never moves the player. Autosave persists each slot's position independently.
+When there is no active order and gameplay is not blocked, `deliveryBoard.ts` derives four deterministic candidates from the current canonical world. Each candidate still contains merchant/pickup and customer/dropoff data, but the map renders one task marker at the delivery destination. Clicking it is a free UI preview. Acceptance sends the exact visible offer ID through the store, advances 2 minutes and promotes that candidate to `activeOrder`; it does not reroll the order after the player commits.
 
-Top status and bottom-left navigation remain visible. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
+The task board is stable while canonical world state is unchanged. Panning, zooming, opening panels and reloading do not consume RNG or refresh it. Effective actions alter world time/history/state and therefore produce a new board the next time offers are available. Pending authored events, generated scenes, the inner trial and game over suppress offers.
+
+While an order is active, all unaccepted offers are hidden. The map renders only the current dropoff and a player-to-destination schematic line. Pickup is no longer a separate movement step or marker; `completeOrder` / explicit pushing represent pickup and delivery as one settlement. Existing battery, durability, stamina, survival and reward checks remain authoritative. Only successful riding or explicit pushing commits the destination, after resource/clock/survival checks and before post-delivery events. Accepting, cancelling or looking around never moves the player. Autosave persists each slot's canonical position independently.
+
+Ten functional landmarks remain permanent; delivery addresses are not listed in the permanent directory. The player marker reflects `game.position = { version: 1, locationId }`. Top status and bottom-left navigation remain visible. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
 
 ## Camera lifecycle
 
@@ -69,6 +76,6 @@ Player restore starts focused and following. Manual gestures or whole-map/route 
 
 ## Verification and delivery
 
-Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus the new cultivation/gesture flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
+Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus cultivation/gesture/delivery-board flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, exact map-offer acceptance, task refresh after actions, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
 
 CI archives only tracked source and also uploads production dist and browser reports/screenshots. Work on a feature branch, open a PR, verify checks and screenshots, squash-merge, then verify completed GitHub Pages deployment for that merge SHA. Pages builds with Vite base `/Daoist-Delivery/`. Model relay deployment remains separate; successful static deployment is not evidence of real provider generation.

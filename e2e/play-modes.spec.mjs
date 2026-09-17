@@ -82,8 +82,8 @@ test('AI service error transparently falls back to authored choices', async ({ p
   await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('503');
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
-  await page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: '跑单', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^接一个新订单/ })).toBeEnabled();
+  await page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: '地图', exact: true }).click();
+  await expect(page.getByTestId('delivery-offer')).toHaveCount(4);
 });
 test('unconfigured generation is honest and classic fallback remains playable', async ({ page }) => {
   await ready(page, 'generative');
