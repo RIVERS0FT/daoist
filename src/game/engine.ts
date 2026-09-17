@@ -1,7 +1,8 @@
+import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstimate, initialBike, normalizeBike, pushingCosts, repairCost, ridingBlockReason, upgradeCost } from './bike';
 import { EVENT_MAP, EVENTS } from './content';
 import { ENDING_MAP } from './endings';
 import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
-import type { ActionContext, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
+import type { ActionContext, BikeUpgrade, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
 const MERCHANTS = ['老王牛肉面', '金记烧腊', '川味小馆', '月桂咖啡', '北门饺子馆', '深夜食堂', '阿婆砂锅粥', '七号便利店'];
 const CUSTOMERS = ['幸福家园 4 栋 404', '云景花园 8 栋', '东城医院住院部', '城南软件园 A3', '老城区梧桐里', '青云山脚 17 号', '大学城 6 号宿舍', '河畔公寓 12F'];
@@ -12,7 +13,7 @@ export const RENT = 850;
 export function createInitialState(seed = Date.now() >>> 0): GameState {
   return {
     version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
-    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, qi: 0, insight: 1,
+    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), qi: 0, insight: 1,
     karma: 0, darkQi: 0, realmLevel: 0, completedOrders: 0, totalIncome: 0, rentDueDay: 7,
     activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, relationships: createInitialRelationships(), endingId: null, gameOver: false,
     log: [makeLog(1, 7 * 60, '新的一个月开始了。七天后要先交第一笔房租。', 'normal')],
@@ -25,10 +26,13 @@ export function migrateGameState(raw: unknown): GameState | null {
   if (source.version !== 1 && source.version !== 2) return null;
   const seed = typeof source.seed === 'number' ? source.seed : 0x5a17d311;
   const base = createInitialState(seed);
+  const bike = normalizeBike(source.bike);
+  if (!bike) return null;
   const merged = {
     ...base,
     ...source,
     version: 2,
+    bike,
     relationships: mergeRelationships(source.relationships as Partial<GameState['relationships']> | undefined),
     endingId: typeof source.endingId === 'string' ? source.endingId : null,
   } as GameState;
@@ -94,7 +98,7 @@ function clampState(state: GameState): GameState {
   const next: GameState = {
     ...state,
     money: Math.max(-9999, Math.round(state.money)), energy: clamp(state.energy, 0, 100), health: clamp(state.health, 0, 100),
-    stress: clamp(state.stress, 0, 100), reputation: clamp(state.reputation, 0, 100), bikeBattery: clamp(state.bikeBattery, 0, 100),
+    stress: clamp(state.stress, 0, 100), reputation: clamp(state.reputation, 0, 100), bikeBattery: clamp(state.bikeBattery, 0, bikeStats(state.bike).capacity),
     qi: clamp(state.qi, 0, 9999), insight: clamp(state.insight, 0, 99), karma: clamp(state.karma, -99, 99), darkQi: clamp(state.darkQi, 0, 99),
     relationships: clampRelationships(state.relationships),
   };
@@ -199,7 +203,7 @@ function generateOrder(state: GameState): [DeliveryOrder, GameState] {
 }
 
 function acceptOrder(state: GameState): GameState {
-  if (state.activeOrder || state.gameOver) return state;
+  if (state.activeOrder || state.gameOver || ridingBlockReason(state)) return state;
   let next = advanceTime(state, 2);
   let order: DeliveryOrder;
   [order, next] = generateOrder(next);
@@ -208,26 +212,36 @@ function acceptOrder(state: GameState): GameState {
   return maybeTriggerEvent(clampState(next), 'delivery', 0.26);
 }
 
-function completeOrder(state: GameState): GameState {
+function completeOrder(state: GameState, pushing = false): GameState {
   const order = state.activeOrder;
-  if (!order || state.gameOver) return state;
-  let next = state;
-  let variance: number;
-  [variance, next] = randomInt(next, -4, 14);
+  if (!order || state.gameOver || (!pushing && ridingBlockReason(state))) return state;
+  const foot = pushingCosts(state), costs = deliveryCosts(order, state.bike);
+  if (pushing && state.energy < foot.energy) return state;
+  let next = state, variance = 0;
+  if (!pushing) [variance, next] = randomInt(next, -4, 14);
   const weatherDelay = next.weather === 'storm' ? 10 : next.weather === 'rain' ? 5 : 0;
-  const fatigueDelay = next.energy < 25 ? 8 : 0;
-  const actualMinutes = Math.max(8, order.estimatedMinutes + variance + weatherDelay + fatigueDelay);
-  const energyCost = Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18));
-  const batteryCost = Math.max(3, Math.round(order.distanceKm * 2.4));
-  const lowBatteryPenalty = next.bikeBattery < batteryCost ? 12 : 0;
-  const income = Math.max(2, order.reward - lowBatteryPenalty);
-  next = advanceTime(next, actualMinutes + (lowBatteryPenalty ? 15 : 0));
+  const actualMinutes = pushing ? foot.minutes : Math.max(8, deliveryEstimate(order, next.bike) + variance + weatherDelay + (next.energy < 25 ? 8 : 0));
+  const energyCost = pushing ? foot.energy : Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18));
+  const income = pushing ? foot.income : order.reward;
+  // All requirements are checked before RNG, time, payment or order state can change.
+  next = advanceTime({ ...next, energy: Math.max(0, next.energy - energyCost),
+    bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
+    bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) }, activeOrder: null }, actualMinutes);
+  if (next.gameOver) return next;
   next = { ...next, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
-    energy: next.energy - energyCost, bikeBattery: next.bikeBattery - batteryCost, reputation: next.reputation + (variance <= 6 ? 1 : 0),
-    stress: next.stress + (variance > 10 ? 3 : -1), activeOrder: null };
-  next = appendLog(next, `送达：耗时 ${actualMinutes + (lowBatteryPenalty ? 15 : 0)} 分钟，收入 ¥${income}。`, 'good');
-  if (lowBatteryPenalty) next = appendLog(next, '电量不足，最后一段只能推车，订单收入也受了影响。', 'bad');
+    reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
+  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
+}
+
+function upgradeBike(state: GameState, id: BikeUpgrade): GameState {
+  if (!BIKE_UPGRADES.some((item) => item.id === id) || state.bike[id] >= MAX_BIKE_LEVEL) return state;
+  const cost = upgradeCost(state.bike, id);
+  if (state.money < cost) return state;
+  const next = advanceTime({ ...state, money: state.money - cost }, 45);
+  if (next.gameOver) return next;
+  return appendLog({ ...next, bike: { ...next.bike, [id]: next.bike[id] + 1 } },
+    `电动车${BIKE_UPGRADES.find((item) => item.id === id)!.label}升至 ${next.bike[id] + 1} 级：¥${cost}，45 分钟。升级不自动充电或维修。`, 'good');
 }
 
 function cultivate(state: GameState, minutes: number): GameState {
@@ -266,10 +280,15 @@ function breakthrough(state: GameState): GameState {
 
 export function runAction(state: GameState, action: GameAction): GameState {
   if (state.pendingEventId || state.gameOver) return state;
+  if (action.startsWith('upgrade-bike-')) return upgradeBike(state, action.slice(13) as BikeUpgrade);
   let next = state;
   switch (action) {
     case 'accept-order': return acceptOrder(next);
     case 'complete-order': return completeOrder(next);
+    case 'push-order': return completeOrder(next, true);
+    case 'cancel-order':
+      if (!next.activeOrder) return next;
+      return appendLog(clampState(advanceTime({ ...next, activeOrder: null, reputation: next.reputation - 2, stress: next.stress + 2 }, 5)), '已取消配送：5 分钟，信誉 -2。', 'bad');
     case 'eat':
       if (next.money < 18) return appendLog(next, '余额不足，连一顿像样的饭都买不起。', 'bad');
       next = advanceTime(next, 30);
@@ -282,16 +301,27 @@ export function runAction(state: GameState, action: GameAction): GameState {
     case 'sleep':
       next = advanceTime(next, 360); next = { ...next, energy: next.energy + 62, health: next.health + 8, stress: next.stress - 16 };
       next = appendLog(clampState(next), '睡了六小时。城市没有因为你休息而停下来。', 'good'); return maybeTriggerEvent(next, 'life', 0.22);
-    case 'charge-bike':
-      if (next.money < 6) return appendLog(next, '换电需要 ¥6。', 'bad');
-      next = advanceTime(next, 18); next = { ...next, money: next.money - 6, bikeBattery: next.bikeBattery + 72 };
-      next = appendLog(clampState(next), '换上满电电池，继续跑单。', 'good'); return maybeTriggerEvent(next, 'life', 0.16);
+    case 'charge-bike': {
+      if (next.money < 6 || next.bikeBattery >= bikeStats(next.bike).capacity) return next;
+      next = advanceTime({ ...next, money: next.money - 6 }, 18);
+      if (next.gameOver) return next;
+      next = { ...next, bikeBattery: bikeStats(next.bike).capacity };
+      return appendLog(clampState(next), '换上满电电池，电量已补满至当前容量上限。', 'good');
+    }
+    case 'repair-bike': {
+      const cost = repairCost(next.bike);
+      if (!cost || next.money < cost) return next;
+      next = advanceTime({ ...next, money: next.money - cost }, 30);
+      if (next.gameOver) return next;
+      return appendLog({ ...next, bike: { ...next.bike, condition: bikeStats(next.bike).maxCondition } }, `电动车已修好：¥${cost}，30 分钟，耐久补满。`, 'good');
+    }
     case 'meditate-1h': return cultivate(next, 60);
     case 'meditate-3h': return cultivate(next, 180);
     case 'study':
       next = advanceTime(next, 90); next = { ...next, energy: next.energy - 7, insight: next.insight + 1, stress: next.stress + 1 };
       next = appendLog(clampState(next), '你把零碎的修炼笔记重新整理了一遍，悟性有所增长。', 'mystic'); return maybeTriggerEvent(next, 'cultivation', 0.3);
     case 'breakthrough': return breakthrough(next);
+    default: return state;
   }
 }
 

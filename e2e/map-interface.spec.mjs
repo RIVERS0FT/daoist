@@ -1,15 +1,12 @@
 import { test, expect } from '@playwright/test';
-async function ready(page) { await page.goto('./'); await expect(page.getByRole('heading', { name: '外卖修仙', exact: true })).toBeVisible(); }
+import { newGame, continueRecent, replaceWorld } from './helpers.mjs';
+async function ready(page) { await page.goto('./'); await newGame(page); }
 const nav = (page, label) => page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: label, exact: true });
 async function world(page) {
-  return page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); const s = useGameStore.getState(); return JSON.parse(JSON.stringify({ version: 3, game: s.game, play: s.play })); });
+  return page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); await useGameStore.getState().flushSaves(); const s = useGameStore.getState(); return JSON.parse(JSON.stringify({ version: 4, game: s.game, play: s.play })); });
 }
 async function restore(page, change) {
-  const session = await world(page); change(session);
-  await page.evaluate((value) => new Promise((resolve, reject) => {
-    const r = indexedDB.open('daoist-delivery', 1); r.onerror = () => reject(r.error); r.onsuccess = () => { const db = r.result; const tx = db.transaction('saves', 'readwrite'); tx.objectStore('saves').put(value, 'autosave'); tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => reject(tx.error); };
-  }), session);
-  await page.reload(); await expect(page.getByRole('heading', { name: '外卖修仙', exact: true })).toBeVisible();
+  const session = await world(page); change(session); await replaceWorld(page, session);
 }
 async function resolvePendingEvent(page) {
   if ((await world(page)).game.pendingEventId) await page.locator('.event-choices button:enabled').first().click();
@@ -73,7 +70,7 @@ test('pending stories can be closed, reopened and cannot be bypassed from map pa
 });
 test('v3 world and mode survive new UI; relationships and endings remain reachable', async ({ page }) => {
   await ready(page); await restore(page, (s) => {
-    s.game.day = 31; s.game.money = 2567; s.game.realmLevel = 2; s.game.qi = 86; s.play.mode = 'generative';
+    s.version = 3; delete s.game.bike; s.game.day = 31; s.game.money = 2567; s.game.realmLevel = 2; s.game.qi = 86; s.play.mode = 'generative';
     s.game.relationships.zhou_ye = { met: true, affinity: 60, trust: 60, bond: 50, romance: 0, route: 'close-friend', lastSeenDay: 30 };
   });
   await expect(page.locator('.clock-block strong')).toContainText('第 31 天'); await expect(page.locator('.realm-button')).toContainText('炼气二层');
@@ -82,7 +79,7 @@ test('v3 world and mode survive new UI; relationships and endings remain reachab
   await nav(page, '更多导航').click(); await page.locator('#more-navigation').getByRole('button', { name: /命运分岔/ }).click();
   await expect(page.locator('.ending-grid button').first()).toBeEnabled(); await page.locator('.ending-grid button').first().click();
   await expect(page.locator('.ending-result')).toBeVisible(); expect((await world(page)).game.gameOver).toBe(true);
-  await page.reload(); await expect(page.locator('.ending-result')).toBeVisible(); expect((await world(page)).play.mode).toBe('generative');
+  await page.reload(); await continueRecent(page); await expect(page.locator('.ending-result')).toBeVisible(); expect((await world(page)).play.mode).toBe('generative');
 });
 test('short landscape keeps navigation and scrollable panel controls reachable', async ({ page }, info) => {
   await page.setViewportSize({ width: 844, height: 390 }); await ready(page); await nav(page, '奇遇').click();

@@ -2,131 +2,165 @@ import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
 import { resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
-import { beginExploration, createSession, fallbackExploration, migrateSession, receiveGeneratedScene, resolveScene, sessionBusy, switchMode } from './play';
+import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
-import { loadGame, saveGame } from './storage';
+import { loadSlots, saveSlot, SaveConflictError } from './storage';
+import type { SaveSlot, SlotEntry } from './storage';
 import type { PlayMode, PlayState, SceneFocus } from './generation';
 import type { GameAction, GameState, NpcId } from './types';
 
 interface GameStore {
   game: GameState; play: PlayState; hydrated: boolean; loadBlocked: boolean;
-  aiSettings: AiSettings; aiStatus: 'idle' | 'loading' | 'checking' | 'success' | 'fallback' | 'error';
-  aiMessage: string; saveError: string;
+  screen: 'start' | 'playing'; slots: SlotEntry[]; activeSlotId: string | null; slotBusy: boolean;
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error'; saveError: string;
+  aiSettings: AiSettings; aiStatus: 'idle' | 'loading' | 'checking' | 'success' | 'fallback' | 'error'; aiMessage: string;
   hydrate: () => Promise<void>;
+  newGame: (name: string, mode: PlayMode) => Promise<void>;
+  openSlot: (id: string) => Promise<void>;
+  returnToStart: (discardUnsaved?: boolean) => Promise<void>;
+  flushSaves: () => Promise<void>;
   initAiSettings: (defaultEndpoint?: string) => void;
   configureAi: (settings: AiSettings, relayToken: string) => void;
-  setMode: (mode: PlayMode) => void;
   explore: (focus: SceneFocus, npcId?: NpcId, intent?: string) => Promise<void>;
-  fallback: () => void;
-  testAi: () => Promise<void>;
-  act: (action: GameAction) => void;
-  socialize: (npcId: NpcId) => void;
-  chooseEvent: (choiceId: string) => void;
-  chooseEnding: (endingId: string) => void;
-  reset: () => Promise<void>;
+  fallback: () => void; testAi: () => Promise<void>;
+  act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
+  chooseEvent: (choiceId: string) => void; chooseEnding: (endingId: string) => void;
 }
-interface Dependencies {
-  load: typeof loadGame; save: typeof saveGame;
-  generate: typeof requestScene; test: typeof testAiConnection;
-}
-const defaults: Dependencies = { load: loadGame, save: saveGame, generate: requestScene, test: testAiConnection };
-
+interface Dependencies { list: typeof loadSlots; save: typeof saveSlot; generate: typeof requestScene; test: typeof testAiConnection }
+const defaults: Dependencies = { list: loadSlots, save: saveSlot, generate: requestScene, test: testAiConnection };
 export function createGameStore(overrides: Partial<Dependencies> = {}) {
   const deps = { ...defaults, ...overrides };
   return create<GameStore>((set, get) => {
-    const gate = new RequestGate();
-    let relayToken = ''; // Session-only relay password. Never part of any persisted state.
-    let settingsInitialized = false;
-    let hydration: Promise<void> | null = null;
-    let saves = Promise.resolve();
-    let writeRevision = 0;
-    const session = (): PlaySession => ({ version: 3, game: get().game, play: get().play });
-    const persist = (value: PlaySession) => {
+    const gate = new RequestGate(), unsaved = new Map<string, PlaySession>();
+    let relayToken = '', settingsInitialized = false, hydration: Promise<void> | null = null;
+    let saves = Promise.resolve(), writeRevision = 0, retry: ReturnType<typeof setTimeout> | undefined;
+    const session = (): PlaySession => ({ version: 4, game: get().game, play: get().play });
+    const playing = () => get().hydrated && get().screen === 'playing' && Boolean(get().activeSlotId) && !get().slotBusy && !get().loadBlocked;
+    const replaceSlot = (slot: SlotEntry) => set((state) => ({ slots: [...state.slots.filter((entry) => entry.id !== slot.id), slot].sort((a, b) => b.updatedAt - a.updatedAt) }));
+    const persist = (value: PlaySession, id = get().activeSlotId) => {
+      if (!id) return saves;
       const revision = ++writeRevision;
-      saves = saves.then(() => deps.save(value)).then(() => { if (revision === writeRevision) set({ saveError: '' }); }).catch(() => {
-        if (revision === writeRevision) set({ saveError: '本机存档写入失败。当前进度仍在内存中，请勿关闭页面。' });
+      unsaved.set(id, value); set({ saveStatus: 'saving' });
+      saves = saves.then(async () => {
+        if (get().loadBlocked) return;
+        const slot = get().slots.find((entry) => entry.id === id);
+        if (!slot?.session) throw new SaveConflictError();
+        const result = await deps.save({ ...slot, session: value, updatedAt: Date.now() }, slot.revision);
+        replaceSlot(result);
+        if (unsaved.get(id) === value) unsaved.delete(id);
+        if (revision === writeRevision) set({ saveStatus: 'saved', saveError: '' });
+      }).catch((error: unknown) => {
+        const conflict = error instanceof SaveConflictError;
+        if (revision === writeRevision || conflict) set({ saveStatus: 'error', loadBlocked: conflict,
+          saveError: conflict ? error.message : '自动保存失败，正在自动重试。进度仍在内存中，请勿关闭页面。' });
+        if (!conflict && typeof window !== 'undefined' && !retry) retry = setTimeout(() => {
+          retry = undefined;
+          const active = get().activeSlotId, pending = active ? unsaved.get(active) : null;
+          if (pending && !get().loadBlocked) void persist(pending, active);
+        }, 3000);
       });
       return saves;
     };
     const commit = (value: PlaySession) => {
-      if (get().loadBlocked || value.game === get().game && value.play === get().play) return;
-      set({ game: value.game, play: value.play });
-      void persist(value);
+      if (get().loadBlocked || !get().activeSlotId || value.game === get().game && value.play === get().play) return;
+      set({ game: value.game, play: value.play }); void persist(value);
     };
-    const canAct = () => get().hydrated && !get().loadBlocked && !sessionBusy(session());
+    const canAct = () => playing() && !sessionBusy(session());
     const fallBack = (message: string) => {
-      gate.cancel(); commit(fallbackExploration(session()));
-      set({ aiStatus: 'fallback', aiMessage: message });
+      gate.cancel(); commit(fallbackExploration(session())); set({ aiStatus: 'fallback', aiMessage: message });
     };
     const initial = createSession(0x5a17d311);
     return {
       game: initial.game, play: initial.play, hydrated: false, loadBlocked: false,
-      aiSettings: { endpoint: '', consent: false }, aiStatus: 'idle', aiMessage: '', saveError: '',
+      screen: 'start', slots: [], activeSlotId: null, slotBusy: false, saveStatus: 'idle', saveError: '',
+      aiSettings: { endpoint: '', consent: false }, aiStatus: 'idle', aiMessage: '',
       hydrate: () => {
         if (hydration) return hydration;
         hydration = (async () => {
-          try {
-            const saved = await deps.load();
-            const restored = saved === null ? null : migrateSession(saved);
-            if (saved !== null && !restored) {
-              set({ hydrated: true, loadBlocked: true, saveError: '无法读取此存档版本，原存档未被覆盖。确认不再需要后可重新开局。' }); return;
-            }
-            const current = restored ?? session();
-            set({ game: current.game, play: current.play, hydrated: true });
-            if (restored) await persist(current);
-          } catch {
-            set({ hydrated: true, loadBlocked: true, saveError: '读取本机存档失败，已暂停写入，避免覆盖旧进度。' });
-          }
+          try { set({ slots: await deps.list(), hydrated: true }); }
+          catch { set({ hydrated: true, loadBlocked: true, saveError: '读取本机存档失败，已暂停写入，避免覆盖旧进度。请重新加载页面。' }); }
         })();
         return hydration;
       },
+      newGame: async (name, mode) => {
+        if (!get().hydrated || get().screen !== 'start' || get().slotBusy || get().loadBlocked || !['classic', 'generative'].includes(mode)) return;
+        set({ slotBusy: true, saveStatus: 'saving', saveError: '' }); gate.cancel();
+        try {
+          const now = Date.now(), id = `save-${globalThis.crypto.randomUUID()}`;
+          const next = createSession(undefined, mode);
+          const slot = await deps.save({ version: 1, id, name: name.trim().slice(0, 32) || `第 ${get().slots.length + 1} 段仙途`, createdAt: now, updatedAt: now, revision: 0, session: next }, null);
+          replaceSlot(slot);
+          set({ game: next.game, play: next.play, activeSlotId: id, screen: 'playing', saveStatus: 'saved', aiStatus: 'idle', aiMessage: '' });
+        } catch { set({ saveStatus: 'error', saveError: '新存档创建失败，未覆盖任何旧档。请检查浏览器的本机存储权限与空间。' }); }
+        finally { set({ slotBusy: false }); }
+      },
+      openSlot: async (id) => {
+        if (!get().hydrated || get().screen !== 'start' || get().slotBusy || get().loadBlocked) return;
+        set({ slotBusy: true, saveError: '' }); gate.cancel();
+        try {
+          const slots = await deps.list(), slot = slots.find((entry) => entry.id === id);
+          set({ slots });
+          if (!slot?.session) { set({ saveError: slot?.error ?? '找不到这个存档，原数据未被覆盖。' }); return; }
+          set({ game: slot.session.game, play: slot.session.play, activeSlotId: id, screen: 'playing', aiStatus: 'idle', aiMessage: '', saveStatus: 'saved' });
+          // Persist migrations and paid-request fallbacks in this slot, without touching its backup.
+          await persist(slot.session, id);
+        } catch { set({ saveError: '读取存档失败，原数据未被覆盖。', saveStatus: 'error' }); }
+        finally { set({ slotBusy: false }); }
+      },
+      returnToStart: async (discardUnsaved = false) => {
+        if (get().screen !== 'playing' || get().slotBusy) return;
+        set({ slotBusy: true }); gate.cancel();
+        if (!discardUnsaved && get().play.pending) commit(fallbackExploration(session()));
+        await saves;
+        if (get().saveError && !discardUnsaved) { set({ slotBusy: false }); return; }
+        if (retry) clearTimeout(retry); retry = undefined;
+        unsaved.clear();
+        try {
+          const slots = await deps.list();
+          set({ slots, screen: 'start', activeSlotId: null, loadBlocked: false, saveError: '', saveStatus: 'idle', aiStatus: 'idle', aiMessage: '' });
+        } catch { set({ saveError: '读取存档列表失败。当前游戏仍保留在页面中。' }); }
+        finally { set({ slotBusy: false }); }
+      },
+      flushSaves: () => saves,
       initAiSettings: (defaultEndpoint = '') => {
         if (!settingsInitialized) { settingsInitialized = true; set({ aiSettings: readAiSettings(defaultEndpoint) }); }
       },
       configureAi: (settings, token) => {
+        if (!playing() || get().play.mode !== 'generative') return;
         try {
           const endpoint = normalizeRelayEndpoint(settings.endpoint);
           if (token.length > 256 || /[\r\n]/.test(token)) throw new Error('relay 访问口令格式不正确。');
-          fallBack('设置已更新；等待中的奇遇已改用经典剧情。');
+          fallBack('设置已更新；等待中的奇遇已使用人工回退，存档模式不变。');
           relayToken = token.trim();
-          const next = { endpoint, consent: settings.consent === true };
-          const stored = persistAiSettings(next);
-          set({ aiSettings: next, aiStatus: 'idle', aiMessage: stored ? '配置已保存。访问口令只在本次页面会话有效。' : '配置仅在当前页面有效：浏览器禁用了本机设置存储。' });
+          const next = { endpoint, consent: settings.consent === true }, stored = persistAiSettings(next);
+          set({ aiSettings: next, aiStatus: 'idle', aiMessage: stored ? '接入配置已保存。访问口令只在本次页面会话有效。' : '配置仅在当前页面有效：浏览器禁用了本机设置存储。' });
         } catch (error) { set({ aiStatus: 'error', aiMessage: error instanceof Error ? error.message : '设置无效。' }); }
-      },
-      setMode: (mode) => {
-        if (!get().hydrated || get().loadBlocked || mode === get().play.mode) return;
-        gate.cancel(); commit(switchMode(session(), mode));
-        set({ aiStatus: 'idle', aiMessage: mode === 'classic' ? '经典模式：不发送 AI 请求。已有奇遇可继续在本机结算。' : '生成模式：原剧情保留，点击自由奇遇后才会请求 AI。' });
       },
       explore: async (focus, npcId, intent = '') => {
         if (!canAct()) return;
-        const before = session();
-        const started = beginExploration(before, focus, npcId, intent);
+        const before = session(), started = beginExploration(before, focus, npcId, intent);
         if (started === before) { set({ aiStatus: 'error', aiMessage: '暂时无法探索：请完成配送，保留至少 2 精力，并选择已认识且未疏远的人物。' }); return; }
         commit(started);
         if (!started.play.pending) return;
         if (started.play.mode === 'classic') {
-          commit(fallbackExploration(started)); set({ aiStatus: 'idle', aiMessage: '本段为人工编写的经典奇遇，没有调用 AI。' }); return;
+          commit(fallbackExploration(started)); set({ aiStatus: 'idle', aiMessage: '本段为人工编写的经典奇遇，没有调用 AI。' }); await saves; return;
         }
-        const ticket = gate.begin();
-        set({ aiStatus: 'loading', aiMessage: '正在生成奇遇；等待不推进游戏时间，可以随时改用经典剧情。' });
+        const ticket = gate.begin(), slotId = get().activeSlotId;
+        set({ aiStatus: 'loading', aiMessage: '正在生成奇遇；等待不推进游戏时间。可取消本次请求并使用人工回退。' });
         try {
           const result = await deps.generate(started, get().aiSettings, relayToken, ticket.signal);
-          if (!gate.current(ticket) || get().play.pending?.id !== started.play.pending.id) return;
-          if (!result.ok) { fallBack(result.error); return; }
+          if (!gate.current(ticket) || get().activeSlotId !== slotId || get().play.pending?.id !== started.play.pending.id) return;
+          if (!result.ok) { fallBack(result.error); await saves; return; }
           const next = receiveGeneratedScene(session(), started.play.pending.id, result.data);
           commit(next);
-          set(next.play.scene?.source === 'ai' ? { aiStatus: 'success', aiMessage: 'AI 奇遇已生成并写入本地存档。选择的实际影响由本地规则结算。' } : { aiStatus: 'fallback', aiMessage: 'AI 内容未通过规则校验，已替换为经典剧情。' });
-        } catch {
-          if (gate.current(ticket)) fallBack('AI 服务异常，已使用经典剧情。');
-        }
+          set(next.play.scene?.source === 'ai' ? { aiStatus: 'success', aiMessage: 'AI 奇遇已生成。自动保存完成后可选择，实际影响由本地规则结算。' } : { aiStatus: 'fallback', aiMessage: 'AI 内容未通过规则校验，已使用经典人工事件，存档模式不变。' });
+          await saves;
+        } catch { if (gate.current(ticket)) { fallBack('AI 服务异常，已使用经典人工事件。'); await saves; } }
       },
-      fallback: () => fallBack('已取消 AI 请求，使用经典剧情；不重复收取探索时间。'),
+      fallback: () => { if (playing()) fallBack('已取消本次 AI 请求，使用人工回退；不重复收费，也不改变存档模式。'); },
       testAi: async () => {
-        if (!get().hydrated || get().loadBlocked || get().play.mode !== 'generative' || get().play.pending || get().aiStatus === 'checking') return;
-        const ticket = gate.begin();
-        set({ aiStatus: 'checking', aiMessage: '正在检查 relay 协议与配置；此检查不调用模型。' });
+        if (!playing() || get().play.mode !== 'generative' || get().play.pending || get().aiStatus === 'checking') return;
+        const ticket = gate.begin(); set({ aiStatus: 'checking', aiMessage: '正在检查 relay 协议与配置；此检查不调用模型。' });
         try {
           const result = await deps.test(get().play.mode, get().aiSettings, relayToken, ticket.signal);
           if (gate.current(ticket)) set({ aiStatus: result.ok ? 'success' : 'error', aiMessage: result.ok ? 'relay 可达且支持生成协议；实际模型结果以生成奇遇为准。' : result.error });
@@ -135,18 +169,10 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },
       chooseEvent: (choiceId) => {
-        if (!get().hydrated || get().loadBlocked || get().play.pending || get().game.gameOver) return;
+        if (!playing() || get().play.pending || get().game.gameOver || get().play.scene && get().saveStatus !== 'saved') return;
         commit(get().play.scene ? resolveScene(session(), choiceId) : { ...session(), game: resolveEventChoice(get().game, choiceId) });
       },
       chooseEnding: (endingId) => { if (canAct()) commit({ ...session(), game: selectEnding(get().game, endingId) }); },
-      reset: async () => {
-        // Also wait for initial hydration so a late disk read cannot revive the previous world.
-        if (hydration) await hydration;
-        gate.cancel();
-        const next = createSession(); next.play.mode = get().play.mode;
-        set({ game: next.game, play: next.play, hydrated: true, loadBlocked: false, aiStatus: 'idle', aiMessage: '', saveError: '' });
-        await persist(next);
-      },
     };
   });
 }

@@ -1,3 +1,5 @@
+import { bikeStats, deliveryCosts, deliveryEstimate, pushingCosts, ridingBlockReason } from '../game/bike';
+import { BikePanel } from './BikePanel';
 import { EVENT_MAP } from '../game/content';
 import { availableEndings, ENDING_MAP } from '../game/endings';
 import { breakthroughCost, formatTime, realmName, RENT } from '../game/engine';
@@ -5,7 +7,7 @@ import { NPC_MAP, NPCS, relationshipLabel, relationshipScore } from '../game/npc
 import { useGameStore } from '../game/store';
 import type { GameAction, GameState, NpcId, NumericStatKey } from '../game/types';
 
-function useExplorationBusy() { return useGameStore((s) => Boolean(s.play.pending || s.play.scene || s.loadBlocked)); }
+function useExplorationBusy() { return useGameStore((s) => Boolean(s.play.pending || s.play.scene || s.loadBlocked || s.slotBusy)); }
 export function StatBar({ label, value, max = 100, suffix = '', danger = false }: { label: string; value: number; max?: number; suffix?: string; danger?: boolean }) {
   const width = Math.max(0, Math.min(100, (value / max) * 100));
   return <div className="stat-row"><div className="stat-label"><span>{label}</span><strong>{Math.round(value)}{suffix}</strong></div><div className="bar"><span className={danger ? 'danger' : ''} style={{ width: `${width}%` }} /></div></div>;
@@ -70,7 +72,7 @@ export function CharacterPanel() {
   const rentDays = game.rentDueDay - game.day;
   return <section className="panel stats-panel">
     <div className="section-heading"><h3>此身在人间</h3><span>{realmName(game.realmLevel)}</span></div><div className="money">¥{game.money}</div>
-    <StatBar label="精力" value={game.energy} danger={game.energy < 25} /><StatBar label="健康" value={game.health} danger={game.health < 35} /><StatBar label="压力" value={game.stress} danger={game.stress > 70} /><StatBar label="电量" value={game.bikeBattery} danger={game.bikeBattery < 20} />
+    <StatBar label="精力" value={game.energy} danger={game.energy < 25} /><StatBar label="健康" value={game.health} danger={game.health < 35} /><StatBar label="压力" value={game.stress} danger={game.stress > 70} /><StatBar label="电量" value={game.bikeBattery} max={bikeStats(game.bike).capacity} suffix={` / ${bikeStats(game.bike).capacity}`} danger={game.bikeBattery < 20} />
     <div className="mini-grid">{[['灵气', game.qi], ['悟性', game.insight], ['信誉', game.reputation], ['因果', game.karma], ['阴气', game.darkQi], ['完成订单', game.completedOrders]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
     <div className={`rent-box ${rentDays <= 2 ? 'urgent' : ''}`}><span>房租 ¥{RENT}</span><strong>{rentDays >= 0 ? `${rentDays} 天后` : '已逾期'}</strong></div>
     <p className="panel-note">累计配送收入 ¥{game.totalIncome}。查看状态与切换地图不消耗游戏时间。</p>
@@ -79,18 +81,24 @@ export function CharacterPanel() {
 export function DeliveryPanel() {
   const game = useGameStore((s) => s.game);
   const disabled = Boolean(game.pendingEventId) || game.gameOver;
-  const order = game.activeOrder;
+  const order = game.activeOrder, reason = ridingBlockReason(game), foot = pushingCosts(game);
+  const costs = order ? deliveryCosts(order, game.bike) : null;
   return <section className="panel action-panel">
-    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单 · 谨慎前行' : '配送中'}</div><h3>{order.merchant}</h3><p>送往 {order.customer}</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {order.estimatedMinutes} 分钟</span><span>¥{order.reward}</span></div><ActionButton action="complete-order" title="完成配送" meta="路况、天气与事件会改变实际耗时" disabled={disabled} /></div> : <><p className="panel-note">城市里总有人等着一顿热饭。接单后，地图会显示取餐与送达区域。</p><ActionButton action="accept-order" title="接一个新订单" meta="2 分钟 · 可能遇见 NPC、友情与灵异剧情" disabled={disabled} /></>}
+    {reason && <p className="play-warning" role="alert">{reason}</p>}
+    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单 · 谨慎前行' : '配送中'}</div><h3>{order.merchant}</h3><p>送往 {order.customer}</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(order, game.bike)} 分钟</span><span>¥{order.reward}</span></div>
+      <ActionButton action="complete-order" title="完成配送" meta={`骑行 · 电量 -${costs?.battery} · 耐久 -${costs?.wear} · 天气与路况影响耗时`} disabled={disabled || Boolean(reason)} />
+      <div className="delivery-recovery"><ActionButton action="push-order" title="推车送达（不骑行）" meta={`${foot.minutes} 分钟 · 精力 -${foot.energy} · 收入 ¥${foot.income} · 不耗电`} disabled={disabled || game.energy < foot.energy} /><ActionButton action="cancel-order" title="取消当前订单" meta="5 分钟 · 信誉 -2 · 不收取费用" disabled={disabled} /></div>
+    </div> : <><p className="panel-note">城市里总有人等着一顿热饭。接单后，地图会显示取餐与送达区域。</p><ActionButton action="accept-order" title="接一个新订单" meta="2 分钟 · 可能遇见 NPC、友情与灵异剧情" disabled={disabled || Boolean(reason)} /></>}
     <div className="info-row"><span>已完成 {game.completedOrders} 单</span><span>累计 ¥{game.totalIncome}</span></div>
-    <p className="panel-note">午高峰 11:00–14:00，晚高峰 17:00–20:00。地图连线是区域示意，不是精确导航；实际地址、耗时与收入以订单为准。</p>
+    <p className="panel-note">午高峰 11:00–14:00，晚高峰 17:00–20:00。地图连线是区域示意，不是精确导航。骑行条件不满足时，不会自动扣款或代替你推车。</p>
+    <BikePanel />
   </section>;
 }
 export function LifePanel() {
   const game = useGameStore((s) => s.game);
   const disabled = Boolean(game.pendingEventId) || game.gameOver;
   return <section className="panel"><p className="panel-note">凡俗生活也是修行的一部分。照顾身体，给下一趟旅程留些余力。</p><div className="action-grid">
-    <ActionButton action="eat" title="吃顿热饭" meta="30 分钟 · ¥18" disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta="60 分钟 · 恢复精力" disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta="360 分钟 · 大幅恢复" disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta="18 分钟 · ¥6" disabled={disabled || game.money < 6} />
+    <ActionButton action="eat" title="吃顿热饭" meta="30 分钟 · ¥18" disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta="60 分钟 · 恢复精力" disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta="360 分钟 · 大幅恢复" disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta={`18 分钟 · ¥6 · 补满至 ${bikeStats(game.bike).capacity}`} disabled={disabled || game.money < 6 || game.bikeBattery >= bikeStats(game.bike).capacity} />
   </div><div className="rent-box"><span>房租 ¥{RENT}</span><strong>第 {game.rentDueDay} 天到期</strong></div></section>;
 }
 export function CultivationPanel() {
@@ -111,5 +119,5 @@ export function EndingResult({ onReset }: { onReset: () => void }) {
   const game = useGameStore((s) => s.game);
   const ending = game.endingId ? ENDING_MAP.get(game.endingId) : null;
   if (!game.gameOver) return <EndingsPanel />;
-  return <section className="gameover ending-result"><div className="eyebrow">{ending?.category ?? '本世结束'}</div><h3>{ending?.title ?? '你倒在了通往长生的路上。'}</h3><p>{ending?.description ?? `完成 ${game.completedOrders} 单，累计收入 ¥${game.totalIncome}，最终境界 ${realmName(game.realmLevel)}。`}</p>{ending && <blockquote>{ending.epilogue}</blockquote>}<button type="button" onClick={onReset}>重新开始一世</button></section>;
+  return <section className="gameover ending-result"><div className="eyebrow">{ending?.category ?? '本世结束'}</div><h3>{ending?.title ?? '你倒在了通往长生的路上。'}</h3><p>{ending?.description ?? `完成 ${game.completedOrders} 单，累计收入 ¥${game.totalIncome}，最终境界 ${realmName(game.realmLevel)}。`}</p>{ending && <blockquote>{ending.epilogue}</blockquote>}<button type="button" onClick={onReset}>返回开始页，保留这一世</button></section>;
 }

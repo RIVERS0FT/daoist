@@ -1,29 +1,29 @@
-# Architecture v0.4
+# Architecture v0.5
 
 ## Stack and layout
 
 React + TypeScript + Vite，Zustand，IndexedDB，CSS；GitHub Actions / Pages。核心游戏本地运行。独立 Node relay 是可选生成服务，不随 Pages 运行。
 
-- `types.ts`、`engine.ts`：保留发布版 v2 世界状态及确定性 RPG 引擎。
+- `types.ts`、`engine.ts`：保留 v2 世界并添加 versioned bike；确定性 RPG 引擎负责硬性骑行门槛、推车、维护和升级。`bike.ts` 提供车辆派生属性、价格和成本。
 - `events.ts`、`npcEvents.ts`、`content.ts`：原有人工事件定义与统一事件表。
 - `npcs.ts`、`endings.ts`：关系、路线与多结局本地规则。
 - `generation.ts`：生成式场景数据类型、严格验证、行动模板、6 个可回退人工奇遇与成本描述。
-- `play.ts`：纯函数会话层。旧档迁移、探索开始、场景接收、模式切换、回退、选择结算和最小请求上下文。
+- `play.ts`：纯函数会话层。旧档迁移、探索开始、场景接收、创建时模式、回退、选择结算和最小请求上下文。
 - `ai.ts`：安全 URL / 设置读写、限长 HTTP adapter、请求失效门控。没有构建期自动请求。
-- `store.ts`：唯一 UI 写入口，统一待处理场景锁，模式与配置切换取消网络，防迟到写入，串行保存。
+- `store.ts`：唯一 UI 写入口，统一待处理场景锁，存档与配置切换取消网络，捕获槽 ID 防迟到写入，串行自动保存、错误重试与退出保护。
 - `storage.ts`：IndexedDB 读写；写事务完成后才算成功，关闭数据库连接，向 store 报告错误。
 - `components/PlayModePanel.tsx`、`playModes.css`：双模式和可操作奇遇界面。
 - `server/relay.mjs`：可选服务端 Chat Completions 兼容 relay，配置在服务端环境变量。
 
 ## Save envelope
 
-当前磁盘格式为 `PlaySession = { version: 3, game: GameState(v2), play: PlayState }`。内部世界版本与磁盘封装版本分开，避免为了 UI 模式破坏原有 RPG 模型。
+当前会话格式为 `PlaySession = { version: 4, game: GameState(v2 + bike), play: PlayState }`。每槽外层为 `SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session }`，存入 `saves` 下的 `slot:<id>`。内部世界版本与磁盘封装版本分开，避免为了 UI 模式破坏原有 RPG 模型。
 
 `play` 持有 mode、sequence、pending request、完整 scene、最近 12 条已解决奇遇 history。没有 provider key 或 relay token。地址和授权为独立本机设置；访问口令仅为 store 闭包内字符串。
 
-v1/v2 原始存档先由既有 migrateGameState 升级世界，再加默认经典模式；v3 恢复场景时重新验证受控模板。未知未来版本阻止自动写入。刷新遇到 pending 请求则在原有已付款探索上回退，不再次收费或发请求。
+v1/v2 原始存档先由既有 migrateGameState 升级世界，再加默认经典模式；v3/v4 恢复时保留模式并重新验证受控模板，添加或规范化车辆。未知未来版本阻止自动写入。刷新遇到 pending 请求则在原有已付款探索上回退，不再次收费或发请求。
 
-IndexedDB 保持 `daoist-delivery` / `saves` / `autosave`，无需新建数据库或删除旧数据。每次状态转移后保存，队列保证旧写入不能覆盖新世界。
+IndexedDB 保持 `daoist-delivery` / `saves`。首次读取将旧 `autosave` 原子迁移到 `slot:legacy-autosave` 并写入 `meta:legacy-import` 标记；原 autosave 永久保留备份，不重复导入。每次状态转移立即保存。每次写事务校验 revision 与固定剧情模式，阻止另一标签页覆盖新版。事务完成后才显示保存成功；失败自动重试，未知版本或冲突停止写入。
 
 ## Scene lifecycle
 
@@ -37,7 +37,7 @@ IndexedDB 保持 `daoist-delivery` / `saves` / `autosave`，无需新建数据�
 
 ## Network authority and cancellation
 
-模式与用户同意双重约束。`RequestGate` 的 revision + AbortController 同时取消请求和迟到结果的写权限。换模式、改配置、回退、重开都使旧 ticket 失效；仅匹配当前 pending id 的结果可提交。
+模式与用户同意双重约束。`RequestGate` 的 revision + AbortController 同时取消请求和迟到结果的写权限。返回开始页、换存档、改配置、回退都使旧 ticket 失效；仅同时匹配当前槽 ID 与 pending id 的结果可提交。
 
 客户端 20 秒超时、32 KiB 响应限制、无自动重试、禁止跨重定向传令牌、credentials omit、no-referrer。所有模型文本按纯文本渲染。模型只提供 approach 标签，不提供效果 JSON。已保存的生成内容不再依赖模型可用性。
 
@@ -57,4 +57,10 @@ relay 自己持有供应商密钥、固定上游 URL、访问口令、Origin 白
 
 `src/App.tsx` 管理临时面板與导航焦点，不保存地图浏览状态、不写世界数据。`src/game/cityMap.ts` 提供可测试的地点坐标、功能入口与配送区域映射。`components/CityMap.tsx` 渲染本地 SVG、原生地图滚动及缩放。`components/GamePanels.tsx` 复用现有行动、人物、结局和事件视图；所有实际行动仍调用 store。`PlayModePanel` 的 settingsOnly 视图复用同一份模式/relay 配置逻辑，不复制请求状态。`map.css` 在基础样式之后载入，控制整屏布局、320px 和横屏适配。
 
-面板是非模态区域：主地图与固定导航仍可使用。关闭/Escape 恢复焦点，更多菜单打开后焦点进入首项。AI 场景和人工事件通过 store 状态变化自动显示；关闭界面不会丢弃 pending 内容。存档失败在全局显示。磁盘 schema 与 AI 协议不变。CI 附带仅含 git 跟踪文件的 source-snapshot 压缩包，便于复现 UI 验证，不包含 .git 凭证、未跟踪环境文件或 node_modules。
+面板是非模态区域：主地图与固定导航仍可使用。关闭/Escape 恢复焦点，更多菜单打开后焦点进入首项。AI 场景和人工事件通过 store 状态变化自动显示；关闭界面不会丢弃 pending 内容。存档失败在全局显示。AI 协议不变；存档升级到 v4 并保留旧备份。CI 附带仅含 git 跟踪文件的 source-snapshot 压缩包，便于复现 UI 验证，不包含 .git 凭证、未跟踪环境文件或 node_modules。
+
+## Start page and slot lifecycle
+
+`StartScreen` 是启动入口：只有新建或进入存档后才能显示地图和执行行动。模式只作为 `newGame(name, mode)` 的创建参数，不导出运行时切换 API。`returnToStart` 取消请求、保存已付款探索的人工回退并等待自动写入。失败时留在当前世界，显式确认后才能放弃未保存改动，磁盘数据不被删除。
+
+全局保存指示器区分 saving / saved / error。生成场景的选项在保存完成前不可结算。没有手动保存按钮；自动重试只影响存储，不推进游戏时钟。浏览器清理网站数据会删除本机存档，不宣称云同步。
