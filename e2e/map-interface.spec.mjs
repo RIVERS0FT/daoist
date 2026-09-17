@@ -13,16 +13,27 @@ async function resolvePendingEvent(page) {
 }
 async function pointerAccessibleOffer(page) {
   const offers = page.getByTestId('delivery-offer');
-  for (let index = 0; index < await offers.count(); index += 1) {
-    const offer = offers.nth(index);
-    const hit = await offer.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return Boolean(target && (target === element || element.contains(target)));
-    });
-    if (hit) return offer;
+  const find = async () => {
+    for (let index = 0; index < await offers.count(); index += 1) {
+      const offer = offers.nth(index);
+      const hit = await offer.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return Boolean(target && (target === element || element.contains(target)));
+      });
+      if (hit) return offer;
+    }
+    return null;
+  };
+  let offer = await find();
+  if (!offer) {
+    await page.locator('.camera-access summary').click();
+    await page.getByRole('button', { name: '显示全图', exact: true }).click();
+    await page.locator('.camera-access summary').click();
+    offer = await find();
   }
-  throw new Error('No pointer-accessible delivery offer is visible on the current map view.');
+  expect(offer, 'at least one map delivery task should be pointer-accessible after browsing the map').not.toBeNull();
+  return offer;
 }
 test('map landing keeps status at top and navigation at bottom left without external calls', async ({ page }, info) => {
   const outside = [], errors = [];
