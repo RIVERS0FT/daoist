@@ -9,6 +9,7 @@ dist/
 .env.*.local
 server/.env
 server/.env.local
+.test-src/
 .test-dist/
 test-results/
 playwright-report/
