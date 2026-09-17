@@ -52,7 +52,7 @@ test('AI scene choices persist across reload and finish offline without switchin
   await ready(page, 'generative'); await configure(page);
   await page.getByRole('button', { name: '测试连接', exact: true }).click();
   await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('relay 可达'); expect(generations).toBe(0);
-  await page.getByLabel(/^想尝试的虚构行动/).fill('看看桥下的纸鹤，但不强行改变任何人的关系。');
+  await page.getByLabel(/^虚构行动/).fill('看看桥下的纸鹤，但不强行改变任何人的关系。');
   await page.getByRole('button', { name: /^生成下一段奇遇/ }).click();
   await expect(page.getByRole('heading', { name: scene.title, exact: true })).toBeVisible();
   await expect.poll(async () => (await saved(page))?.play?.scene?.title).toBe(scene.title);

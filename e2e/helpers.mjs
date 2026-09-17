@@ -1,8 +1,8 @@
 import { expect } from '@playwright/test';
 export async function newGame(page, mode = 'classic', name = '测试仙途') {
   await expect(page.locator('.start-screen')).toBeVisible();
-  await page.getByRole('button', { name: '新建存档', exact: false }).click();
-  await page.getByLabel('存档名称', { exact: true }).fill(name);
+  await page.getByRole('button', { name: '新建角色', exact: true }).click();
+  await page.getByLabel('角色名称', { exact: true }).fill(name);
   await page.getByRole('radio', { name: mode === 'classic' ? /^经典剧情/ : /^AI 生成式剧情/ }).check();
   await page.getByRole('button', { name: '开始这一世', exact: true }).click();
   await expect(page.locator('.game-shell')).toBeVisible();

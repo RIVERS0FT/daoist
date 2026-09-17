@@ -7,16 +7,20 @@ async function rawLegacy(page, value) {
     r.onsuccess = () => { const db = r.result, tx = db.transaction('saves', 'readwrite'); tx.objectStore('saves').put(raw, 'autosave'); tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(tx.error); }; };
   }), value);
 }
-test('start page offers creation-only modes and has no manual save control', async ({ page }, info) => {
+test('start page keeps help collapsed, requires a character name and offers creation-only modes', async ({ page }, info) => {
   await page.goto('./'); await expect(page.locator('.start-screen')).toBeVisible();
   await expect(page.locator('.game-shell')).toHaveCount(0); await expect(page.getByRole('button', { name: /手动保存/ })).toHaveCount(0);
-  await page.getByRole('button', { name: /新建存档/ }).click();
+  await expect(page.locator('.start-help')).not.toHaveAttribute('open', '');
+  await page.getByRole('button', { name: '新建角色', exact: true }).click();
   await expect(page.getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '开始这一世', exact: true })).toBeDisabled();
+  await page.getByLabel('角色名称', { exact: true }).fill('界面测试');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('start-page.png'), fullPage: true });
   await page.getByRole('button', { name: '开始这一世', exact: true }).click();
+  await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { name: '界面测试', exact: true })).toBeVisible();
   await nav(page, '奇遇').click(); await expect(page.getByRole('radio')).toHaveCount(0);
-  await expect(page.locator('.mode-locked')).toContainText('本局不可切换');
+  await expect(page.locator('.mode-locked')).toContainText('本存档固定');
 });
 test('two slots keep independent modes, upgrades and automatically saved progress', async ({ page }, info) => {
   await page.goto('./'); await newGame(page, 'classic', '跑单人生');
@@ -28,6 +32,7 @@ test('two slots keep independent modes, upgrades and automatically saved progres
   await menu(page); await expect(page.locator('.save-card')).toHaveCount(2);
   await page.getByRole('button', { name: '进入存档：跑单人生', exact: true }).click();
   const restored = await readStore(page); expect(restored.game).toEqual(first.game); expect(restored.play.mode).toBe('classic');
+  await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { name: '跑单人生', exact: true })).toBeVisible();
   await page.reload(); await expect(page.locator('.start-screen')).toBeVisible(); await continueRecent(page);
   expect((await readStore(page)).game.bike.speed).toBe(1);
 });
@@ -78,6 +83,6 @@ test('transient storage failures retry automatically without losing the upgrade'
   await page.evaluate(() => { const original = IDBObjectStore.prototype.put; let failed = false; IDBObjectStore.prototype.put = function(value, key) { if (!failed && String(key).startsWith('slot:')) { failed = true; throw new DOMException('Test quota', 'QuotaExceededError'); } return original.call(this, value, key); }; });
   await page.getByRole('button', { name: /^升级速度/ }).click();
   await expect(page.locator('.storage-alert')).toContainText('自动保存失败');
-  await expect(page.locator('.save-indicator')).toContainText('进度已自动保存', { timeout: 10000 });
+  await expect(page.locator('.save-indicator')).toContainText('已保存', { timeout: 10000 });
   const current = await readStore(page); expect((await disk(page))[`slot:${current.id}`].session.game.bike.speed).toBe(1);
 });
