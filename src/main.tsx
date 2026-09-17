@@ -5,6 +5,7 @@ import './styles.css';
 import './map.css';
 import './deliveryMap.css';
 import './simplifiedUi.css';
+import './uiAdjustments.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

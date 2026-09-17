@@ -31,8 +31,9 @@
 .camera-viewport .landmark-cluster { z-index:6; }
 .camera-viewport .landmark-cluster .pin-emblem { background:#384930; border-color:#bbc08c; color:#efe4b0; font-size:16px; }
 
-/* At whole-city scale, delivery offers remain visible as compact task dots. Large labels would otherwise cover clustered landmarks. */
+/* Whole-city layering keeps current delivery highest, clustered landmarks usable, and candidate offers visible beneath clusters. */
 .camera-viewport .map-world[data-detail=overview] .delivery-pin.offer { width:44px; min-width:44px; height:44px; min-height:44px; gap:0; z-index:4; }
 .camera-viewport .map-world[data-detail=overview] .delivery-pin.offer .pin-emblem { width:34px; height:34px; margin:0; }
 .camera-viewport .map-world[data-detail=overview] .delivery-pin.offer > strong,
 .camera-viewport .map-world[data-detail=overview] .delivery-pin.offer > small { display:none; }
+.camera-viewport .delivery-pin:not(.offer) { z-index:8; }

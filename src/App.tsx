@@ -2,10 +2,12 @@ import { StartScreen } from './components/StartScreen';
 import { bikeStats, deliveryEstimate } from './game/bike';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CityMap } from './components/CityMap';
-import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, JournalPanel, LifePanel, RelationshipsPanel } from './components/GamePanels';
+import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, LifePanel } from './components/GamePanels';
 import { HelpPanel } from './components/HelpPanel';
 import { Icon } from './components/Icon';
+import { MapLogOverlay } from './components/MapLogOverlay';
 import { PlayModePanel } from './components/PlayModePanel';
+import { RelationshipsPanel } from './components/RelationshipsPanel';
 import { MAP_PLACES, PANEL_TITLES } from './game/cityMap';
 import type { MapPlace, PanelId, PlaceId } from './game/cityMap';
 import { EVENT_MAP } from './game/content';
@@ -15,11 +17,11 @@ import { useGameStore } from './game/store';
 const WEATHER = { clear: '晴', cloudy: '多云', rain: '雨', storm: '雷暴' } as const;
 const NAV = [
   { id: null, label: '地图', icon: 'map' }, { id: 'delivery', label: '跑单', icon: 'bike' },
-  { id: 'cultivation', label: '修炼', icon: 'moon' }, { id: 'relationships', label: '人物', icon: 'users' },
+  { id: 'cultivation', label: '修炼', icon: 'moon' }, { id: 'relationships', label: '关系', icon: 'users' },
   { id: 'exploration', label: '奇遇', icon: 'spark' },
 ] as const;
 const MORE = [
-  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' }, { id: 'journal', icon: 'book' },
+  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' },
   { id: 'endings', icon: 'flag' }, { id: 'help', icon: 'book' }, { id: 'settings', icon: 'settings' },
 ] as const;
 
@@ -92,6 +94,7 @@ export default function App() {
     {saveError && <div className="storage-alert" role="alert">{saveError}<button type="button" onClick={() => openNav('settings')}>打开设置</button></div>}
     <section className="map-stage" aria-label="城市地图主界面">
       <CityMap key={activeSlotId} panelOpen={Boolean(panel)} order={game.activeOrder} position={game.position} selected={selected} onOrder={() => { setPlace(null); openPanel('delivery'); }} onPlace={openPlace} onPlaces={() => openNav('places')} />
+      <MapLogOverlay compact={Boolean(panel)} />
       {!panel && <aside className={`map-task ${pendingPanel ? 'requires-attention' : ''}`}>
         <span className="eyebrow">{pendingPanel ? '待处理' : game.activeOrder ? '当前配送' : '地图接单'}</span>
         <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.cultivation.trial ? '内景筑基试炼待续' : game.activeOrder ? `${game.activeOrder.merchant} → ${game.activeOrder.customer}` : '选择地图上的配送任务'}</strong>
@@ -99,19 +102,18 @@ export default function App() {
         {(pendingPanel || game.activeOrder) && <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : '查看配送'}<Icon name="arrow" size={17} /></button>}
       </aside>}
       {panel && <section ref={drawer} className="game-drawer" tabIndex={-1} aria-labelledby="drawer-heading">
-        <header className="drawer-heading"><div><span className="eyebrow">{place && place.panel === panel ? place.name : currentSlot?.name ?? '青岚市'}</span><h2 id="drawer-heading">{PANEL_TITLES[panel]}</h2></div><button className="drawer-close" type="button" aria-label="关闭面板，返回地图" onClick={closePanel}><Icon name="close" /></button></header>
+        <header className="drawer-heading"><div>{place && place.panel === panel && <span className="eyebrow">{place.name}</span>}<h2 id="drawer-heading">{PANEL_TITLES[panel]}</h2></div><button className="drawer-close" type="button" aria-label="关闭面板，返回地图" onClick={closePanel}><Icon name="close" /></button></header>
         <div className="drawer-body" key={panel}>
           {pendingPanel && panel !== pendingPanel && <button type="button" className="pending-link" onClick={() => openPanel(pendingPanel)}>{game.gameOver ? '查看本世结局' : '有待处理的内容，点击继续'}<Icon name="arrow" size={16} /></button>}
           {place && place.panel === panel && <div className="place-intro"><span>{place.district}</span><p>{place.description}</p></div>}
           {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
-          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'journal' && <JournalPanel />}
+          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}
           {panel === 'exploration' && <PlayModePanel />}
           {panel === 'help' && <HelpPanel />}
           {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>存档 · {currentSlot?.name}</h3><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
           {panel === 'endings' && <EndingResult onReset={resetGame} />}
           {panel === 'event' && (event ? <EventPanel /> : <div className="resolved-event"><Icon name="book" size={28} /><h3>这一页，已经写下。</h3><p>{latest?.text}</p><button type="button" className="primary-button" onClick={() => openNav(game.activeOrder ? 'delivery' : null)}>{game.activeOrder ? '继续配送' : '返回地图'}</button></div>)}
           {panel === 'places' && <div className="place-directory">{MAP_PLACES.map((item) => <button key={item.id} type="button" onClick={() => openPlace(item)}><Icon name={item.icon} /><span><strong>{item.name}</strong><small>{item.subtitle}</small></span><Icon name="arrow" size={16} /></button>)}</div>}
-          {latest && !['journal', 'event', 'endings', 'help'].includes(panel) && <div className="last-result" aria-label="最近行动结果"><span>第 {latest.day} 天 {formatTime(latest.minute)} · 最近见闻</span><p>{latest.text}</p></div>}
         </div>
       </section>}
     </section>
