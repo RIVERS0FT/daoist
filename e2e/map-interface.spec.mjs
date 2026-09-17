@@ -18,6 +18,7 @@ test('map landing keeps status at top and navigation at bottom left without exte
   await ready(page);
   await expect(page.locator('.game-drawer')).toHaveCount(0);
   await expect(page.getByTestId('map-viewport')).toBeVisible();
+  await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { name: '测试仙途', exact: true })).toBeVisible();
   const header = await page.getByRole('banner', { name: '顶部状态栏' }).boundingBox();
   const dock = await page.getByRole('navigation', { name: '游戏导航' }).boundingBox();
   expect(header.y).toBe(0); expect(dock.x).toBeLessThan(40); expect(dock.y + dock.height).toBeGreaterThan(page.viewportSize().height - 40);
@@ -30,10 +31,13 @@ test('map landing keeps status at top and navigation at bottom left without exte
 test('navigation and map browsing never advance time, change saves or invoke AI', async ({ page }, info) => {
   await ready(page); const before = await world(page);
   for (const label of ['跑单', '修炼', '人物', '奇遇']) { await nav(page, label).click(); await expect(page.locator('.game-drawer')).toBeVisible(); }
-  for (const label of ['凡俗生活', '骑手状态', '今日见闻', '命运分岔', '设置']) {
+  for (const label of ['凡俗生活', '角色状态', '今日见闻', '命运分岔', '帮助', '设置']) {
     await nav(page, '更多导航').click(); await page.locator('#more-navigation').getByRole('button', { name: label, exact: true }).click();
     await expect(page.locator('#drawer-heading')).toHaveText(label);
   }
+  await nav(page, '更多导航').click(); await page.locator('#more-navigation').getByRole('button', { name: '帮助', exact: true }).click();
+  await expect(page.getByRole('region', { name: '玩法帮助' })).toBeVisible();
+  await expect(page.getByText('只在这里说明规则。', { exact: true })).toBeVisible();
   await nav(page, '地图').click();
   await page.getByRole('button', { name: '地点', exact: true }).click();
   await expect(page.locator('.place-directory > button')).toHaveCount(10);
@@ -63,7 +67,7 @@ test('pending stories can be closed, reopened and cannot be bypassed from map pa
   await expect(page.locator('.event-panel')).toBeVisible();
   await page.getByRole('button', { name: '关闭面板，返回地图' }).click(); await expect(page.getByRole('button', { name: '继续处理', exact: true })).toBeVisible();
   await nav(page, '修炼').click(); await expect(page.getByRole('button', { name: /^吐纳一小时/ })).toBeDisabled();
-  await page.getByRole('button', { name: '有待处理的故事，点击继续' }).click();
+  await page.getByRole('button', { name: '有待处理的内容，点击继续' }).click();
   await page.locator('.event-choices button:enabled').first().click();
   await expect(page.getByRole('heading', { name: '这一页，已经写下。' })).toBeVisible();
   expect((await world(page)).game.pendingEventId).toBeNull();
