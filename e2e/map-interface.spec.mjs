@@ -11,6 +11,10 @@ async function restore(page, change) {
 async function resolvePendingEvent(page) {
   if ((await world(page)).game.pendingEventId) await page.locator('.event-choices button:enabled').first().click();
 }
+async function zoomOutFully(page) {
+  const button = page.getByRole('button', { name: '缩小地图', exact: true });
+  for (let i = 0; i < 20 && await button.isEnabled(); i += 1) await button.click();
+}
 async function pointerAccessibleOffer(page) {
   const offers = page.getByTestId('delivery-offer');
   const find = async () => {
@@ -27,9 +31,7 @@ async function pointerAccessibleOffer(page) {
   };
   let offer = await find();
   if (!offer) {
-    await page.locator('.camera-access summary').click();
-    await page.getByRole('button', { name: '显示全图', exact: true }).click();
-    await page.locator('.camera-access summary').click();
+    await zoomOutFully(page);
     offer = await find();
   }
   expect(offer, 'at least one map delivery task should be pointer-accessible after browsing the map').not.toBeNull();
@@ -46,12 +48,16 @@ test('map landing keeps status at top, transparent controls over the atlas, log 
   await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { name: '测试仙途', exact: true })).toBeVisible();
   await expect(page.locator('.map-log-overlay')).toBeVisible();
   await expect(page.locator('.last-result')).toHaveCount(0);
+  await expect(page.locator('.map-title')).toHaveText('青岚市');
+  await expect(page.locator('.camera-access')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '地点', exact: true })).toHaveCount(0);
   const header = await page.getByRole('banner', { name: '顶部状态栏' }).boundingBox();
   const dock = await page.getByRole('navigation', { name: '游戏导航' }).boundingBox();
   const stage = await page.locator('.map-stage').boundingBox();
   const viewport = await page.getByTestId('map-viewport').boundingBox();
   expect(header.y).toBe(0); expect(dock.x).toBeLessThan(40); expect(dock.y + dock.height).toBeGreaterThan(page.viewportSize().height - 40);
-  expect(Math.abs(viewport.y - stage.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(viewport.y - stage.y)).toBeLessThanOrEqual(1); expect(Math.abs((viewport.y + viewport.height) - (stage.y + stage.height))).toBeLessThanOrEqual(1);
+  expect(viewport.y + viewport.height).toBeGreaterThanOrEqual(dock.y + dock.height);
   for (const label of ['金钱', '灵气', '精力', '健康', '压力', '电量']) await expect(page.locator('.status-meters').getByText(label, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
@@ -69,9 +75,8 @@ test('navigation and map browsing never advance time, change saves or invoke AI'
   await expect(page.getByRole('region', { name: '玩法帮助' })).toBeVisible();
   await expect(page.getByText('只在这里说明规则。', { exact: true })).toBeVisible();
   await nav(page, '地图').click();
-  await page.getByRole('button', { name: '地点', exact: true }).click();
-  await expect(page.locator('.place-directory > button')).toHaveCount(10);
-  await page.locator('.place-directory').getByRole('button', { name: /青云山脚/ }).click();
+  const mountain = page.getByRole('button', { name: /^青云山脚，/ });
+  await mountain.focus(); await page.keyboard.press('Enter');
   await expect(page.locator('#drawer-heading')).toHaveText('夜间修行');
   await page.getByRole('button', { name: '关闭面板，返回地图' }).click();
   await page.getByRole('button', { name: '放大地图' }).click(); await page.getByRole('button', { name: '定位玩家' }).click();
