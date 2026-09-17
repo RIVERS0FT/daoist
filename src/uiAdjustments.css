@@ -6,9 +6,11 @@
 /* Generic drawers keep only the page title; place drawers retain the place context label. */
 .game-drawer:not(:has(.place-intro)) .drawer-heading h2 { margin-top: 0; }
 
-/* Move the same-size camera viewport upward so the atlas sits under transparent title/tools. */
-.map-viewport { inset: 0 0 200px; }
+/* The atlas paints behind all floating controls, including the transparent bottom navigation. Camera math still reserves the former action area. */
+.map-viewport { inset: 0; --camera-safe-bottom: 200px; }
 .map-title, .map-tools { background: transparent; }
+.map-title h2 { margin: 0; }
+.map-location { top: 60px; }
 .map-tools > button, .zoom-tools { backdrop-filter: blur(3px); }
 .map-tools button { background: rgba(29, 43, 34, .72); }
 .zoom-tools { background: transparent; }
@@ -47,7 +49,9 @@
 }
 
 @media (max-width: 520px) {
-  .map-viewport { inset: 0 0 258px; }
+  .map-viewport { inset: 0; --camera-safe-bottom: 258px; }
+  .map-location { top: 50px; }
+  .map-caption { display: none; }
   .map-log-overlay { right: 12px; bottom: 176px; width: min(240px, calc(100% - 24px)); max-height: 74px; }
   .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
   .map-log-overlay ol { max-height: 38px; }
@@ -58,7 +62,8 @@
 }
 
 @media (max-height: 520px) {
-  .map-viewport { inset-block: 0 140px; }
+  .map-viewport { inset: 0; --camera-safe-bottom: 140px; }
+  .map-location { top: 43px; }
   .map-log-overlay { right: 324px; bottom: 13px; max-height: 74px; }
   .map-log-overlay ol { max-height: 38px; }
   .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
