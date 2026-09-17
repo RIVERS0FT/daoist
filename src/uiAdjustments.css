@@ -13,6 +13,14 @@
 .map-tools button { background: rgba(29, 43, 34, .72); }
 .zoom-tools { background: transparent; }
 
+/* Bottom navigation is a transparent overlay. Only the actual buttons capture pointer input. */
+.nav-dock { padding: 0; background: transparent; border-color: transparent; box-shadow: none; pointer-events: none; }
+.nav-dock > .nav-button, .nav-dock > .more-navigation { pointer-events: auto; }
+.nav-button { background: transparent; text-shadow: 0 1px 4px #071009, 0 0 10px #071009; }
+.nav-button[aria-pressed=true], .nav-button[aria-expanded=true], .nav-button:hover { background: transparent; }
+.nav-button[aria-pressed=true], .nav-button[aria-expanded=true] { border-color: rgba(216, 188, 128, .5); box-shadow: 0 0 0 1px rgba(15, 24, 18, .42); }
+.more-button { border-left-color: rgba(91, 105, 80, .55); }
+
 /* Keep the canonical log in the lower-right area without displacing the existing task card. */
 .map-log-overlay { position: absolute; z-index: 6; right: 324px; bottom: 22px; width: min(340px, calc(100% - 56px)); max-height: 190px; overflow: hidden; border: 1px solid #52604a; border-radius: 13px; background: rgba(20, 30, 24, .88); box-shadow: 0 8px 24px #0005; backdrop-filter: blur(7px); }
 .map-log-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 38px; padding: 9px 12px; border-bottom: 1px solid #3a4938; }
