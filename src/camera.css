@@ -21,3 +21,11 @@
 @media(max-width:520px) { .camera-access { left:14px; bottom:184px; }.camera-menu { max-height:42dvh; } }
 @media(max-height:520px) { .camera-access { left:18px; bottom:80px; }.camera-access > summary { min-height:36px; }.camera-menu { bottom:44px; max-height:140px; width:300px; } }
 @media(prefers-reduced-motion:reduce) { .camera-viewport .pin-emblem { transition:none; } }
+
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) { width:44px; min-height:44px; height:44px; gap:0; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) .pin-emblem { width:32px; height:32px; border-radius:11px; margin:0; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) .pin-emblem::before { display:none; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) .pin-emblem svg { width:18px; height:18px; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) > strong,
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin) > small { display:none; }
+.camera-viewport .landmark-cluster .pin-emblem { background:#384930; border-color:#bbc08c; color:#efe4b0; font-size:16px; }

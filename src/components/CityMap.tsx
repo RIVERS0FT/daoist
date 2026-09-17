@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { clusterLandmarks } from '../game/mapCamera';
 import { createMapController } from '../map/controller';
 import type { MapController, CameraStatus } from '../map/controller';
 import '../camera.css';
@@ -15,7 +16,7 @@ const STREETS = [
   'M-30 1220H750L1100 1200H1560L1900 1240H2430', 'M-30 1500H1400L1830 1480H2430',
   'M280 -30V700L320 920V1630', 'M760 -30V550L720 940V1630',
   'M1200 -30V540L1170 920V1630', 'M1880 -30V500L1920 1030V1630',
-  'M2210 -30V650L2250 1140V1630', 'M-20 190H1530L1800 240H2430',
+  'M2210 -30V650L2250 1140V1630', 'M-30 190H1530L1800 240H2430',
 ];
 const BLOCKS = Array.from({ length: 56 }, (_, i) => {
   const column = i % 8, row = Math.floor(i / 8);
@@ -52,6 +53,7 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onPlace
   const viewport = useRef<HTMLDivElement>(null), world = useRef<HTMLDivElement>(null), controller = useRef<MapController | null>(null);
   const [status, setStatus] = useState<CameraStatus>({ scale: .65, minimum: .04, following: true, wheel: 'zoom' });
   const player = playerMapPoint(position), route = order ? orderMapPoints(order) : null;
+  const groups = clusterLandmarks(MAP_PLACES, status.scale);
   useLayoutEffect(() => {
     if (!viewport.current || !world.current) return;
     const api = createMapController(viewport.current, world.current, player, setStatus); controller.current = api;
@@ -82,9 +84,14 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onPlace
     <div ref={viewport} className="map-viewport camera-viewport" tabIndex={0} aria-label="城市地图，可拖动、双指缩放或使用方向键平移" data-testid="map-viewport">
       <div ref={world} className="map-world" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }} data-scale="0.65">
         <MapArtwork order={order} player={player} />
-        {MAP_PLACES.map((place) => <button type="button" className={`map-pin ${selected === place.id ? 'selected' : ''} ${place.panel === 'cultivation' || place.panel === 'exploration' ? 'mystic-pin' : ''}`} key={place.id} data-map-x={place.x} data-map-y={place.y} style={{ left: place.x, top: place.y }} aria-label={`${place.name}，${place.subtitle}`} onClick={() => onPlace(place)}>
+        {groups.map((group) => {
+          if (group.members.length > 1) return <button type="button" key={`cluster-${group.members.map(p => p.id).join('-')}`} className="map-pin landmark-cluster" data-map-x={group.x} data-map-y={group.y} style={{ left: group.x, top: group.y }} aria-label={`展开 ${group.members.length} 处地标：${group.members.map(p => p.name).join('、')}`} onClick={() => { controller.current?.zoom(Math.max(1.6, .42 / status.scale)); controller.current?.locate(group); }}>
+            <span className="pin-emblem"><b>{group.members.length}</b></span><small>处地标</small>
+          </button>;
+          const place = group.members[0];
+          return <button type="button" className={`map-pin ${selected === place.id ? 'selected' : ''} ${place.panel === 'cultivation' || place.panel === 'exploration' ? 'mystic-pin' : ''}`} key={place.id} data-map-x={place.x} data-map-y={place.y} style={{ left: place.x, top: place.y }} aria-label={`${place.name}，${place.subtitle}`} onClick={() => onPlace(place)}>
           <span className="pin-emblem"><Icon name={place.icon} size={25} /></span><strong>{place.name}</strong><small>{place.subtitle}</small>
-        </button>)}
+        </button>; })}
         {route && ([['pickup', route.pickup, '取', '取餐点'], ['dropoff', route.dropoff, '送', '送达点']] as const).map(([kind, point, badge, label]) => <button type="button" key={kind} className={`map-pin delivery-pin ${kind}`} data-location-id={point.id} data-map-x={point.x} data-map-y={point.y} data-testid={`delivery-${kind}`} style={{ left: point.x, top: point.y }} aria-label={`${label}：${point.name}`} onClick={onOrder}>
           <span className="pin-emblem"><b className="route-pin">{badge}</b></span><strong>{point.name}</strong><small>{point.district} · 当前订单</small>
         </button>)}

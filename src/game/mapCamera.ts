@@ -34,3 +34,20 @@ export function pinchCamera(start: Camera, before: [Point, Point], after: [Point
   return boundCamera(zoomAt(start, scale, midpoint(before), midpoint(after)), view);
 }
 export function wheelPixels(delta: number, mode: number, page: number): number { return delta * (mode === 1 ? 16 : mode === 2 ? page : 1); }
+
+/** Merge overlapping functional landmarks at overview scale; never alter their saved coordinates. */
+export function clusterLandmarks<T extends Point>(points: T[], scale: number): Array<Point & { members: T[] }> {
+  const groups = points.map(p => ({ x: p.x, y: p.y, members: [p] }));
+  if (scale >= .38) return groups;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
+      if (Math.hypot(groups[i].x - groups[j].x, groups[i].y - groups[j].y) * scale >= 64) continue;
+      const members = [...groups[i].members, ...groups[j].members];
+      groups[i] = { members, x: members.reduce((sum,p) => sum + p.x, 0) / members.length, y: members.reduce((sum,p) => sum + p.y, 0) / members.length };
+      groups.splice(j,1); merged = true; break outer;
+    }
+  }
+  return groups;
+}

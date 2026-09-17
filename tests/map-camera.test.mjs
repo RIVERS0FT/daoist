@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const {boundCamera,minimumScale,worldAt,screenAt,zoomAt,pinchCamera,fitPoints,wheelPixels}=require('../.test-dist/mapCamera.js');
+const {boundCamera,minimumScale,worldAt,screenAt,zoomAt,pinchCamera,fitPoints,wheelPixels,clusterLandmarks}=require('../.test-dist/mapCamera.js');
 const view={width:1280,height:650};
 test('zoom preserves arbitrary screen anchors exactly, independent of camera origin',()=>{
  for(let i=0;i<1000;i++){const c={x:-150-i/8,y:-180,scale:.65},p={x:100+i%700,y:150+i%200};const next=zoomAt(c,1.2,p);const before=worldAt(c,p),after=worldAt(next,p);assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<1e-8);}
@@ -27,4 +27,15 @@ test('fit route accounts for side-panel width and leaves room for marker labels'
 test('wheel units are normalized and invalid transforms are bounded',()=>{
  assert.equal(wheelPixels(3,1,650),48);assert.equal(wheelPixels(1,2,650),650);assert.equal(wheelPixels(24,0,650),24);
  const c=boundCamera({x:NaN,y:Infinity,scale:NaN},view);assert.ok(Object.values(c).every(Number.isFinite));
+});
+
+test('overview clusters are disjoint, deterministic and preserve every original landmark',()=>{
+ const {MAP_PLACES}=require('../.test-dist/cityMap.js'),snapshot=structuredClone(MAP_PLACES);
+ for(const scale of [.05,.1,.2,.37]){
+  const groups=clusterLandmarks(MAP_PLACES,scale);
+  assert.deepEqual(groups,clusterLandmarks(MAP_PLACES,scale));
+  assert.deepEqual(groups.flatMap(g=>g.members.map(m=>m.id)).sort(),MAP_PLACES.map(m=>m.id).sort());
+  for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++)assert.ok(Math.hypot(groups[i].x-groups[j].x,groups[i].y-groups[j].y)*scale>=64);
+ }
+ assert.equal(clusterLandmarks(MAP_PLACES,.65).length,10);assert.deepEqual(MAP_PLACES,snapshot);
 });
