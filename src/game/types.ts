@@ -1,3 +1,4 @@
+import type { CultivationState } from './cultivation';
 export type Weather = 'clear' | 'cloudy' | 'rain' | 'storm';
 export type ActionContext = 'delivery' | 'life' | 'cultivation' | 'travel' | 'social';
 
@@ -64,6 +65,7 @@ export interface GameState {
   bikeBattery: number;
   bike: BikeState;
   position: PlayerPosition;
+  cultivation: CultivationState;
   qi: number;
   insight: number;
   karma: number;

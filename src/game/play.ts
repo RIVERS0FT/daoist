@@ -4,23 +4,24 @@ import { authoredScene, initialPlay, isRecord, PROFILES, sceneText, validRequest
 import type { PlayMode, PlayState, SceneFocus, SceneMemory, SceneRequest } from './generation';
 import type { GameState, NpcId, NumericStatKey, RelationshipField } from './types';
 
-export interface PlaySession { version: 4; game: GameState; play: PlayState }
-export function createSession(seed?: number, mode: PlayMode = 'classic'): PlaySession { return { version: 4, game: createInitialState(seed), play: { ...initialPlay(), mode: mode === 'generative' ? 'generative' : 'classic' } }; }
-export function sessionBusy(s: PlaySession): boolean { return Boolean(s.game.gameOver || s.game.pendingEventId || s.play.pending || s.play.scene); }
+export interface PlaySession { version: 5; game: GameState; play: PlayState }
+export function createSession(seed?: number, mode: PlayMode = 'classic'): PlaySession { return { version: 5, game: createInitialState(seed), play: { ...initialPlay(), mode: mode === 'generative' ? 'generative' : 'classic' } }; }
+export function sessionBusy(s: PlaySession): boolean { return Boolean(s.game.gameOver || s.game.pendingEventId || s.game.cultivation.trial || s.play.pending || s.play.scene); }
 function log(game: GameState, text: string, id: string): GameState {
   return { ...game, log: [{ id, day: game.day, minute: game.minute, text, tone: 'normal' as const }, ...game.log].slice(0, 80) };
 }
 const integer = (value: unknown, fallback: number, max = 999999999) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(0, Math.floor(value))) : fallback;
 
-/** v4 adds vehicles while retaining the v2 world and v3 scenes, relationships and routes. */
+/** v5 adds cultivation; preserve v1–v4 progress and reject future or incomplete v5 saves. */
 export function migrateSession(raw: unknown): PlaySession | null {
   if (!isRecord(raw)) return null;
-  if (![1, 2, 3, 4].includes(Number(raw.version))) return null;
-  const enveloped = raw.version === 3 || raw.version === 4;
+  if (![1, 2, 3, 4, 5].includes(raw.version as number)) return null;
+  if (raw.version === 5 && (!isRecord(raw.game) || !isRecord(raw.game.cultivation) || !isRecord(raw.play) || !['classic', 'generative'].includes(raw.play.mode as string))) return null;
+  const enveloped = raw.version === 3 || raw.version === 4 || raw.version === 5;
   const world = enveloped ? raw.game : raw;
   const game = migrateGameState(world);
   if (!game || !Number.isInteger(game.day) || game.day < 1 || !Number.isInteger(game.minute) || game.minute < 0 || game.minute >= 1440 || !Array.isArray(game.log) || !isRecord(game.flags)) return null;
-  if (!enveloped) return { version: 4, game, play: initialPlay() };
+  if (!enveloped) return { version: 5, game, play: initialPlay() };
   const p = isRecord(raw.play) ? raw.play : {};
   const play = initialPlay();
   play.mode = p.mode === 'generative' ? 'generative' : 'classic';
@@ -42,8 +43,8 @@ export function migrateSession(raw: unknown): PlaySession | null {
   }
   const pending = validRequest(p.pending, game);
   if (!play.scene && pending?.id === `encounter-${play.sequence}`) play.pending = pending;
-  const session: PlaySession = { version: 4, game, play };
-  if (game.gameOver || game.pendingEventId || game.activeOrder) return { ...session, play: { ...play, pending: null, scene: null } };
+  const session: PlaySession = { version: 5, game, play };
+  if (game.gameOver || game.pendingEventId || game.activeOrder || game.cultivation.trial) return { ...session, play: { ...play, pending: null, scene: null } };
   // A browser reload never repeats the paid exploration or silently reissues an AI call.
   if (play.pending) return fallbackExploration(session);
   return session;
@@ -67,7 +68,7 @@ export function fallbackExploration(s: PlaySession): PlaySession {
   return { ...s, game: { ...s.game, seed }, play: { ...s.play, pending: null, scene } };
 }
 export function receiveGeneratedScene(s: PlaySession, expectedId: string, raw: unknown): PlaySession {
-  if (s.play.mode !== 'generative' || s.play.pending?.id !== expectedId || s.game.gameOver || s.game.pendingEventId || s.game.activeOrder) return s;
+  if (s.play.mode !== 'generative' || s.play.pending?.id !== expectedId || s.game.gameOver || s.game.pendingEventId || s.game.activeOrder || s.game.cultivation.trial) return s;
   const scene = validateScene(raw, s.play.pending);
   return scene ? { ...s, play: { ...s.play, pending: null, scene } } : fallbackExploration(s);
 }
