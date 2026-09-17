@@ -54,5 +54,5 @@
   .map-log-overlay { max-height: 74px; }
   .map-log-overlay ol { max-height: 38px; }
   .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
-  .map-task { bottom: 96px; right: 380px; }
+  .map-task { bottom: 166px; }
 }
