@@ -8,7 +8,12 @@ export function createMapController(viewport: HTMLDivElement, world: HTMLDivElem
   let frame = 0, timer: ReturnType<typeof setTimeout> | undefined, dead = false, suppressClick = false;
   let pointerStart: Camera = camera, origins: Point[] = [], moved = false;
   const pointers = new Map<number, Point>(), captureTargets = new Map<number, Element>();
-  let view: View = { width: viewport.clientWidth, height: viewport.clientHeight };
+  const measuredView = (): View => {
+    const raw = Number.parseFloat(getComputedStyle(viewport).getPropertyValue('--camera-safe-bottom'));
+    const bottom = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    return { width: viewport.clientWidth, height: Math.max(1, viewport.clientHeight - bottom) };
+  };
+  let view: View = measuredView();
   const status = () => { if (!dead) notify({ scale: camera.scale, minimum: minimumScale(view), following, wheel }); };
   const point = (e: { clientX: number; clientY: number }): Point => { const r = viewport.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const safeArea = (): Area => {
@@ -93,7 +98,7 @@ export function createMapController(viewport: HTMLDivElement, world: HTMLDivElem
   };
   const resize = () => {
     const before = worldAt(camera, { x: view.width / 2, y: view.height / 2 });
-    view = { width: viewport.clientWidth, height: viewport.clientHeight };
+    view = measuredView();
     clear(); if (following) locate(player, true); else { update({ ...camera, x: view.width / 2 - before.x * camera.scale, y: view.height / 2 - before.y * camera.scale }); status(); }
   };
   const visibility = () => { if (document.hidden) cancel(); };
