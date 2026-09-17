@@ -10,7 +10,7 @@
 .map-viewport { inset: 0; --camera-safe-bottom: 200px; }
 .map-title, .map-tools { background: transparent; }
 .map-title h2 { margin: 0; }
-.map-location { top: 60px; }
+.map-location { top: 64px; }
 .map-tools > button, .zoom-tools { backdrop-filter: blur(3px); }
 .map-tools button { background: rgba(29, 43, 34, .72); }
 .zoom-tools { background: transparent; }
