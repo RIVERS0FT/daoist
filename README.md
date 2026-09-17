@@ -14,7 +14,7 @@
 
 线上：https://rivers0ft.github.io/Daoist-Delivery/
 
-页面顶部选择游玩模式。AI 模式需要在“AI 服务设置”保存 relay 地址、授权及可选访问口令；没有服务或生成失败会明确回退为人工剧情，不伪装成 AI 已连接。接入步骤见 [server/README.md](server/README.md)。仓库提供可运行 relay，GitHub Pages 本身不运行模型服务。
+通过左下角“奇遇”或“更多 → 设置”选择游玩模式。AI 模式需要在“AI 服务设置”保存 relay 地址、授权及可选访问口令；没有服务或生成失败会明确回退为人工剧情，不伪装成 AI 已连接。接入步骤见 [server/README.md](server/README.md)。仓库提供可运行 relay，GitHub Pages 本身不运行模型服务。
 
 不要在前端填写模型供应商 API Key。模型密钥只在服务端；relay 访问口令仅存在当前页面内存，刷新后重新输入。真实模型调用可能收费，未配置服务时经典玩法不受影响。
 
@@ -38,3 +38,9 @@ npm run test:e2e
 AI relay：复制 `server/.env.example` 为 `server/.env.local`，在服务端配置后运行 `npm run relay`。前端也支持 `.env.local` 的公开 `VITE_NARRATIVE_AI_ENDPOINT` 默认地址，但仍须玩家选择生成模式并同意外发虚构上下文。
 
 CI 使用模拟模型，不使用或消耗生产密钥。真实供应商接入需用实际服务另行验证。规则见 `AGENTS.md`、`docs/GAME_DESIGN.md`、`docs/ARCHITECTURE.md` 和 `docs/PLAY_MODES.md`。
+
+## 地图主界面
+
+默认进入青岚市地图。顶部查看时间、天气与资源，左下角使用地图 / 跑单 / 修炼 / 人物 / 奇遇 / 更多导航；生活、状态、见闻、结局与设置在“更多”中。点击地点只打开功能，不消耗时间。地图可拖动、缩放，也可通过地点列表访问全部位置。待处理故事可关闭后再从“继续处理”打开。手机面板独立滚动，顶部和左下导航保持可见。
+
+地图为游戏内虚构区域，取送虚线为示意；本次不改动存档格式、人物路线、经典/AI 模式或行动成本。详见 `docs/MAP_INTERFACE.md`。

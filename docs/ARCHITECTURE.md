@@ -1,4 +1,4 @@
-# Architecture v0.3
+# Architecture v0.4
 
 ## Stack and layout
 
@@ -52,3 +52,9 @@ relay 自己持有供应商密钥、固定上游 URL、访问口令、Origin 白
 ## Verification
 
 `npm test` 编译 game 模块并运行 Node tests（核心结算、迁移、网关与 relay mock）。`npm run build` 严格生产构建。`npm run test:e2e` 用 Chromium 验证桌面及 320px 双模式、真实 IndexedDB、无 AI 请求、生成 mock、刷新恢复和回退。测试不调用付费真实模型，不能据此宣称已完成实际模型端到端联调。
+
+## Map UI composition
+
+`src/App.tsx` 管理临时面板與导航焦点，不保存地图浏览状态、不写世界数据。`src/game/cityMap.ts` 提供可测试的地点坐标、功能入口与配送区域映射。`components/CityMap.tsx` 渲染本地 SVG、原生地图滚动及缩放。`components/GamePanels.tsx` 复用现有行动、人物、结局和事件视图；所有实际行动仍调用 store。`PlayModePanel` 的 settingsOnly 视图复用同一份模式/relay 配置逻辑，不复制请求状态。`map.css` 在基础样式之后载入，控制整屏布局、320px 和横屏适配。
+
+面板是非模态区域：主地图与固定导航仍可使用。关闭/Escape 恢复焦点，更多菜单打开后焦点进入首项。AI 场景和人工事件通过 store 状态变化自动显示；关闭界面不会丢弃 pending 内容。存档失败在全局显示。磁盘 schema 与 AI 协议不变。CI 附带仅含 git 跟踪文件的 source-snapshot 压缩包，便于复现 UI 验证，不包含 .git 凭证、未跟踪环境文件或 node_modules。

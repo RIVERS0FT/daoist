@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FOCUS_LABELS, profileSummary } from '../game/generation';
 import type { SceneFocus } from '../game/generation';
 import { NPC_MAP, NPCS } from '../game/npcs';
@@ -16,6 +16,7 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
   const [focus, setFocus] = useState<SceneFocus>('city');
   const [npcId, setNpcId] = useState<NpcId | ''>('');
   const [intent, setIntent] = useState('');
+  const sceneElement = useRef<HTMLElement>(null);
   const contacts = NPCS.filter((npc) => game.relationships[npc.id].met && game.relationships[npc.id].route !== 'estranged');
   const selectedNpc = contacts.some((npc) => npc.id === npcId) ? npcId : contacts[0]?.id;
   const effectiveFocus = focus === 'social' && !contacts.length ? 'city' : focus;
@@ -23,6 +24,19 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
 
   useEffect(() => { store.initAiSettings(import.meta.env.VITE_NARRATIVE_AI_ENDPOINT as string | undefined); }, [store.initAiSettings]);
   useEffect(() => { setEndpoint(aiSettings.endpoint); setConsent(aiSettings.consent); }, [aiSettings]);
+  // Only scroll the panel: the map, fixed status bar and navigation stay put.
+  useEffect(() => {
+    if (settingsOnly || !play.scene) return;
+    const frame = requestAnimationFrame(() => {
+      const scene = sceneElement.current;
+      const body = scene?.closest<HTMLElement>('.drawer-body');
+      if (!scene || !body) return;
+      const top = body.scrollTop + scene.getBoundingClientRect().top - body.getBoundingClientRect().top - 12;
+      body.scrollTo({ top, behavior: 'instant' });
+      scene.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [play.scene?.id, settingsOnly]);
 
   return <section className="panel play-mode-panel" aria-label="游玩模式与自由奇遇">
     <div className="section-heading"><h2>选择你的游玩方式</h2><span>同一世界 · 随时切换 · 保留进度</span></div>
@@ -59,7 +73,7 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
     <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式没有 AI 网络请求。' : '等待主动探索。')}</p>
     {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>不等待，改用经典剧情（不重复收费）</button>}
     {store.saveError && <p className="play-warning" role="alert">{store.saveError}</p>}
-    {!settingsOnly && play.scene && <section className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
+    {!settingsOnly && play.scene && <section ref={sceneElement} tabIndex={-1} className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
       <div className="eyebrow">{play.scene.source === 'ai' ? 'AI 生成奇遇' : '经典人工奇遇'} · {FOCUS_LABELS[play.scene.focus]}{play.scene.npcId ? ` · ${NPC_MAP.get(play.scene.npcId)?.name}` : ''}</div>
       <h3>{play.scene.title}</h3><p>{play.scene.description}</p>
       {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">这是切换前已经保存的 AI 场景，完成本段无需联网；后续采用经典剧情。</p>}

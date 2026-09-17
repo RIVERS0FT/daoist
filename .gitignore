@@ -13,3 +13,4 @@ server/.env.local
 .test-dist/
 test-results/
 playwright-report/
+source-snapshot.zip

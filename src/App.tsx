@@ -37,7 +37,11 @@ export default function App() {
   }, []);
   const closePanel = useCallback(() => {
     setPanel(null); setMore(false); setPlace(null);
-    requestAnimationFrame(() => { (opener.current?.isConnected ? opener.current : mapNav.current)?.focus({ preventScroll: true }); });
+    requestAnimationFrame(() => {
+      const target = opener.current;
+      const canRestore = target?.isConnected && !(target instanceof HTMLButtonElement && target.disabled);
+      (canRestore ? target : mapNav.current)?.focus({ preventScroll: true });
+    });
   }, []);
   const openNav = (next: PanelId | null) => { setPlace(null); if (next === null || panel === next) closePanel(); else openPanel(next); };
   const openPlace = (next: MapPlace) => { setPlace(next); setSelected(next.id); openPanel(next.panel); };
