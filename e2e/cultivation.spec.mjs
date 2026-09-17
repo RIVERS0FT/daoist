@@ -45,7 +45,7 @@ test('foundation trial locks outside actions, survives refresh and unlocks a rea
  await page.locator('.foundation-trial .action-button').first().click();await readStore(page);await page.locator('.foundation-trial .action-button').first().click();const done=await readStore(page);
  expect(done.game.cultivation.trialPassed).toBe(true);expect(done.game.position).toEqual(before.game.position);
  await page.getByRole('button',{name:'破境',exact:true}).click();await page.getByRole('button',{name:/^确认稳妥突破/}).click();const result=await readStore(page);
- expect(result.game.realmLevel).toBe(10);await expect(page.locator('.realm-button')).toContainText('筑基初期');await expect(page.getByRole('button',{name:/^已达本版境界上限/})).toBeDisabled();
+ expect(result.game.realmLevel).toBe(10);await expect(page.locator('.realm-button')).toContainText('筑基初期');await expect(page.getByRole('button',{name:/^已达境界上限/})).toBeDisabled();
 });
 test('upgrading an old v4 slot makes an exact one-time backup without resetting its world',async({page})=>{
  await ready(page);const s=await readStore(page);delete s.game.cultivation;s.game.realmLevel=7;s.game.qi=324;s.game.money=823;
