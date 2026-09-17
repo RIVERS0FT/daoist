@@ -1,9 +1,8 @@
-import type { GameState } from './types';
+import type { PlaySession } from './play';
 
 const DB_NAME = 'daoist-delivery';
 const STORE_NAME = 'saves';
 const SAVE_KEY = 'autosave';
-
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
@@ -13,47 +12,30 @@ function openDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('Database blocked'));
   });
 }
-
 export async function loadGame(): Promise<unknown | null> {
+  const db = await openDb();
   try {
-    const db = await openDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const request = tx.objectStore(STORE_NAME).get(SAVE_KEY);
       request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error);
+      tx.onabort = () => reject(tx.error);
     });
-  } catch {
-    return null;
-  }
+  } finally { db.close(); }
 }
-
-export async function saveGame(state: GameState): Promise<void> {
+export async function saveGame(state: PlaySession): Promise<void> {
+  const db = await openDb();
   try {
-    const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       tx.objectStore(STORE_NAME).put(state, SAVE_KEY);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
-  } catch {
-    // The game remains playable if browser storage is unavailable.
-  }
-}
-
-export async function clearGame(): Promise<void> {
-  try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).delete(SAVE_KEY);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    // Nothing else to clear if storage is blocked.
-  }
+  } finally { db.close(); }
 }
