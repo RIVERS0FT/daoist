@@ -12,7 +12,7 @@ React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub A
 - `storage.ts`: IndexedDB transactions, revision/mode checks, migration backups and transaction-completion acknowledgement.
 - `deliveryLocations.ts`: stable delivery IDs, local atlas coordinates and position validation; `cityMap.ts`: permanent functional landmarks only.
 - `mapCamera.ts`, `map/controller.ts`: pure camera math and a DOM pointer/transform controller, respectively. Neither writes gameplay state.
-- `App.tsx` and panels: accessible views and command dispatch. Cultivation has its own panel, while generated scenes remain in `PlayModePanel`.
+- `App.tsx` and panels: accessible views and command dispatch. `StatusBar.tsx` owns the persistent player identity/time/resource grouping; cultivation has its own panel, while generated scenes remain in `PlayModePanel`.
 
 ## Persistence and migrations
 
@@ -22,6 +22,8 @@ Current format:
 PlaySession = { version: 5, game: GameState /* v2 + bike + position + cultivation */, play: PlayState }
 SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session: PlaySession }
 ```
+
+For newly created slots, `SaveSlot.name` is the player's display name. `newGame(name, mode)` trims the value, limits it to 32 characters and rejects an empty result before any write; this reuses the existing slot field and does not require a schema bump. Existing slot names are preserved exactly as the compatible player display name, so old saves are not renamed or migrated solely for this UI change.
 
 The database stays `daoist-delivery`, version 1, object store `saves`; slots use `slot:<id>`. The envelope version is separate from the world version. v1/v2 raw worlds migrate to classic sessions; v3/v4 preserve their mode, scenes, memories and progress. v5 requires valid cultivation data and a valid fixed mode. Unknown future versions, malformed counters, unknown stable IDs or unsupported realm levels are rejected without overwriting originals.
 
@@ -33,7 +35,7 @@ Each state transition captures the slot ID and queues a write. Every transaction
 
 ## Session, simulation and AI lifecycle
 
-The start page is mandatory. Only `newGame(name, mode)` chooses classic/generative mode; there is no runtime switching API. Each slot owns its independent world. Browsing menus does not advance game time. All actual gameplay uses the store, with shared locks for authored events, generated scenes, pending requests, game over and the inner trial.
+The start page is mandatory. Only `newGame(name, mode)` chooses the required player name and classic/generative mode; there is no runtime mode switch. Each slot owns its independent world. Browsing menus does not advance game time. All actual gameplay uses the store, with shared locks for authored events, generated scenes, pending requests, game over and the inner trial.
 
 Exploration pays 15 minutes and 2 energy before requesting a scene. Classic mode selects a seeded authored scene with recent suppression and makes zero AI calls. Generative mode requires explicit consent and a configured safe relay. `validateScene` accepts only bounded prose and 2–4 distinct allowlisted approaches and adds a resource-free timed exit. AI cannot write stats, items, routes, flags, ending IDs or player positions. Scene choices are persisted before use and settle only once. Reloading a paid pending request uses authored fallback without recharging or automatically requesting again. Full scenes and the latest 12 resolved memories are saved.
 
@@ -55,7 +57,7 @@ The fictional atlas is 2400×1600 with 24 pickup and 40 dropoff addresses. New o
 
 Only the current order renders pickup/dropoff markers and its line. Ten functional landmarks remain permanent; task addresses are not listed in the permanent directory. The player marker reflects `game.position = { version: 1, locationId }`. Only successful riding or explicit pushing commits the destination, after resource/clock/survival checks and before post-delivery events. Accepting, rejecting, cancelling or looking around never moves the player. Autosave persists each slot's position independently.
 
-Top status and bottom-left navigation remain visible. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
+Top status and bottom-left navigation remain visible. The in-game top status uses the current slot's player name instead of the game title, then groups realm, clock/weather/autosave, six core resources and the fixed story-mode entry. Responsive wrapping may rearrange groups but must preserve autosave/error visibility and 320px usability. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
 
 ## Camera lifecycle
 
@@ -69,6 +71,6 @@ Player restore starts focused and following. Manual gestures or whole-map/route 
 
 ## Verification and delivery
 
-Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus the new cultivation/gesture flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
+Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus the new cultivation/gesture flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, AI cancellation, classic zero-network behavior, required player naming and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
 
 CI archives only tracked source and also uploads production dist and browser reports/screenshots. Work on a feature branch, open a PR, verify checks and screenshots, squash-merge, then verify completed GitHub Pages deployment for that merge SHA. Pages builds with Vite base `/Daoist-Delivery/`. Model relay deployment remains separate; successful static deployment is not evidence of real provider generation.
