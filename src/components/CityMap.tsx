@@ -58,7 +58,7 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const game = useGameStore((state) => state.game);
   const playBusy = useGameStore((state) => Boolean(state.play.pending || state.play.scene || state.slotBusy || state.loadBlocked));
-  const acceptDeliveryOffer = useGameStore((state) => state.acceptDeliveryOffer);
+  const deliverDeliveryOffer = useGameStore((state) => state.deliverDeliveryOffer);
   const offers = playBusy ? [] : deliveryOffers(game);
   const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) ?? null;
   const selectedCosts = selectedOffer ? deliveryCosts(selectedOffer, game.bike) : null;
@@ -79,7 +79,6 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
       <button type="button" aria-label="放大地图" title="放大地图" disabled={status.scale >= 2} onClick={() => controller.current?.zoom(1.2)}><Icon name="plus" /></button>
       <button type="button" aria-label="缩小地图" title="缩小地图" disabled={status.scale <= status.minimum + .0001} onClick={() => controller.current?.zoom(1 / 1.2)}><Icon name="minus" /></button>
       <button type="button" aria-label="定位玩家" title="定位玩家（只移动视角）" onClick={() => controller.current?.locate(player, true)}><Icon name="focus" /></button>
-      <button type="button" aria-label="定位配送终点" title="定位当前订单送达点" disabled={!route} onClick={() => { if (route) controller.current?.locate(route.dropoff); }}><Icon name="flag" /></button>
     </div></div>
     <div ref={viewport} className="map-viewport camera-viewport" tabIndex={0} aria-label="城市地图，可拖动、双指缩放或使用方向键平移" data-testid="map-viewport">
       <div ref={world} className="map-world" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }} data-scale="0.65">
@@ -114,8 +113,8 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
         <span>骑行电量：需 {selectedCosts?.battery ?? 0} / 当前 {Math.round(game.bikeBattery)}</span>
         <span>车辆耐久：需 {selectedCosts?.wear ?? 0} / 当前 {Math.round(game.bike.condition)}</span>
       </div>
-      {selectedCosts && (game.bikeBattery < selectedCosts.battery || game.bike.condition < selectedCosts.wear) && <p className="delivery-offer-warning">当前车辆不足以完整骑行；仍可接单后选择推车，或先补给。</p>}
-      <button type="button" className="primary-button delivery-accept-button" onClick={() => { acceptDeliveryOffer(selectedOffer.id); setSelectedOfferId(null); }}>接取任务 · 2 分钟</button>
+      {selectedCosts && (game.bikeBattery < selectedCosts.battery || game.bike.condition < selectedCosts.wear) && <p className="delivery-offer-warning">当前车辆不足以完成骑行配送，请先换电或维修。</p>}
+      <button type="button" className="primary-button delivery-accept-button" disabled={Boolean(selectedCosts && (game.bikeBattery < selectedCosts.battery || game.bike.condition < selectedCosts.wear))} onClick={() => { deliverDeliveryOffer(selectedOffer.id); setSelectedOfferId(null); }}>配送</button>
     </aside>}
     <div className="map-caption"><span className="legend-dot" />生活地标<span className="legend-dot mystic" />修行奇遇<span className="map-help">配送任务随行动刷新 · 点击“单”查看要求</span></div>
     <div className="map-compass" aria-hidden="true"><span>北</span><svg viewBox="0 0 40 52" width="28" height="36"><path d="M20 2 32 44 20 35 8 44Z" fill="none" stroke="currentColor" /><path d="M20 2V35L8 44Z" fill="currentColor" /></svg></div>

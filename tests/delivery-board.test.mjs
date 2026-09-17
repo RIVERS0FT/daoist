@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { acceptDeliveryOffer, deliveryOffers } from '../.test-dist/deliveryBoard.js';
+import { deliverDeliveryOffer, deliveryOffers } from '../.test-dist/deliveryBoard.js';
 import { createInitialState, runAction } from '../.test-dist/engine.js';
 
 test('delivery board is stable for the same state and exposes distinct task destinations', () => {
@@ -22,31 +22,22 @@ test('successful player actions refresh the visible task board', () => {
   assert.notDeepEqual(after, before);
 });
 
-test('accepting a map task selects that exact offer and charges only acceptance time', () => {
+test('dispatching a map task completes that exact delivery with no separate acceptance time', () => {
   const game = createInitialState(314159);
-  const offers = deliveryOffers(game);
-  const selected = offers[2];
-  const next = acceptDeliveryOffer(game, selected.id);
-  assert.equal(next.activeOrder?.id, selected.id);
-  assert.equal(next.activeOrder?.merchant, selected.merchant);
-  assert.equal(next.activeOrder?.customer, selected.customer);
-  assert.equal(next.minute, game.minute + 2);
-  assert.equal(deliveryOffers(next).length, 0);
-  assert.match(next.log[0].text, /取餐并入配送流程/);
+  const selected = deliveryOffers(game)[2];
+  const next = deliverDeliveryOffer(game, selected.id);
+  assert.equal(next.activeOrder, null);
+  assert.equal(next.completedOrders, game.completedOrders + 1);
+  assert.equal(next.position.locationId, selected.dropoffId);
+  assert.ok(next.minute >= game.minute + 8);
+  assert.notEqual(next.minute, game.minute + 2);
+  assert.ok(next.log.some((entry) => entry.text.includes(selected.customer) && entry.text.includes('送达')));
 });
 
-test('invalid or stale task ids cannot mutate the world', () => {
+test('invalid, stale or unaffordable map tasks cannot mutate the world', () => {
   const game = createInitialState(271828);
-  assert.equal(acceptDeliveryOffer(game, 'offer-stale'), game);
-});
-
-test('cancelling a selected order reveals a refreshed task board', () => {
-  const game = createInitialState(13579);
+  assert.equal(deliverDeliveryOffer(game, 'offer-stale'), game);
   const selected = deliveryOffers(game)[0];
-  const accepted = acceptDeliveryOffer(game, selected.id);
-  const cancelled = runAction(accepted, 'cancel-order');
-  const refreshed = deliveryOffers(cancelled);
-  assert.equal(cancelled.activeOrder, null);
-  assert.equal(refreshed.length, 4);
-  assert.ok(refreshed.every((offer) => offer.id !== selected.id));
+  const empty = { ...game, bikeBattery: 0 };
+  assert.equal(deliverDeliveryOffer(empty, selected.id), empty);
 });

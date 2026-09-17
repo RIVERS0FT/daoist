@@ -13,7 +13,10 @@
 .map-location { top: 64px; }
 .map-tools > button, .zoom-tools { backdrop-filter: blur(3px); }
 .map-tools button { background: rgba(29, 43, 34, .72); }
-.zoom-tools { background: transparent; }
+.zoom-tools { display: flex; flex-direction: row; background: transparent; }
+.game-shell .zoom-tools button { border: 0; border-right: 1px solid #3f4f3c; }
+.game-shell .zoom-tools button:nth-child(-n+3) { border-bottom: 0; }
+.game-shell .zoom-tools button:last-child { border-right: 0; }
 
 /* Bottom navigation is a transparent overlay. Only the actual buttons capture pointer input. */
 .nav-dock { padding: 0; background: transparent; border-color: transparent; box-shadow: none; pointer-events: none; }
@@ -37,11 +40,10 @@
 .map-log-overlay li.bad p { color: #d0a99d; }
 .map-log-overlay li.mystic p { color: #c5b1cc; }
 .map-log-empty { margin: 0; padding: 12px; color: #879383; font-size: 11px; }
-.map-log-overlay.compact { right: 28px; max-height: 82px; }
-.map-log-overlay.compact ol { max-height: 43px; overflow: hidden; }
+.map-log-overlay.compact { right: 28px; max-height: 164px; }
+.map-log-overlay.compact ol { max-height: 126px; overflow: auto; }
 .map-log-overlay.compact .map-log-heading { min-height: 30px; padding-block: 6px; }
 .map-log-overlay.compact li { padding-block: 5px; }
-.map-log-overlay.compact p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 780px) {
   .map-log-overlay { right: 270px; }
@@ -52,20 +54,17 @@
   .map-viewport { inset: 0; --camera-safe-bottom: 258px; }
   .map-location { top: 50px; }
   .map-caption { display: none; }
-  .map-log-overlay { right: 12px; bottom: 176px; width: min(240px, calc(100% - 24px)); max-height: 74px; }
-  .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
-  .map-log-overlay ol { max-height: 38px; }
+  .map-log-overlay { right: 12px; bottom: 176px; width: min(240px, calc(100% - 24px)); max-height: 152px; }
+  .map-log-overlay ol { max-height: 114px; }
   .map-log-heading { min-height: 30px; padding: 5px 9px; }
   .map-log-overlay li { padding: 4px 0; }
-  .map-log-overlay p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .map-log-overlay.compact { right: 12px; bottom: 87px; }
 }
 
 @media (max-height: 520px) {
   .map-viewport { inset: 0; --camera-safe-bottom: 140px; }
   .map-location { top: 43px; }
-  .map-log-overlay { right: 324px; bottom: 13px; max-height: 74px; }
-  .map-log-overlay ol { max-height: 38px; }
-  .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
+  .map-log-overlay { right: 324px; bottom: 13px; max-height: 138px; }
+  .map-log-overlay ol { max-height: 100px; }
   .map-log-overlay.compact { right: 28px; bottom: 13px; }
 }

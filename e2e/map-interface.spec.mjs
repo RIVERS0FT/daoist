@@ -51,6 +51,9 @@ test('map landing keeps status at top, transparent controls over the atlas, log 
   await expect(page.locator('.map-title')).toHaveText('青岚市');
   await expect(page.locator('.camera-access')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '地点', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '定位配送终点' })).toHaveCount(0);
+  await expect(page.locator('.zoom-tools > button')).toHaveCount(3);
+  expect(await page.locator('.zoom-tools').evaluate((element) => getComputedStyle(element).flexDirection)).toBe('row');
   const header = await page.getByRole('banner', { name: '顶部状态栏' }).boundingBox();
   const dock = await page.getByRole('navigation', { name: '游戏导航' }).boundingBox();
   const stage = await page.locator('.map-stage').boundingBox();
@@ -87,6 +90,19 @@ test('navigation and map browsing never advance time, change saves or invoke AI'
   await page.keyboard.press('Escape'); await expect(nav(page, '更多导航')).toBeFocused();
   await nav(page, '修炼').click(); await page.screenshot({ path: info.outputPath('map-cultivation.png'), fullPage: true });
 });
+test('map log remains a multi-entry list when a panel is open', async ({ page }) => {
+  await ready(page); await restore(page, (s) => {
+    s.game.log = [
+      { id: 'list-1', day: 1, minute: 425, text: '完成一次配送。', tone: 'good' },
+      { id: 'list-2', day: 1, minute: 420, text: '查看了一处任务。', tone: 'normal' },
+      { id: 'list-3', day: 1, minute: 415, text: '路边发生一件小事。', tone: 'mystic' },
+      ...s.game.log,
+    ];
+  });
+  await expect(page.locator('.map-log-overlay ol > li')).toHaveCount(4);
+  await nav(page, '关系').click();
+  await expect(page.locator('.map-log-overlay.compact ol > li')).toHaveCount(4);
+});
 test('relationship panel only renders people already met', async ({ page }) => {
   await ready(page); await restore(page, (s) => {
     for (const relationship of Object.values(s.game.relationships)) {
@@ -100,21 +116,21 @@ test('relationship panel only renders people already met', async ({ page }) => {
   await expect(page.locator('.relationships-panel')).not.toContainText('尚未相遇');
   await expect(page.locator('.relationships-panel')).not.toContainText('林小满');
 });
-test('map task preview accepts the exact order and active route has only a dropoff pin', async ({ page }, info) => {
+test('map task preview dispatches the exact offer and completes it in one action', async ({ page }, info) => {
   await ready(page);
   const offers = page.getByTestId('delivery-offer'); await expect(offers).toHaveCount(4);
   const offer = await pointerAccessibleOffer(page);
-  const selectedId = await offer.getAttribute('data-offer-id');
+  const destination = await offer.getAttribute('data-location-id');
+  const before = await world(page);
   await offer.click();
   await expect(page.getByTestId('delivery-offer-card')).toBeVisible();
-  await page.getByRole('button', { name: '接取任务 · 2 分钟', exact: true }).click();
+  await page.getByRole('button', { name: '配送', exact: true }).click();
   await resolvePendingEvent(page);
-  const accepted = await world(page); expect(accepted.game.activeOrder).not.toBeNull(); expect(accepted.game.activeOrder.id).toBe(selectedId);
-  await expect(page.locator('.delivery-line')).toHaveCount(1); await expect(page.getByTestId('delivery-pickup')).toHaveCount(0); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(1);
-  await page.screenshot({ path: info.outputPath('map-delivery-route.png'), fullPage: true });
-  await page.getByTestId('delivery-dropoff').click(); await page.getByRole('button', { name: /^执行配送/ }).click();
-  expect((await world(page)).game.activeOrder).toBeNull(); await expect(page.locator('.delivery-line')).toHaveCount(0);
-  expect((await world(page)).game.completedOrders).toBe(1);
+  const delivered = await world(page);
+  expect(delivered.game.activeOrder).toBeNull(); expect(delivered.game.completedOrders).toBe(before.game.completedOrders + 1);
+  expect(delivered.game.position.locationId).toBe(destination); expect(delivered.game.minute).not.toBe(before.game.minute + 2);
+  await expect(page.locator('.delivery-line')).toHaveCount(0); await expect(page.getByTestId('delivery-pickup')).toHaveCount(0); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('map-delivery-complete.png'), fullPage: true });
 });
 test('pending stories can be closed, reopened and cannot be bypassed from map panels', async ({ page }) => {
   await ready(page); await restore(page, (s) => { s.game.pendingEventId = 'old-lady-1'; });

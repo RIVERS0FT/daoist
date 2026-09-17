@@ -1,6 +1,6 @@
-import { advanceTime, phaseFor } from './engine';
+import { completeDelivery, phaseFor } from './engine';
 import { DELIVERY_DROPOFFS, DELIVERY_PICKUPS } from './deliveryLocations';
-import type { DeliveryOrder, GameState, LogEntry } from './types';
+import type { DeliveryOrder, GameState } from './types';
 
 export const DELIVERY_OFFER_COUNT = 4;
 
@@ -30,16 +30,6 @@ function randomInt(seed: number, min: number, max: number): [number, number] {
 function boardSeed(state: GameState): number {
   const latest = state.log[0]?.id ?? 'new-save';
   return hashText(`${state.day}|${state.minute}|${state.seed}|${state.weather}|${state.completedOrders}|${latest}`);
-}
-
-function makeLog(state: GameState, text: string, tone: LogEntry['tone'] = 'normal'): LogEntry {
-  return {
-    id: `${state.day}-${state.minute}-${hashText(text).toString(36)}`,
-    day: state.day,
-    minute: state.minute,
-    text,
-    tone,
-  };
 }
 
 function isNightMinute(minute: number): boolean {
@@ -89,15 +79,8 @@ export function deliveryOffers(state: GameState, count = DELIVERY_OFFER_COUNT): 
   return offers;
 }
 
-export function acceptDeliveryOffer(state: GameState, offerId: string): GameState {
+export function deliverDeliveryOffer(state: GameState, offerId: string): GameState {
   if (state.activeOrder || state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   const selected = deliveryOffers(state).find((offer) => offer.id === offerId);
-  if (!selected) return state;
-
-  let next = advanceTime(state, 2);
-  if (next.gameOver) return next;
-  const order: DeliveryOrder = { ...selected, acceptedAtDay: next.day, acceptedAtMinute: next.minute };
-  next = { ...next, activeOrder: order };
-  const text = `接取地图任务：${order.merchant} → ${order.customer}，取餐并入配送流程，预计 ${order.estimatedMinutes} 分钟，基础收入 ¥${order.reward}。`;
-  return { ...next, log: [makeLog(next, text, order.strange ? 'mystic' : 'normal'), ...next.log].slice(0, 80) };
+  return selected ? completeDelivery(state, selected) : state;
 }
