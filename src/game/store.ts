@@ -86,11 +86,13 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
       },
       newGame: async (name, mode) => {
         if (!get().hydrated || get().screen !== 'start' || get().slotBusy || get().loadBlocked || !['classic', 'generative'].includes(mode)) return;
+        const playerName = name.trim().slice(0, 32);
+        if (!playerName) { set({ saveError: '请输入玩家名称（1–32 个字符）。' }); return; }
         set({ slotBusy: true, saveStatus: 'saving', saveError: '' }); gate.cancel();
         try {
           const now = Date.now(), id = `save-${globalThis.crypto.randomUUID()}`;
           const next = createSession(undefined, mode);
-          const slot = await deps.save({ version: 1, id, name: name.trim().slice(0, 32) || `第 ${get().slots.length + 1} 段仙途`, createdAt: now, updatedAt: now, revision: 0, session: next }, null);
+          const slot = await deps.save({ version: 1, id, name: playerName, createdAt: now, updatedAt: now, revision: 0, session: next }, null);
           replaceSlot(slot);
           set({ game: next.game, play: next.play, activeSlotId: id, screen: 'playing', saveStatus: 'saved', aiStatus: 'idle', aiMessage: '' });
         } catch { set({ saveStatus: 'error', saveError: '新存档创建失败，未覆盖任何旧档。请检查浏览器的本机存储权限与空间。' }); }
