@@ -33,7 +33,7 @@ export function StartScreen() {
         <div className="save-list">{slots.map((slot) => <article className="save-card" key={slot.id}>
           <div className="save-card-title"><h3>{slot.name}</h3><span>{slot.session?.play.mode === 'generative' ? 'AI 生成式' : slot.session ? '经典剧情' : '受保护'}</span></div>
           {slot.session ? <><p>第 {slot.session.game.day} 天 · {formatTime(slot.session.game.minute)} · {realmName(slot.session.game.realmLevel)}{slot.session.game.gameOver ? ' · 本世结束' : ''}</p><p>¥{Math.round(slot.session.game.money)} · 已送 {slot.session.game.completedOrders} 单</p><small>自动保存于 {new Date(slot.updatedAt).toLocaleString('zh-CN')}</small></> : <p className="start-warning">{slot.error}</p>}
-          <button className="start-secondary" type="button" disabled={slotBusy || loadBlocked || !slot.session} onClick={() => { void openSlot(slot.id); }} aria-label={`进入玩家存档：${slot.name}`}>进入这段仙途<Icon name="arrow" size={16} /></button>
+          <button className="start-secondary" type="button" disabled={slotBusy || loadBlocked || !slot.session} onClick={() => { void openSlot(slot.id); }} aria-label={`进入存档：${slot.name}`}>进入这段仙途<Icon name="arrow" size={16} /></button>
         </article>)}</div>
         <footer className="start-footer"><Icon name="leaf" size={16} /><span>每次行动自动保存，无需手动操作。存档仅保存在当前浏览器；清理网站数据会删除本机进度。</span></footer>
       </section>
