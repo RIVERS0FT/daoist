@@ -1,0 +1,20 @@
+.game-identity{min-width:0}
+.game-identity h1{max-width:15rem;overflow:hidden;text-overflow:ellipsis;letter-spacing:.05em}
+.game-identity .realm-button span{display:none}
+.map-task.compact-idle p{display:none}
+.more-navigation>span{letter-spacing:.08em}
+.settings-save>p{display:none}
+.help-panel{display:grid;gap:14px}
+.help-summary{display:grid;gap:5px;padding:12px 14px;border:1px solid #46533f;border-radius:10px;background:#202b22}
+.help-summary strong{font-size:14px;color:#e0d3ad}.help-summary span{font-size:11px;line-height:1.6;color:#aeb7a7}
+.help-list{display:grid;gap:9px}.help-list details{border:1px solid #414f3b;border-radius:10px;background:#172119;overflow:hidden}
+.help-list summary{cursor:pointer;padding:13px 14px;color:#ddd7bf;font-size:13px;font-weight:600;list-style-position:inside}
+.help-list details[open] summary{border-bottom:1px solid #364331;background:#1e2a20}
+.help-list p{margin:0;padding:10px 14px 0;color:#aeb7a7;font-size:11px;line-height:1.75}
+.help-list p:last-child{padding-bottom:13px}
+.start-help{margin-top:18px;border:1px solid #40523f;border-radius:11px;background:#18251dcc}
+.start-help summary{cursor:pointer;padding:13px 15px;color:#d6d9ca;font-size:12px}
+.start-help[open] summary{border-bottom:1px solid #40523f}
+.start-help-body{display:grid;gap:10px;padding:13px 15px 15px;color:#aab5a3;font-size:11px;line-height:1.75}
+.start-help-body p{margin:0}
+@media(max-width:760px){.game-identity h1{max-width:9rem}.help-list summary{min-height:44px;display:flex;align-items:center}}
