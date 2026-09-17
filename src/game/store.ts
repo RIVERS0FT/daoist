@@ -2,6 +2,7 @@ import type { CultivationCommand } from './cultivation';
 import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
+import { acceptDeliveryOffer as acceptMapDeliveryOffer } from './deliveryBoard';
 import { runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
 import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
@@ -25,6 +26,7 @@ interface GameStore {
   explore: (focus: SceneFocus, npcId?: NpcId, intent?: string) => Promise<void>;
   fallback: () => void; testAi: () => Promise<void>;
   cultivate: (command: CultivationCommand) => void;
+  acceptDeliveryOffer: (offerId: string) => void;
   act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
   chooseEvent: (choiceId: string) => void; chooseEnding: (endingId: string) => void;
 }
@@ -173,6 +175,7 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
         if (!playing() || s.saveStatus !== 'saved' || s.play.pending || s.play.scene) return;
         commit({ ...session(), game: runCultivationAction(s.game, command) });
       },
+      acceptDeliveryOffer: (offerId) => { if (canAct()) commit({ ...session(), game: acceptMapDeliveryOffer(get().game, offerId) }); },
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },
       chooseEvent: (choiceId) => {
