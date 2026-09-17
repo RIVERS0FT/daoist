@@ -1,0 +1,84 @@
+export type Weather = 'clear' | 'cloudy' | 'rain' | 'storm';
+export type ActionContext = 'delivery' | 'life' | 'cultivation' | 'travel';
+
+export interface DeliveryOrder {
+  id: string;
+  merchant: string;
+  customer: string;
+  distanceKm: number;
+  reward: number;
+  estimatedMinutes: number;
+  acceptedAtDay: number;
+  acceptedAtMinute: number;
+  strange: boolean;
+}
+
+export interface LogEntry {
+  id: string;
+  day: number;
+  minute: number;
+  text: string;
+  tone?: 'normal' | 'good' | 'bad' | 'mystic';
+}
+
+export interface GameState {
+  version: 1;
+  day: number;
+  minute: number;
+  seed: number;
+  weather: Weather;
+  money: number;
+  energy: number;
+  health: number;
+  stress: number;
+  reputation: number;
+  bikeBattery: number;
+  qi: number;
+  insight: number;
+  karma: number;
+  darkQi: number;
+  realmLevel: number;
+  completedOrders: number;
+  totalIncome: number;
+  rentDueDay: number;
+  activeOrder: DeliveryOrder | null;
+  pendingEventId: string | null;
+  recentEvents: string[];
+  flags: Record<string, string | number | boolean>;
+  log: LogEntry[];
+  gameOver: boolean;
+}
+
+export type NumericStatKey = 'money' | 'energy' | 'health' | 'stress' | 'reputation' | 'bikeBattery' | 'qi' | 'insight' | 'karma' | 'darkQi';
+
+export type EventEffect =
+  | { type: 'stat'; key: NumericStatKey; delta: number }
+  | { type: 'flag'; key: string; value: string | number | boolean }
+  | { type: 'time'; minutes: number };
+
+export interface EventRequirement {
+  key: NumericStatKey;
+  min: number;
+  label: string;
+}
+
+export interface EventChoice {
+  id: string;
+  label: string;
+  result: string;
+  effects?: EventEffect[];
+  requires?: EventRequirement;
+}
+
+export interface EventDefinition {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  contexts: ActionContext[];
+  weight: number;
+  condition?: (state: GameState) => boolean;
+  choices: EventChoice[];
+}
+
+export type GameAction = 'accept-order' | 'complete-order' | 'eat' | 'rest' | 'sleep' | 'charge-bike' | 'meditate-1h' | 'meditate-3h' | 'study' | 'breakthrough';
