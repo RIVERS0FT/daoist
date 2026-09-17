@@ -34,7 +34,7 @@ test('two slots keep independent modes, upgrades and automatically saved progres
   await menu(page); await newGame(page, 'generative', '生成式仙途');
   const second = await readStore(page); expect(second.id).not.toBe(first.id); expect(second.game.bike.speed).toBe(0); expect(second.play.mode).toBe('generative');
   await menu(page); await expect(page.locator('.save-card')).toHaveCount(2);
-  await page.getByRole('button', { name: '进入玩家存档：跑单人生', exact: true }).click();
+  await page.getByRole('button', { name: '进入存档：跑单人生', exact: true }).click();
   const restored = await readStore(page); expect(restored.game).toEqual(first.game); expect(restored.play.mode).toBe('classic');
   await page.reload(); await expect(page.locator('.start-screen')).toBeVisible(); await continueRecent(page);
   expect((await readStore(page)).game.bike.speed).toBe(1);
