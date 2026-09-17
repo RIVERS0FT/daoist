@@ -95,11 +95,11 @@ export default function App() {
     <section className="map-stage" aria-label="城市地图主界面">
       <CityMap key={activeSlotId} panelOpen={Boolean(panel)} order={game.activeOrder} position={game.position} selected={selected} onOrder={() => { setPlace(null); openPanel('delivery'); }} onPlace={openPlace} onPlaces={() => openNav('places')} />
       <MapLogOverlay compact={Boolean(panel)} />
-      {!panel && <aside className={`map-task ${pendingPanel ? 'requires-attention' : ''}`}>
-        <span className="eyebrow">{pendingPanel ? '待处理' : game.activeOrder ? '当前配送' : '地图接单'}</span>
-        <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.cultivation.trial ? '内景筑基试炼待续' : game.activeOrder ? `${game.activeOrder.merchant} → ${game.activeOrder.customer}` : '选择地图上的配送任务'}</strong>
-        {(pendingPanel || game.activeOrder) ? <p>{pendingPanel ? '先处理当前内容再继续行动。' : `${game.activeOrder?.distanceKm.toFixed(1)} km · 约 ${game.activeOrder ? deliveryEstimate(game.activeOrder, game.bike) : 0} 分钟`}</p> : <p className="map-task-hint">点击标有“单”的任务点查看要求，再决定是否接取。</p>}
-        {(pendingPanel || game.activeOrder) && <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : '查看配送'}<Icon name="arrow" size={17} /></button>}
+      {!panel && (pendingPanel || game.activeOrder) && <aside className={`map-task ${pendingPanel ? 'requires-attention' : ''}`}>
+        <span className="eyebrow">{pendingPanel ? '待处理' : '当前配送'}</span>
+        <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.cultivation.trial ? '内景筑基试炼待续' : `${game.activeOrder?.merchant} → ${game.activeOrder?.customer}`}</strong>
+        <p>{pendingPanel ? '先处理当前内容再继续行动。' : `${game.activeOrder?.distanceKm.toFixed(1)} km · 约 ${game.activeOrder ? deliveryEstimate(game.activeOrder, game.bike) : 0} 分钟`}</p>
+        <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : '查看配送'}<Icon name="arrow" size={17} /></button>
       </aside>}
       {panel && <section ref={drawer} className="game-drawer" tabIndex={-1} aria-labelledby="drawer-heading">
         <header className="drawer-heading"><div>{place && place.panel === panel && <span className="eyebrow">{place.name}</span>}<h2 id="drawer-heading">{PANEL_TITLES[panel]}</h2></div><button className="drawer-close" type="button" aria-label="关闭面板，返回地图" onClick={closePanel}><Icon name="close" /></button></header>
