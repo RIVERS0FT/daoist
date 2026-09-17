@@ -26,6 +26,8 @@ export interface NpcRelationship {
 export interface DeliveryOrder {
   id: string;
   merchant: string;
+  pickupId?: string;
+  dropoffId?: string;
   customer: string;
   distanceKm: number;
   reward: number;
@@ -46,6 +48,8 @@ export interface LogEntry {
 export type BikeUpgrade = 'speed' | 'battery' | 'durability' | 'efficiency';
 export interface BikeState { version: 1; speed: number; battery: number; durability: number; efficiency: number; condition: number }
 
+export interface PlayerPosition { version: 1; locationId: string }
+
 export interface GameState {
   version: 2;
   day: number;
@@ -59,6 +63,7 @@ export interface GameState {
   reputation: number;
   bikeBattery: number;
   bike: BikeState;
+  position: PlayerPosition;
   qi: number;
   insight: number;
   karma: number;

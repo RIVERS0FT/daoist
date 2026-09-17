@@ -1,3 +1,4 @@
+import { playerMapPoint } from '../game/deliveryLocations';
 import { bikeStats, deliveryCosts, deliveryEstimate, pushingCosts, ridingBlockReason } from '../game/bike';
 import { BikePanel } from './BikePanel';
 import { EVENT_MAP } from '../game/content';
@@ -84,13 +85,14 @@ export function DeliveryPanel() {
   const order = game.activeOrder, reason = ridingBlockReason(game), foot = pushingCosts(game);
   const costs = order ? deliveryCosts(order, game.bike) : null;
   return <section className="panel action-panel">
+    <p className="delivery-location">当前位置：{playerMapPoint(game.position).name}</p>
     {reason && <p className="play-warning" role="alert">{reason}</p>}
     {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单 · 谨慎前行' : '配送中'}</div><h3>{order.merchant}</h3><p>送往 {order.customer}</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(order, game.bike)} 分钟</span><span>¥{order.reward}</span></div>
       <ActionButton action="complete-order" title="完成配送" meta={`骑行 · 电量 -${costs?.battery} · 耐久 -${costs?.wear} · 天气与路况影响耗时`} disabled={disabled || Boolean(reason)} />
       <div className="delivery-recovery"><ActionButton action="push-order" title="推车送达（不骑行）" meta={`${foot.minutes} 分钟 · 精力 -${foot.energy} · 收入 ¥${foot.income} · 不耗电`} disabled={disabled || game.energy < foot.energy} /><ActionButton action="cancel-order" title="取消当前订单" meta="5 分钟 · 信誉 -2 · 不收取费用" disabled={disabled} /></div>
-    </div> : <><p className="panel-note">城市里总有人等着一顿热饭。接单后，地图会显示取餐与送达区域。</p><ActionButton action="accept-order" title="接一个新订单" meta="2 分钟 · 可能遇见 NPC、友情与灵异剧情" disabled={disabled || Boolean(reason)} /></>}
+    </div> : <><p className="panel-note">城市里总有人等着一顿热饭。接单后，地图会临时显示本单的取餐与送达点，完成或取消后消失。</p><ActionButton action="accept-order" title="接一个新订单" meta="2 分钟 · 可能遇见 NPC、友情与灵异剧情" disabled={disabled || Boolean(reason)} /></>}
     <div className="info-row"><span>已完成 {game.completedOrders} 单</span><span>累计 ¥{game.totalIncome}</span></div>
-    <p className="panel-note">午高峰 11:00–14:00，晚高峰 17:00–20:00。地图连线是区域示意，不是精确导航。骑行条件不满足时，不会自动扣款或代替你推车。</p>
+    <p className="panel-note">午高峰 11:00–14:00，晚高峰 17:00–20:00。成功送达后，你的位置会移动到目的地并自动保存。连线是示意，不是实时导航。骑行条件不满足时，不会自动扣款或代替你推车。</p>
     <BikePanel />
   </section>;
 }

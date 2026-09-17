@@ -15,7 +15,7 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - Preserve serializable NPC memories, relationship metrics, flags and route locks. Romance is not the default destination: friendship, peers, family-like bonds, partnership, estrangement and solitude remain valid.
 - Core play never requires AI or a backend. Classic mode must issue zero AI requests, including after NPC choices, reloads and switching save slots.
 - Core rule randomness comes from saved seeds. AI scene text is external content, saved before choices and reused without rerolling on reload.
-- Preserve the v2 world (with additive versioned vehicle data) inside the v4 session envelope; migrate legacy v1/v2/v3 saves without clearing progress. Preserve the original autosave as a backup and migrate it exactly once into an independent slot. Reject unknown future save versions rather than silently overwriting them.
+- Preserve the v2 world (with additive versioned vehicle and player-position data) inside the v4 session envelope; migrate legacy v1/v2/v3 saves without clearing progress. Preserve the original autosave as a backup and migrate it exactly once into an independent slot. Reject unknown future save versions rather than silently overwriting them.
 - UI renders state and dispatches commands. Pure simulation and session transitions live in `src/game/`; network and storage remain adapters.
 
 ## Dual-mode AI rules
@@ -42,7 +42,7 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 
 - Keep the map as the default main view, persistent top status and bottom-left navigation. Map browsing is UI only, never a gameplay action.
 - Preserve all classic/generative, NPC, ending and recovery controls in accessible panels; never hide pending events or save errors without a recovery entry point.
-- Map geometry is local and fictional. No map tiles, geolocation, or implied free travel. Delivery lines are schematic, not real-time positions.
+- Map geometry is local and fictional. No map tiles, geolocation, or implied free travel. Delivery lines are schematic, not real-time navigation. The player marker is the saved last confirmed location; only a successful riding/pushing delivery moves it to the destination.
 
 ## Vehicles and automatic saves (v0.5)
 
@@ -51,3 +51,11 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - Always enter through the start page. Create and open independent slots; gameplay cannot run before selecting one. There is no manual save action.
 - Capture slot identity for queued saves and AI tickets. Write transactions must check revision and immutable mode; never silently overwrite another tab, an unknown future schema, or an unreadable save.
 - Surface autosave progress/failure globally. Retry transient errors automatically and do not silently leave an unsaved game. Require explicit user confirmation to discard only the unsaved in-memory changes.
+
+## Expanded delivery atlas (v0.6)
+
+- `deliveryLocations.ts` owns the 2400×1600 atlas, 24 pickup / 40 dropoff IDs and versioned player-position validation. IDs are durable save identifiers; never rename or reuse them.
+- Only the active order renders pickup/dropoff markers and its route. Delivery-only stops must not appear in permanent `MAP_PLACES` or its directory; functional landmarks remain accessible.
+- Commit the destination in the pure engine only after delivery succeeds, before any post-delivery event. Accepting, rejecting, cancelling, browsing, panning and zooming do not move the player. An aborted/fatal delivery cannot claim arrival.
+- Retain the v4 session envelope with additive `game.position`. Missing legacy positions start at the station; do not invent historical coordinates or regenerate active orders. Preserve old address lookup and all prior progress. Reject unknown position schemas without overwriting saves.
+- Each slot persists its own position automatically. Camera focus is temporary UI state and follows the restored/updated player; locating a marker is not a travel action. Do not send position data to AI or add real-time ticks.
