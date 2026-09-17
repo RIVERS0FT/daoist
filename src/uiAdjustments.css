@@ -1,0 +1,58 @@
+/* Relationship/log/map overlay refinements layered after the core map styles. */
+.relationships-empty { padding: 22px 14px; border: 1px dashed #46513f; border-radius: 11px; text-align: center; color: #96a28f; }
+.relationships-empty strong { display: block; color: #cbd2bd; font-size: 14px; font-weight: 500; }
+.relationships-empty p { margin: 7px 0 0; font-size: 12px; }
+
+/* Let the atlas continue beneath the city title and camera controls. */
+.map-viewport { inset: 0 0 116px; }
+.map-title, .map-tools { background: transparent; }
+.map-tools > button, .zoom-tools { backdrop-filter: blur(3px); }
+.map-tools button { background: rgba(29, 43, 34, .72); }
+.zoom-tools { background: transparent; }
+
+.map-log-overlay { position: absolute; z-index: 6; right: 28px; bottom: 22px; width: min(340px, calc(100% - 56px)); max-height: 190px; overflow: hidden; border: 1px solid #52604a; border-radius: 13px; background: rgba(20, 30, 24, .88); box-shadow: 0 8px 24px #0005; backdrop-filter: blur(7px); }
+.map-log-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 38px; padding: 9px 12px; border-bottom: 1px solid #3a4938; }
+.map-log-heading strong { color: #d7d8c7; font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+.map-log-heading span { min-width: 22px; padding: 2px 6px; border-radius: 99px; background: #303c2d; color: #aebaa2; font-size: 10px; text-align: center; }
+.map-log-overlay ol { list-style: none; margin: 0; padding: 0 12px 10px; max-height: 150px; overflow: auto; scrollbar-width: thin; scrollbar-color: #56654d transparent; }
+.map-log-overlay li { padding: 8px 0; border-top: 1px solid #314030; }
+.map-log-overlay li:first-child { border-top: 0; }
+.map-log-overlay time { display: block; color: #84917f; font-size: 9px; }
+.map-log-overlay p { margin: 3px 0 0; color: #bdc5b4; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.map-log-overlay li.good p { color: #bac9a9; }
+.map-log-overlay li.bad p { color: #d0a99d; }
+.map-log-overlay li.mystic p { color: #c5b1cc; }
+.map-log-empty { margin: 0; padding: 12px; color: #879383; font-size: 11px; }
+.map-log-overlay.compact { max-height: 82px; }
+.map-log-overlay.compact ol { max-height: 43px; overflow: hidden; }
+.map-log-overlay.compact .map-log-heading { min-height: 30px; padding-block: 6px; }
+.map-log-overlay.compact li { padding-block: 5px; }
+.map-log-overlay.compact p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The task card occupies the space above the single canonical log panel. */
+.map-task { bottom: 226px; }
+
+@media (max-width: 780px) {
+  .map-viewport { inset: 0 0 116px; }
+  .map-log-overlay { right: 18px; }
+  .map-task { bottom: 222px; }
+}
+
+@media (max-width: 520px) {
+  .map-viewport { inset: 0 0 170px; }
+  .map-log-overlay { right: 12px; bottom: 78px; width: min(240px, calc(100% - 24px)); max-height: 96px; }
+  .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
+  .map-log-overlay ol { max-height: 55px; }
+  .map-log-heading { min-height: 32px; padding: 6px 9px; }
+  .map-log-overlay li { padding: 5px 0; }
+  .map-log-overlay p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .map-task { bottom: 188px; }
+}
+
+@media (max-height: 520px) {
+  .map-viewport { inset-block: 0 78px; }
+  .map-log-overlay { max-height: 74px; }
+  .map-log-overlay ol { max-height: 38px; }
+  .map-log-overlay:not(.compact) ol li:nth-child(n+2) { display: none; }
+  .map-task { bottom: 166px; }
+}
