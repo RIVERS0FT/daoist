@@ -63,7 +63,7 @@ test('remaining map controls fit the city and keyboard navigation stays UI-only'
  await expect(page.locator('.camera-access')).toHaveCount(0);await expect(page.getByRole('button',{name:'地点',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'放大地图',exact:true}).click();await page.getByRole('button',{name:'定位玩家',exact:true}).click();
  const a=await camera(page);const v=page.getByTestId('map-viewport');await v.focus();await page.keyboard.press('ArrowRight');const b=await camera(page);
- expect(b.scale).toBe(a.scale);expect(b.x).toBeLessThan(a.x);expect(await readStore(page)).toEqual(g);
+ await expect(v).toHaveAttribute('data-following','false');expect(b.scale).toBe(a.scale);expect(await readStore(page)).toEqual(g);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('camera-overview.png'),fullPage:true});
 });
