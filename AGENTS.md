@@ -4,47 +4,36 @@ This repository is a single-player Web RPG about delivering food by day and cult
 
 ## Read before modifying
 
-1. Read this file.
-2. Read `docs/GAME_DESIGN.md`.
-3. Read `docs/ARCHITECTURE.md`.
-4. Read the files directly affected by the change.
-
-If a requested change conflicts with the design documents, call out the conflict before implementing it. Otherwise the design documents are authoritative.
+Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.md`, then directly affected code. Call out conflicts before implementation. The v0.3 dual-mode design intentionally extends the earlier short-dialogue-only AI policy at the user's request.
 
 ## Non-negotiable game rules
 
-- Game time advances only because the player performs an action. There is no real-time clock tick.
-- Every meaningful action must have an explicit time cost in game minutes.
-- Day/night, weather, rent pressure, energy, money, relationships, and cultivation must influence one another.
-- Random events and story events are data-driven. Do not hard-code event stories inside React components.
-- Event content lives under `src/game/` event-definition modules and is composed by the event engine. React only renders definitions and dispatches choices.
-- Event eligibility uses conditions plus weights. Recent events should be suppressed to avoid obvious repetition.
-- NPC relationships must remember choices through serializable relationship state and story flags. Important choices may permanently close or redirect later branches.
-- Relationship routes are not required to become romance. Friendship, mentor/peer, family-like bonds, partnership, estrangement and solitude are valid outcomes.
-- Normal delivery gameplay must be able to open supernatural, relationship, and cultivation content.
-- The game is single-player and local-first. A backend or AI service must never be required for core play.
-- Save data is stored in IndexedDB and must carry a version field for future migrations.
-- Randomness must be derived from the save-state seed so a save remains reproducible enough to debug.
-- UI components render state and issue actions; simulation rules live under `src/game/`.
+- Game time advances only through player actions, never a wall-clock tick. Every gameplay action has an explicit cost in minutes. UI settings and mode switching cost no time.
+- Day/night, weather, rent, energy, money, relationships and cultivation influence one another.
+- Authored events and NPC branches remain data-driven under `src/game/`; never write story logic in React.
+- Event selection uses eligibility, weights and recent-event suppression. Delivery can open supernatural and relationship content.
+- Preserve serializable NPC memories, relationship metrics, flags and route locks. Romance is not the default destination: friendship, peers, family-like bonds, partnership, estrangement and solitude remain valid.
+- Core play never requires AI or a backend. Classic mode must issue zero AI requests, including after NPC choices, reloads and mode changes.
+- Core rule randomness comes from saved seeds. AI scene text is external content, saved before choices and reused without rerolling on reload.
+- Preserve the existing v2 world model inside the v3 session envelope; migrate legacy v1/v2 saves without clearing progress. Reject unknown future save versions rather than silently overwriting them.
+- UI renders state and dispatches commands. Pure simulation and session transitions live in `src/game/`; network and storage remain adapters.
 
-## AI narrative rules
+## Dual-mode AI rules
 
-- AI is an optional narrative enhancement layer only. The deterministic engine owns stats, time, relationship values, flags, route locks and endings.
-- Never embed provider API secrets in the Web bundle, IndexedDB save, source code, or GitHub Pages configuration.
-- Browser builds may call a configured server-side relay through `VITE_NARRATIVE_AI_ENDPOINT`; the relay owns provider credentials and policy.
-- Send only minimal game context required for the current fictional scene. Do not send unrelated user/device/browser data.
-- AI output may add short dialogue, reactions or atmosphere. It must not directly mutate game state or decide success/failure.
-- AI requests must time out and fail silently back to authored content. Offline play remains complete.
-- Authored story beats, branch conditions and endings remain playable and understandable without AI-generated text.
+- Explicit classic / generative modes share one world, relationship history and ending rules.
+- AI may generate bounded side scenes, dialogue, 2–4 choices and outcome prose. It cannot return executable effects, arbitrary stats, world flags, route changes or ending IDs.
+- Each generated choice references an allowlisted local action profile; the engine owns costs, effects, resource requirements, relation deltas and all canonical decisions. Always supply a resource-free exit with an explicit time cost.
+- Generated social scenes are limited to already-known, non-estranged NPCs. Never force romance or bypass authored route locks.
+- Require mode selection and consent before sending minimal fictional context. Never send the whole save, unrelated logs, real personal data or browser/device details.
+- Never embed model-provider keys in source, Vite variables, Pages or browser storage. A relay owns provider secrets; an optional relay access token is session-memory-only.
+- Require safe endpoint URLs, bounded JSON, strict output validation, timeouts and visible authored fallback. Do not claim AI success on mock, fallback or unconfigured services.
+- Abort requests and invalidate stale results on mode/config changes and resets. Handle double clicks, pending saves, reloads and out-of-order writes. Do not charge twice on fallback.
+- AI prose may be imperfect; canonical story beats, route conditions, numeric results and endings remain understandable and playable without it.
 
-## Engineering rules
+## Engineering and delivery
 
-- TypeScript strict mode stays enabled.
-- Keep the core engine deterministic and side-effect free; persistence and optional network narrative calls belong in adapters/store glue.
-- Clamp player stats and relationship stats after effects so saves cannot drift into invalid values.
-- Preserve mobile usability at 320px width.
-- Run `npm run build` before merging.
-
-## Delivery workflow
-
-Use a feature branch, open a pull request, verify the build, then squash-merge to `main`. GitHub Pages deployment is driven from `main` by `.github/workflows/pages.yml`.
+- TypeScript strict mode stays enabled. Clamp stats and relationship values.
+- Preserve 320px mobile usability and keyboard-accessible controls.
+- Test classic zero-network behavior, scene validation, save migration, cancellation, fallback, resource costs and relay boundaries.
+- Run `npm test`, `npm run build` and browser tests before merging. Use mocked providers in tests; never require or spend production credentials in CI.
+- Work on a feature branch, open a PR, verify CI, squash-merge to `main`, then verify GitHub Pages deployment. Never report deployment complete based only on a queued workflow.

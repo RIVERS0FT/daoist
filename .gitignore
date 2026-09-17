@@ -3,3 +3,13 @@ dist/
 .vite/
 .DS_Store
 *.log
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+server/.env
+server/.env.local
+.test-src/
+.test-dist/
+test-results/
+playwright-report/

@@ -1,84 +1,54 @@
-# Architecture v0.2
+# Architecture v0.3
 
-## Stack
+## Stack and layout
 
-React + TypeScript + Vite；Zustand 作为 UI-facing store；IndexedDB 作为本地存档；CSS 作为当前视觉层；GitHub Actions + GitHub Pages 部署。核心游戏不需要后端。
+React + TypeScript + Vite，Zustand，IndexedDB，CSS；GitHub Actions / Pages。核心游戏本地运行。独立 Node relay 是可选生成服务，不随 Pages 运行。
 
-可选 AI 叙事通过一个独立 HTTP relay 接入，浏览器只知道 `VITE_NARRATIVE_AI_ENDPOINT`，不保存模型供应商密钥。
+- `types.ts`、`engine.ts`：保留发布版 v2 世界状态及确定性 RPG 引擎。
+- `events.ts`、`npcEvents.ts`、`content.ts`：原有人工事件定义与统一事件表。
+- `npcs.ts`、`endings.ts`：关系、路线与多结局本地规则。
+- `generation.ts`：生成式场景数据类型、严格验证、行动模板、6 个可回退人工奇遇与成本描述。
+- `play.ts`：纯函数会话层。旧档迁移、探索开始、场景接收、模式切换、回退、选择结算和最小请求上下文。
+- `ai.ts`：安全 URL / 设置读写、限长 HTTP adapter、请求失效门控。没有构建期自动请求。
+- `store.ts`：唯一 UI 写入口，统一待处理场景锁，模式与配置切换取消网络，防迟到写入，串行保存。
+- `storage.ts`：IndexedDB 读写；写事务完成后才算成功，关闭数据库连接，向 store 报告错误。
+- `components/PlayModePanel.tsx`、`playModes.css`：双模式和可操作奇遇界面。
+- `server/relay.mjs`：可选服务端 Chat Completions 兼容 relay，配置在服务端环境变量。
 
-## Source layout
+## Save envelope
 
-- `src/game/types.ts` — serializable state and content types
-- `src/game/events.ts` — 基础随机事件定义
-- `src/game/npcEvents.ts` — NPC 与关系剧情事件定义
-- `src/game/content.ts` — 合并事件内容并建立 EVENT_MAP
-- `src/game/npcs.ts` — NPC 元数据、关系初始值、clamp 与关系操作
-- `src/game/endings.ts` — 数据驱动结局定义与可用结局筛选
-- `src/game/engine.ts` — deterministic simulation actions, time, RNG, relationships, event selection, ending selection
-- `src/game/ai.ts` — 可选叙事 AI adapter，只返回短文本，不修改游戏状态
-- `src/game/storage.ts` — IndexedDB persistence
-- `src/game/store.ts` — Zustand adapter；持久化与可选 AI 网络调用发生在这一层附近
-- `src/App.tsx` — presentation and action controls
-- `src/styles.css` — responsive visual design
+当前磁盘格式为 `PlaySession = { version: 3, game: GameState(v2), play: PlayState }`。内部世界版本与磁盘封装版本分开，避免为了 UI 模式破坏原有 RPG 模型。
 
-## State model
+`play` 持有 mode、sequence、pending request、完整 scene、最近 12 条已解决奇遇 history。没有 provider key 或 relay token。地址和授权为独立本机设置；访问口令仅为 store 闭包内字符串。
 
-`GameState` 是完整可序列化存档，schema 当前为 v2。包含日/时间、随机种子、天气、角色资源、进度、当前订单、待处理事件、flags、事件历史、日志、5 名 NPC 的关系状态以及可选 endingId。
+v1/v2 原始存档先由既有 migrateGameState 升级世界，再加默认经典模式；v3 恢复场景时重新验证受控模板。未知未来版本阻止自动写入。刷新遇到 pending 请求则在原有已付款探索上回退，不再次收费或发请求。
 
-每个 NPC 关系包含：`met`、`affinity`、`trust`、`bond`、`romance`、`route`、`lastSeenDay`。
+IndexedDB 保持 `daoist-delivery` / `saves` / `autosave`，无需新建数据库或删除旧数据。每次状态转移后保存，队列保证旧写入不能覆盖新世界。
 
-引擎 action 接收 `GameState` 并返回新的 `GameState`；核心引擎本身不执行持久化或网络请求。
+## Scene lifecycle
 
-## Save migration
+`beginExploration` 校验没有在途订单、事件、场景和游戏结束状态，扣 2 精力并用唯一时钟 `advanceTime` 推进 15 分钟，产生本地 request id。
 
-`migrateGameState` 接受未知旧存档。v1 存档会保留原有时间、资源、订单、flags 和日志，并补齐 v2 的 relationships 与 endingId。迁移后立即按 v2 重新保存。
+经典模式立即按保存的种子和近期重复抑制选择人工奇遇，不发网络。生成模式只在用户授权后发请求。成功：validateScene 严格限制字段、长度、2–4 个不同 approach、允许的方向；本地补充退出选项。失败：fallbackExploration 产生明确人工来源。
 
-IndexedDB database: `daoist-delivery`; store: `saves`; key: `autosave`。
+选择时先查本地资源门槛，支付成本，经 advanceTime 处理跨日，再在角色存活时支付模板奖励。关系只影响已认识且非疏远的指定 NPC，不写 romance、route 或 flags。结果与已选分支进入存档及日志；scene 清空后才能执行其他动作，重复 choice 无效。
 
-## Randomness
+既有 GameState 引擎导出仍为世界 API；UI 必须通过 store 会话入口使用，不能绕过 pending/scene 锁直接修改世界。
 
-存档持有 numeric seed。核心随机调用同时返回结果和更新后的 seed，禁止用 `Math.random()` 决定订单、事件、突破或结局条件。
+## Network authority and cancellation
 
-AI 生成文本不参与随机数流，不得反向影响确定性状态。
+模式与用户同意双重约束。`RequestGate` 的 revision + AbortController 同时取消请求和迟到结果的写权限。换模式、改配置、回退、重开都使旧 ticket 失效；仅匹配当前 pending id 的结果可提交。
 
-## Time advancement
+客户端 20 秒超时、32 KiB 响应限制、无自动重试、禁止跨重定向传令牌、credentials omit、no-referrer。所有模型文本按纯文本渲染。模型只提供 approach 标签，不提供效果 JSON。已保存的生成内容不再依赖模型可用性。
 
-`advanceTime` 是唯一允许推动游戏时间的核心函数，负责跨日以及日初维护（天气、房租、疲劳压力）。玩法 action 不应直接修改 minute。
+原 v0.2 的选择后短对白请求已被替代，避免经典模式隐式联网。新的 scene-v1 协议与部署说明见 `server/README.md`。已有仅 `{text}` 的 relay 不被误判为新协议成功。
 
-主动联系 NPC 通过 `socializeNpc` 推进 45 分钟，再从该 NPC 的 `social` 事件池里选择可触发剧情。
+## Relay and deployment
 
-## Events
+relay 自己持有供应商密钥、固定上游 URL、访问口令、Origin 白名单、并发与预算。前端只知道公开地址，可在游戏内配置；`VITE_NARRATIVE_AI_ENDPOINT` 只作为可选默认值，不能携带任何密钥。
 
-基础与 NPC 事件都实现 `EventDefinition`。`content.ts` 将不同定义模块合并为统一 EVENT_MAP。
+`main` 按现有 Vite base `/Daoist-Delivery/` 构建，Pages 发布静态 dist。真实 AI 仍需部署者单独配置并运行 relay / 模型；健康检查只证明 relay 协议和配置可达，不等于真实模型生成测试。
 
-`maybeTriggerEvent` 按行动上下文、可选 NPC filter、条件、近期重复抑制、权重随机筛选事件。React 只渲染选中的定义并 dispatch choice id。
+## Verification
 
-EventEffect 支持：
-
-- stat
-- time
-- flag
-- relationship
-- relationship-route
-
-因此故事分支不需要在 React 中写剧情判断。
-
-## Endings
-
-`endings.ts` 定义 `EndingDefinition`。每个结局只有描述与纯函数 condition。第 30 天后 UI 调用 `availableEndings` 展示所有当前成立的结局；玩家选择后由 `selectEnding` 再验证条件并写入 endingId。
-
-普通的 `city-lights` 结局保证第 30 天后至少存在一个可收束方向，其他结局通过关系路线、数值和 flags 解锁。
-
-## Optional AI narrative
-
-`ai.ts` 读取构建期 `VITE_NARRATIVE_AI_ENDPOINT`。未配置时不发网络请求。
-
-NPC 事件选择首先由 deterministic engine 完成全部时间、关系和 flag 变化，随后 store 可以异步向 relay 发送：当前事件、玩家选择、日期/时间、境界、天气和对应 NPC 的最小关系摘要。relay 预期返回 `{ "text": "..." }`。
-
-返回文本被限制长度后只追加为日志里的“人物片段”。请求 7 秒超时；任何 HTTP、解析、超时错误都直接忽略，不影响游戏。
-
-服务端 relay 不属于本仓库核心范围，应负责供应商密钥、鉴权、限流和模型策略。不得把模型 API key 编译进 Vite 客户端。
-
-## Deployment
-
-`main` 使用 Vite base `/Daoist-Delivery/` 构建。GitHub Actions 上传 `dist/` 并部署到 GitHub Pages。若需要启用 AI，Pages 构建可提供公开 relay URL 作为 `VITE_NARRATIVE_AI_ENDPOINT`；真正的模型密钥必须只存在于 relay 服务端。
+`npm test` 编译 game 模块并运行 Node tests（核心结算、迁移、网关与 relay mock）。`npm run build` 严格生产构建。`npm run test:e2e` 用 Chromium 验证桌面及 320px 双模式、真实 IndexedDB、无 AI 请求、生成 mock、刷新恢复和回退。测试不调用付费真实模型，不能据此宣称已完成实际模型端到端联调。
