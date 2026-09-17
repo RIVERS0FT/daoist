@@ -3,6 +3,10 @@
 .relationships-empty strong { display: block; color: #cbd2bd; font-size: 14px; font-weight: 500; }
 .relationships-empty p { margin: 7px 0 0; font-size: 12px; }
 
+/* Generic drawers keep only the page title; place drawers retain the place context label. */
+.game-drawer:not(:has(.place-intro)) .drawer-heading .eyebrow { display: none; }
+.game-drawer:not(:has(.place-intro)) .drawer-heading h2 { margin-top: 0; }
+
 /* Let the atlas continue beneath the city title and camera controls. */
 .map-viewport { inset: 0 0 116px; }
 .map-title, .map-tools { background: transparent; }
