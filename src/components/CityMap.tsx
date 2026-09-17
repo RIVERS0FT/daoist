@@ -52,7 +52,7 @@ interface CityMapProps {
   panelOpen: boolean; order: DeliveryOrder | null; position: PlayerPosition; selected: PlaceId | null;
   onPlace: (place: MapPlace) => void; onPlaces: () => void; onOrder: () => void;
 }
-export function CityMap({ order, position, selected, panelOpen, onPlace, onPlaces, onOrder }: CityMapProps) {
+export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder }: CityMapProps) {
   const viewport = useRef<HTMLDivElement>(null), world = useRef<HTMLDivElement>(null), controller = useRef<MapController | null>(null);
   const [status, setStatus] = useState<CameraStatus>({ scale: .65, minimum: .04, following: true, wheel: 'zoom' });
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
@@ -73,24 +73,14 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onPlace
   useLayoutEffect(() => { if (selected) controller.current?.locate(PLACE_MAP.get(selected)!); }, [selected]);
   useLayoutEffect(() => { controller.current?.resize(); }, [panelOpen]);
   return <>
-    <div className="map-title"><span className="eyebrow">扩展城市 / CITY ATLAS</span><h2>青岚市<span>人间烟火，亦有仙途</span></h2></div>
+    <div className="map-title"><h2>青岚市</h2></div>
     <div className="map-location" role="status" aria-live="polite">当前位置：<strong>{player.name}</strong><span> · {player.district}</span></div>
-    <div className="map-tools"><button type="button" className="place-list-button" onClick={onPlaces}><Icon name="map" size={16} />地点</button><div className="zoom-tools">
+    <div className="map-tools"><div className="zoom-tools">
       <button type="button" aria-label="放大地图" title="放大地图" disabled={status.scale >= 2} onClick={() => controller.current?.zoom(1.2)}><Icon name="plus" /></button>
       <button type="button" aria-label="缩小地图" title="缩小地图" disabled={status.scale <= status.minimum + .0001} onClick={() => controller.current?.zoom(1 / 1.2)}><Icon name="minus" /></button>
       <button type="button" aria-label="定位玩家" title="定位玩家（只移动视角）" onClick={() => controller.current?.locate(player, true)}><Icon name="focus" /></button>
       <button type="button" aria-label="定位配送终点" title="定位当前订单送达点" disabled={!route} onClick={() => { if (route) controller.current?.locate(route.dropoff); }}><Icon name="flag" /></button>
     </div></div>
-    <details className="camera-access"><summary>视角 · {Math.round(status.scale * 100)}% · {status.following ? '跟随' : '自由'}</summary>
-      <div className="camera-menu" aria-label="地图视角控制">
-        <p>单指拖动、双指捏合；从图钉上拖动不会打开地点。缩放只改变视角。</p>
-        <div className="camera-menu-buttons"><button type="button" onClick={() => controller.current?.fitWorld()}>显示全图</button>
-          <button type="button" disabled={!route} onClick={() => { if (route) controller.current?.fit([player, route.dropoff]); }}>查看当前配送</button></div>
-        <div className="camera-directions" aria-label="无需拖动的地图平移">{[['向左平移',80,0,'←'],['向上平移',0,80,'↑'],['向下平移',0,-80,'↓'],['向右平移',-80,0,'→']].map(([label,x,y,glyph]) => <button type="button" key={label} aria-label={String(label)} onClick={() => controller.current?.pan(Number(x), Number(y))}>{glyph}</button>)}</div>
-        <label>滚轮行为<select aria-label="滚轮行为" value={status.wheel} onChange={e => controller.current?.setWheel(e.target.value as 'zoom' | 'pan')}><option value="zoom">鼠标：滚动缩放</option><option value="pan">触控板：滚动平移</option></select></label>
-        <p>触控板捏合缩放；方向键平移，+/− 缩放，Home 定位玩家。点击“定位玩家”恢复跟随。</p>
-      </div>
-    </details>
     <div ref={viewport} className="map-viewport camera-viewport" tabIndex={0} aria-label="城市地图，可拖动、双指缩放或使用方向键平移" data-testid="map-viewport">
       <div ref={world} className="map-world" style={{ width: MAP_WIDTH, height: MAP_HEIGHT }} data-scale="0.65">
         <MapArtwork order={order} player={player} />
