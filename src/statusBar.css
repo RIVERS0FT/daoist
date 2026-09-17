@@ -1,0 +1,94 @@
+.status-bar {
+  grid-template-columns: minmax(150px, auto) minmax(0, 1fr) auto;
+  gap: 20px;
+}
+.game-identity,
+.identity-copy,
+.status-overview,
+.time-status,
+.status-meters { min-width: 0; }
+.game-shell .identity-copy h1 {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  letter-spacing: .06em;
+}
+.status-overview {
+  display: grid;
+  grid-template-columns: minmax(138px, auto) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+.time-status {
+  padding-right: 18px;
+  border-right: 1px solid #384336;
+}
+.game-shell .time-status .clock-block {
+  padding: 0;
+  border: 0;
+  text-align: left;
+}
+.time-status .save-indicator {
+  margin-top: 5px;
+  white-space: nowrap;
+}
+.status-meters {
+  grid-template-columns: repeat(6, minmax(64px, 1fr));
+  gap: 12px;
+}
+.status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1100px) {
+  .status-bar {
+    grid-template-columns: minmax(138px, auto) minmax(0, 1fr);
+    gap: 16px;
+  }
+  .status-actions { display: none; }
+  .status-overview { grid-template-columns: minmax(130px, auto) minmax(0, 1fr); }
+  .status-meters { gap: 9px; }
+  .game-shell .identity-copy h1 { max-width: 220px; }
+}
+
+@media (max-width: 780px) {
+  .status-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px 14px;
+  }
+  .status-overview { display: contents; }
+  .time-status {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    border: 0;
+    text-align: right;
+  }
+  .game-shell .time-status .clock-block { text-align: right; }
+  .time-status .save-indicator { text-align: right; }
+  .status-meters {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    border-top: 1px solid #344231;
+    padding-top: 9px;
+  }
+  .game-shell .identity-copy h1 { max-width: min(44vw, 240px); }
+}
+
+@media (max-width: 520px) {
+  .game-shell .identity-copy h1 {
+    max-width: 42vw;
+    font-size: 17px;
+    letter-spacing: .04em;
+  }
+  .time-status .save-indicator { font-size: 9px; }
+  .status-meters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-height: 520px) {
+  .status-bar { gap: 10px; }
+  .time-status .save-indicator { margin-top: 2px; }
+}
