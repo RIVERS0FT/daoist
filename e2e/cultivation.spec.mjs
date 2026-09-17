@@ -39,7 +39,7 @@ test('foundation trial locks outside actions, survives refresh and unlocks a rea
  await ready(page);const before=await seed(page,9);await nav(page,'修炼').click();await page.getByRole('button',{name:'破境',exact:true}).click();
  await expect(page.getByRole('button',{name:/^确认稳妥突破/})).toBeDisabled();await page.getByRole('button',{name:/^开始内景筑基试炼/}).click();await readStore(page);
  await page.locator('.foundation-trial .action-button').first().click();const stage=await readStore(page);expect(stage.game.cultivation.trial.stage).toBe(1);
- await nav(page,'跑单').click();await expect(page.getByRole('button',{name:/^接一个新订单/})).toBeDisabled();
+ await nav(page,'地图').click();await expect(page.getByTestId('delivery-offer')).toHaveCount(0);
  await page.reload();await continueRecent(page);await expect(page.locator('.foundation-trial')).toBeVisible();expect((await readStore(page)).game.cultivation.trial).toEqual(stage.game.cultivation.trial);
  await page.screenshot({path:info.outputPath('cultivation-trial.png'),fullPage:true});
  await page.locator('.foundation-trial .action-button').first().click();await readStore(page);await page.locator('.foundation-trial .action-button').first().click();const done=await readStore(page);
