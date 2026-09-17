@@ -7,7 +7,7 @@ import { useGameStore } from '../game/store';
 import type { NpcId } from '../game/types';
 import '../playModes.css';
 
-export function PlayModePanel() {
+export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean }) {
   const store = useGameStore();
   const { game, play, aiSettings } = store;
   const [endpoint, setEndpoint] = useState(aiSettings.endpoint);
@@ -35,7 +35,7 @@ export function PlayModePanel() {
       </button>
     </div>
     <p className="play-explanation">{play.mode === 'classic' ? '按原有故事跑单、修炼、经营关系，也可以探索人工编写的自由奇遇。切换模式不会重置这一世。' : '选择一个方向，让 AI 根据当前虚构世界与最近的奇遇记忆生成下一段故事。实际时间、资源和关系影响由本地规则结算，AI 不能直接改写主线或结局。'}</p>
-    <details className="ai-settings">
+    <details className="ai-settings" open={settingsOnly || undefined}>
       <summary>AI 服务设置 · {aiSettings.endpoint ? '已配置地址' : '尚未配置服务'}</summary>
       <form onSubmit={(event) => { event.preventDefault(); store.configureAi({ endpoint, consent }, token); }}>
         <label>生成服务地址（relay，不是模型供应商地址）<input type="url" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://your-relay.example/narrative" maxLength={2048} autoComplete="off" /></label>
@@ -46,7 +46,7 @@ export function PlayModePanel() {
       </form>
     </details>
     {play.mode === 'generative' && (!aiSettings.endpoint || !aiSettings.consent) && <p className="play-warning">AI 尚未就绪：请配置 relay 并保存授权。现在仍可探索，但会明确回退到经典剧情。</p>}
-    <div className="exploration-form">
+    {!settingsOnly && <div className="exploration-form">
       <label>奇遇方向<select value={effectiveFocus} onChange={(event) => setFocus(event.target.value as SceneFocus)} disabled={busy}>
         <option value="city">城市日常</option><option value="cultivation">修炼奇遇</option><option value="social" disabled={!contacts.length}>熟人故事{contacts.length ? '' : '（先在原剧情中认识 NPC）'}</option>
       </select></label>
@@ -55,11 +55,11 @@ export function PlayModePanel() {
       <button className="explore-button" type="button" disabled={busy || game.energy < 2} onClick={() => { void store.explore(effectiveFocus, effectiveFocus === 'social' ? selectedNpc || undefined : undefined, intent); }}>
         {play.mode === 'generative' ? '生成下一段奇遇' : '探索经典奇遇'}<small>先花 15 分钟 · 精力 -2 · 选择另计时间</small>
       </button>
-    </div>
+    </div>}
     <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式没有 AI 网络请求。' : '等待主动探索。')}</p>
-    {play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>不等待，改用经典剧情（不重复收费）</button>}
+    {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>不等待，改用经典剧情（不重复收费）</button>}
     {store.saveError && <p className="play-warning" role="alert">{store.saveError}</p>}
-    {play.scene && <section className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
+    {!settingsOnly && play.scene && <section className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
       <div className="eyebrow">{play.scene.source === 'ai' ? 'AI 生成奇遇' : '经典人工奇遇'} · {FOCUS_LABELS[play.scene.focus]}{play.scene.npcId ? ` · ${NPC_MAP.get(play.scene.npcId)?.name}` : ''}</div>
       <h3>{play.scene.title}</h3><p>{play.scene.description}</p>
       {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">这是切换前已经保存的 AI 场景，完成本段无需联网；后续采用经典剧情。</p>}
@@ -67,6 +67,6 @@ export function PlayModePanel() {
         <strong>{choice.label}</strong><small>{profileSummary(choice.approach, Boolean(play.scene?.npcId))}</small>
       </button>)}</div>
     </section>}
-    {play.history.length > 0 && <details className="scene-memories"><summary>奇遇记忆 · 最近 {play.history.length} 段</summary>{[...play.history].reverse().map((memory, index) => <article key={`${play.sequence}-${index}`}><strong>{memory.source === 'ai' ? 'AI' : '经典'} · 第 {memory.day} 天 · {memory.title}</strong><p>选择：{memory.choice}</p><p>{memory.result}</p></article>)}</details>}
+    {!settingsOnly && play.history.length > 0 && <details className="scene-memories"><summary>奇遇记忆 · 最近 {play.history.length} 段</summary>{[...play.history].reverse().map((memory, index) => <article key={`${play.sequence}-${index}`}><strong>{memory.source === 'ai' ? 'AI' : '经典'} · 第 {memory.day} 天 · {memory.title}</strong><p>选择：{memory.choice}</p><p>{memory.result}</p></article>)}</details>}
   </section>;
 }
