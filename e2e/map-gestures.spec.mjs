@@ -6,6 +6,18 @@ const nav=(page,label)=>page.getByRole('navigation',{name:'游戏导航'}).getBy
 async function ready(page){await page.goto('./');await newGame(page);await expect.poll(async()=>Number((await camera(page)).scale)).toBe(.65);}
 async function wheelAt(page,x,y,deltaY,extra={}){await page.getByTestId('map-viewport').dispatchEvent('wheel',{clientX:x,clientY:y,deltaY,deltaMode:0,cancelable:true,...extra});}
 async function pointer(page,type,id,x,y){await page.getByTestId('map-viewport').dispatchEvent(type,{pointerId:id,pointerType:'touch',clientX:x,clientY:y,button:0,bubbles:true});}
+async function pointerAccessibleCluster(page){
+ const clusters=page.locator('.landmark-cluster');
+ for(let index=0;index<await clusters.count();index+=1){
+  const cluster=clusters.nth(index);
+  const hit=await cluster.evaluate(element=>{
+   const r=element.getBoundingClientRect(),target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+   return Boolean(target&&(target===element||element.contains(target)));
+  });
+  if(hit)return cluster;
+ }
+ return null;
+}
 
 test('wheel zoom stays anchored after a manual pan without modifying any game state',async({page})=>{
  await ready(page);const before=await readStore(page),r=await rect(page),v=page.getByTestId('map-viewport');
@@ -73,6 +85,7 @@ test('overview combines nearby landmarks into clickable groups without changing 
   const a=boxes[i],b=boxes[j];expect(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y).toBe(false);
  }
  await page.screenshot({path:info.outputPath('camera-clustered-atlas.png'),fullPage:true});
- const small=await camera(page);await page.locator('.landmark-cluster').first().click();await expect.poll(async()=>(await camera(page)).scale).toBeGreaterThan(small.scale);
+ const cluster=await pointerAccessibleCluster(page);expect(cluster,'at least one overview cluster should remain pointer-accessible around prioritized delivery tasks').not.toBeNull();
+ const small=await camera(page);await cluster.click();await expect.poll(async()=>(await camera(page)).scale).toBeGreaterThan(small.scale);
  expect(await readStore(page)).toEqual(before);
 });
