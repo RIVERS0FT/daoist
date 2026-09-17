@@ -11,6 +11,19 @@ async function restore(page, change) {
 async function resolvePendingEvent(page) {
   if ((await world(page)).game.pendingEventId) await page.locator('.event-choices button:enabled').first().click();
 }
+async function pointerAccessibleOffer(page) {
+  const offers = page.getByTestId('delivery-offer');
+  for (let index = 0; index < await offers.count(); index += 1) {
+    const offer = offers.nth(index);
+    const hit = await offer.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return Boolean(target && (target === element || element.contains(target)));
+    });
+    if (hit) return offer;
+  }
+  throw new Error('No pointer-accessible delivery offer is visible on the current map view.');
+}
 test('map landing keeps status at top and navigation at bottom left without external calls', async ({ page }, info) => {
   const outside = [], errors = [];
   page.on('request', (request) => { if (!request.url().startsWith('http://127.0.0.1:4173/')) outside.push(request.url()); });
@@ -56,8 +69,9 @@ test('navigation and map browsing never advance time, change saves or invoke AI'
 test('map task preview accepts the exact order and active route has only a dropoff pin', async ({ page }, info) => {
   await ready(page);
   const offers = page.getByTestId('delivery-offer'); await expect(offers).toHaveCount(4);
-  const selectedId = await offers.first().getAttribute('data-offer-id');
-  await offers.first().click();
+  const offer = await pointerAccessibleOffer(page);
+  const selectedId = await offer.getAttribute('data-offer-id');
+  await offer.click();
   await expect(page.getByTestId('delivery-offer-card')).toBeVisible();
   await page.getByRole('button', { name: '接取任务 · 2 分钟', exact: true }).click();
   await resolvePendingEvent(page);
