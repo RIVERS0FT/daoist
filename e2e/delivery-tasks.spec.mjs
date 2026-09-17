@@ -37,24 +37,26 @@ test('delivery tasks are chosen from map and pickup is merged into one delivery 
   await expect(offers).toHaveCount(4);
   const offer = await clickableOffer(page);
   const selectedId = await offer.getAttribute('data-offer-id');
+  const selectedDropoff = await offer.getAttribute('data-location-id');
   await offer.click();
 
   const card = page.getByTestId('delivery-offer-card');
   await expect(card).toBeVisible();
   await expect(card.locator('[aria-label="配送要求"]')).toBeVisible();
   await expect(card.getByText(/取餐 .*取餐已并入配送执行/)).toBeVisible();
-  await card.getByRole('button', { name: '接取任务 · 2 分钟', exact: true }).click();
+  const before = await readStore(page);
+  await card.getByRole('button', { name: '配送', exact: true }).click();
 
-  await expect(page.getByTestId('delivery-offer')).toHaveCount(0);
-  await expect(page.getByTestId('delivery-dropoff')).toHaveCount(1);
-  await expect(page.getByTestId('delivery-pickup')).toHaveCount(0);
   const state = await readStore(page);
-  expect(state.game.activeOrder?.id).toBe(selectedId);
-  expect(state.game.minute).toBe(7 * 60 + 2);
-
-  await page.getByTestId('delivery-dropoff').click();
-  await expect(page.getByRole('button', { name: /执行配送/ })).toBeVisible();
-  await expect(page.getByText('取餐与送达合并为一次配送执行。')).toBeVisible();
+  expect(state.game.activeOrder).toBeNull();
+  expect(state.game.completedOrders).toBe(before.game.completedOrders + 1);
+  expect(state.game.position.locationId).toBe(selectedDropoff);
+  expect(state.game.minute).toBeGreaterThan(before.game.minute);
+  expect(state.game.minute).not.toBe(before.game.minute + 2);
+  expect(state.game.log.some((entry) => entry.text.includes('送达'))).toBe(true);
+  await expect(page.getByTestId('delivery-pickup')).toHaveCount(0);
+  await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
+  expect(selectedId).toBeTruthy();
 });
 
 test('task board refreshes after a player action', async ({ page }) => {
