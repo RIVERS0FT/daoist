@@ -56,7 +56,7 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 
 - `deliveryLocations.ts` owns the 2400×1600 atlas, 24 pickup / 40 dropoff IDs and versioned player-position validation. IDs are durable save identifiers; never rename or reuse them.
 - Only the active order renders pickup/dropoff markers and its route. Delivery-only stops must not appear in permanent `MAP_PLACES` or its directory; functional landmarks remain accessible.
-- Commit the destination in the pure engine only after delivery succeeds, before any post-delivery event. Accepting, rejecting, cancelling, browsing, panning and zooming do not move the player. An aborted/fatal delivery cannot claim arrival.
+- Commit the destination in the pure engine only after delivery succeeds, before any post-delivery event. Previewing/rejecting a map task, cancelling a legacy active order, browsing, panning and zooming do not move the player; a successful direct map delivery does. An aborted/fatal delivery cannot claim arrival.
 - Retain `game.position` inside the v5 session envelope (v0.8 extends v0.6). Missing legacy positions start at the station; do not invent historical coordinates or regenerate active orders. Preserve old address lookup and all prior progress. Reject unknown position schemas without overwriting saves.
 - Each slot persists its own position automatically. Camera focus is temporary UI state and follows the restored/updated player; locating a marker is not a travel action. Do not send position data to AI or add real-time ticks.
 
