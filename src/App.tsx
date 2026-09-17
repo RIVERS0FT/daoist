@@ -2,8 +2,10 @@ import { StartScreen } from './components/StartScreen';
 import { bikeStats, deliveryEstimate } from './game/bike';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CityMap } from './components/CityMap';
-import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, JournalPanel, LifePanel, RelationshipsPanel } from './components/GamePanels';
+import { CharacterPanel, CultivationPanel, DeliveryPanel, EndingResult, EventPanel, LifePanel, RelationshipsPanel } from './components/GamePanels';
 import { HelpPanel } from './components/HelpPanel';
+import { ActivityLog } from './components/ActivityLog';
+import './activityLog.css';
 import { Icon } from './components/Icon';
 import { PlayModePanel } from './components/PlayModePanel';
 import { MAP_PLACES, PANEL_TITLES } from './game/cityMap';
@@ -19,7 +21,7 @@ const NAV = [
   { id: 'exploration', label: '奇遇', icon: 'spark' },
 ] as const;
 const MORE = [
-  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' }, { id: 'journal', icon: 'book' },
+  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' },
   { id: 'endings', icon: 'flag' }, { id: 'help', icon: 'book' }, { id: 'settings', icon: 'settings' },
 ] as const;
 
@@ -32,6 +34,7 @@ export default function App() {
   const currentSlot = useGameStore((s) => s.slots.find((slot) => slot.id === s.activeSlotId));
   const saveError = useGameStore((s) => s.saveError), loadBlocked = useGameStore((s) => s.loadBlocked);
   const [panel, setPanel] = useState<PanelId | null>(null), [more, setMore] = useState(false);
+  const [logExpanded, setLogExpanded] = useState(() => !window.matchMedia('(max-height: 520px)').matches);
   const [place, setPlace] = useState<MapPlace | null>(null), [selected, setSelected] = useState<PlaceId | null>(null);
   const drawer = useRef<HTMLElement>(null), mapNav = useRef<HTMLButtonElement>(null), opener = useRef<HTMLElement | null>(null);
   const event = game.pendingEventId ? EVENT_MAP.get(game.pendingEventId) : null;
@@ -81,8 +84,7 @@ export default function App() {
     { label: '压力', value: `${Math.round(game.stress)}/100`, icon: 'clock', danger: game.stress > 70 },
     { label: '电量', value: `${Math.round(game.bikeBattery)}/${bikeStats(game.bike).capacity}`, icon: 'battery', danger: game.bikeBattery < 20 },
   ];
-  const latest = game.log[0];
-  return <main className={`game-shell ${night ? 'night-map' : 'day-map'}`} data-weather={game.weather}>
+  return <main className={`game-shell ${night ? 'night-map' : 'day-map'}`} data-weather={game.weather} data-log-expanded={logExpanded}>
     <header className="status-bar" role="banner" aria-label="顶部状态栏">
       <div className="game-identity"><div><h1 title={currentSlot?.name}>{currentSlot?.name ?? '无名修士'}</h1><button type="button" className="realm-button" onClick={() => openNav('character')}>{realmName(game.realmLevel)}<span>查看状态 ›</span></button></div></div>
       <div className="clock-block"><strong>第 {game.day} 天 · {formatTime(game.minute)}</strong><span>{phaseFor(game.minute)} · {WEATHER[game.weather]}</span><small className={`save-indicator ${saveStatus}`} aria-live="polite">{saveStatus === 'saving' ? '自动保存中…' : saveStatus === 'error' ? '自动保存失败' : '已保存'}</small></div>
@@ -104,16 +106,16 @@ export default function App() {
           {pendingPanel && panel !== pendingPanel && <button type="button" className="pending-link" onClick={() => openPanel(pendingPanel)}>{game.gameOver ? '查看本世结局' : '有待处理的内容，点击继续'}<Icon name="arrow" size={16} /></button>}
           {place && place.panel === panel && <div className="place-intro"><span>{place.district}</span><p>{place.description}</p></div>}
           {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
-          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'journal' && <JournalPanel />}
+          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}
           {panel === 'exploration' && <PlayModePanel />}
           {panel === 'help' && <HelpPanel />}
           {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>存档 · {currentSlot?.name}</h3><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
           {panel === 'endings' && <EndingResult onReset={resetGame} />}
-          {panel === 'event' && (event ? <EventPanel /> : <div className="resolved-event"><Icon name="book" size={28} /><h3>这一页，已经写下。</h3><p>{latest?.text}</p><button type="button" className="primary-button" onClick={() => openNav(game.activeOrder ? 'delivery' : null)}>{game.activeOrder ? '继续配送' : '返回地图'}</button></div>)}
+          {panel === 'event' && (event ? <EventPanel /> : <div className="resolved-event"><Icon name="book" size={28} /><h3>这一页，已经写下。</h3><button type="button" className="primary-button" onClick={() => openNav(game.activeOrder ? 'delivery' : null)}>{game.activeOrder ? '继续配送' : '返回地图'}</button></div>)}
           {panel === 'places' && <div className="place-directory">{MAP_PLACES.map((item) => <button key={item.id} type="button" onClick={() => openPlace(item)}><Icon name={item.icon} /><span><strong>{item.name}</strong><small>{item.subtitle}</small></span><Icon name="arrow" size={16} /></button>)}</div>}
-          {latest && !['journal', 'event', 'endings', 'help'].includes(panel) && <div className="last-result" aria-label="最近行动结果"><span>第 {latest.day} 天 {formatTime(latest.minute)} · 最近见闻</span><p>{latest.text}</p></div>}
         </div>
       </section>}
+      <ActivityLog key={activeSlotId} expanded={logExpanded} onToggle={() => setLogExpanded((value) => !value)} />
     </section>
     <nav className="nav-dock" aria-label="游戏导航">
       {more && <div className="more-navigation" id="more-navigation"><span className="eyebrow">更多</span>{MORE.map((item) => <button type="button" key={item.id} onClick={() => openNav(item.id)}><Icon name={item.icon} size={18} /><span>{PANEL_TITLES[item.id]}</span>{item.id === 'endings' && game.day >= 30 && <b className="nav-badge">可查看</b>}</button>)}<button type="button" disabled={slotBusy} onClick={resetGame}><Icon name="book" size={18} /><span>存档 / 返回开始页</span></button></div>}

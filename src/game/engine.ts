@@ -326,7 +326,7 @@ export function resolveEventChoice(state: GameState, choiceId: string): GameStat
   for (const effect of choice.effects ?? []) next = applyEffect(next, effect);
   next = clampState(next);
   const tone = event.npcId ? 'good' : event.category.includes('灵异') || event.category.includes('修炼') || event.category.includes('机缘') ? 'mystic' : 'normal';
-  return appendLog(next, `${event.title}：${choice.result}`, tone);
+  return appendLog(next, `${event.title} · 选择「${choice.label}」：${choice.result}`, tone);
 }
 
 export function selectEnding(state: GameState, endingId: string): GameState {

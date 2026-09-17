@@ -56,7 +56,7 @@ test('map landing keeps status at top and navigation at bottom left without exte
 test('navigation and map browsing never advance time, change saves or invoke AI', async ({ page }, info) => {
   await ready(page); const before = await world(page);
   for (const label of ['跑单', '修炼', '人物', '奇遇']) { await nav(page, label).click(); await expect(page.locator('.game-drawer')).toBeVisible(); }
-  for (const label of ['凡俗生活', '角色状态', '今日见闻', '命运分岔', '帮助', '设置']) {
+  for (const label of ['凡俗生活', '角色状态', '命运分岔', '帮助', '设置']) {
     await nav(page, '更多导航').click(); await page.locator('#more-navigation').getByRole('button', { name: label, exact: true }).click();
     await expect(page.locator('#drawer-heading')).toHaveText(label);
   }

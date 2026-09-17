@@ -73,6 +73,5 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
         <strong>{choice.label}</strong><small>{profileSummary(choice.approach, Boolean(play.scene?.npcId))}</small>
       </button>)}</div>
     </section>}
-    {!settingsOnly && play.history.length > 0 && <details className="scene-memories"><summary>奇遇记忆 · 最近 {play.history.length} 段</summary>{[...play.history].reverse().map((memory, index) => <article key={`${play.sequence}-${index}`}><strong>{memory.source === 'ai' ? 'AI' : '经典'} · 第 {memory.day} 天 · {memory.title}</strong><p>选择：{memory.choice}</p><p>{memory.result}</p></article>)}</details>}
   </section>;
 }

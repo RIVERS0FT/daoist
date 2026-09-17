@@ -4,7 +4,7 @@ import { bikeStats, deliveryCosts, deliveryEstimate, pushingCosts, ridingBlockRe
 import { BikePanel } from './BikePanel';
 import { EVENT_MAP } from '../game/content';
 import { availableEndings, ENDING_MAP } from '../game/endings';
-import { breakthroughCost, formatTime, realmName, RENT } from '../game/engine';
+import { breakthroughCost, realmName, RENT } from '../game/engine';
 import { NPC_MAP, NPCS, relationshipLabel, relationshipScore } from '../game/npcs';
 import { useGameStore } from '../game/store';
 import type { GameAction, GameState, NpcId, NumericStatKey } from '../game/types';
@@ -71,10 +71,12 @@ export function EndingsPanel() {
 export function CharacterPanel() {
   const game = useGameStore((s) => s.game);
   const rentDays = game.rentDueDay - game.day;
+  const clues = Object.entries(game.flags).filter(([, value]) => Boolean(value));
   return <section className="panel stats-panel">
     <div className="section-heading"><h3>角色状态</h3><span>{realmName(game.realmLevel)}</span></div><div className="money">¥{game.money}</div>
     <StatBar label="精力" value={game.energy} danger={game.energy < 25} /><StatBar label="健康" value={game.health} danger={game.health < 35} /><StatBar label="压力" value={game.stress} danger={game.stress > 70} /><StatBar label="电量" value={game.bikeBattery} max={bikeStats(game.bike).capacity} suffix={` / ${bikeStats(game.bike).capacity}`} danger={game.bikeBattery < 20} />
     <div className="mini-grid">{[['灵气', game.qi], ['悟性', game.insight], ['信誉', game.reputation], ['因果', game.karma], ['阴气', game.darkQi], ['完成订单', game.completedOrders]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    <details className="clues"><summary>已发现线索 · {clues.length}</summary>{clues.length ? <ul>{clues.map(([key]) => <li key={key}>{key.replaceAll('_', ' ')}</li>)}</ul> : <p>暂无已发现线索。</p>}</details>
     <div className={`rent-box ${rentDays <= 2 ? 'urgent' : ''}`}><span>房租 ¥{RENT}</span><strong>{rentDays >= 0 ? `${rentDays} 天后` : '已逾期'}</strong></div>
   </section>;
 }
@@ -100,11 +102,6 @@ export function LifePanel() {
   return <section className="panel"><div className="action-grid">
     <ActionButton action="eat" title="吃顿热饭" meta="30 分钟 · ¥18" disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta="60 分钟 · 恢复精力" disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta="360 分钟 · 大幅恢复" disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta={`18 分钟 · ¥6 · 补满至 ${bikeStats(game.bike).capacity}`} disabled={disabled || game.money < 6 || game.bikeBattery >= bikeStats(game.bike).capacity} />
   </div><div className="rent-box"><span>房租 ¥{RENT}</span><strong>第 {game.rentDueDay} 天到期</strong></div></section>;
-}
-export function JournalPanel() {
-  const game = useGameStore((s) => s.game);
-  const clues = Object.entries(game.flags).filter(([, value]) => Boolean(value));
-  return <section className="panel log-panel"><details className="clues"><summary>已发现线索 · {clues.length}</summary>{clues.length ? <ul>{clues.map(([key]) => <li key={key}>{key.replaceAll('_', ' ')}</li>)}</ul> : <p>暂时没有。先多跑几单。</p>}</details><ol className="log-list">{game.log.map((entry, index) => <li key={`${entry.id}-${index}`} className={entry.tone ?? 'normal'}><time>第 {entry.day} 天 {formatTime(entry.minute)}</time><p>{entry.text}</p></li>)}</ol></section>;
 }
 export function EndingResult({ onReset }: { onReset: () => void }) {
   const game = useGameStore((s) => s.game);

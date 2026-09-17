@@ -1,0 +1,46 @@
+/* Reserve space for one persistent log, rather than overlaying gameplay controls. */
+.game-shell { --activity-height: 220px; --activity-bottom: max(24px, env(safe-area-inset-bottom)); --activity-gap: 12px; --activity-reserved: calc(var(--activity-bottom) + var(--activity-height) + var(--activity-gap)); }
+.game-shell[data-log-expanded=false] { --activity-height: 46px; }
+.game-shell .game-drawer { bottom: max(110px, var(--activity-reserved)); }
+.game-shell .map-task { bottom: var(--activity-reserved); }
+.game-shell .delivery-offer-card { top: var(--offer-top, 142px); max-height: calc(100% - var(--offer-top, 142px) - var(--activity-reserved)); overflow-y: auto; overscroll-behavior: contain; }
+.map-stage:has(.delivery-offer-card) > .map-task:not(.requires-attention) { display: none; }
+.activity-log { position: absolute; z-index: 22; right: max(28px, env(safe-area-inset-right)); bottom: var(--activity-bottom); width: 434px; max-width: calc(100% - 24px); height: var(--activity-height); display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: #19231ef5; border: 1px solid #526047; border-radius: 13px; box-shadow: 0 8px 24px #0004; }
+.activity-log-header { flex: 0 0 44px; display: flex; align-items: center; gap: 8px; padding: 0 4px 0 13px; min-width: 0; }
+.activity-log-header h2 { display: flex; align-items: center; gap: 7px; flex: 1; margin: 0; color: #d7d4bc; font-size: 12px; font-weight: 600; }
+.activity-log-header button { min-height: 44px; background: transparent; border: 0; color: #d6c38f; cursor: pointer; border-radius: 7px; }
+.activity-log-header button:hover { background: #303c2c; }
+.log-toggle { display: grid; place-items: center; min-width: 44px; flex: none; }
+.log-latest { padding: 0 9px; font-size: 11px; }
+.log-unread { color: #ddc58d; font-size: 11px; }
+.activity-log-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; touch-action: pan-y; padding: 0 13px 10px; scrollbar-width: thin; scrollbar-color: #59694b transparent; border-top: 1px solid #364632; outline-offset: -3px; }
+.activity-log-body[hidden] { display: none; }
+.activity-log-list { list-style: none; margin: 0; padding: 0; }
+.activity-log-list li { padding: 10px 0; border-bottom: 1px solid #33432f; overflow-wrap: anywhere; }
+.activity-log-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.activity-log-list time { display: block; color: #a7b29b; font-size: 10px; font-variant-numeric: tabular-nums; }
+.activity-log-list p { margin: 4px 0 0; color: #ced3c3; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.activity-log-list .good p { color: #c1d4ae; }
+.activity-log-list .bad p { color: #e2b69f; }
+.activity-log-list .mystic p { color: #d3c0df; }
+.activity-log-empty { color: #a7b29b; font-size: 12px; padding-block: 10px; }
+@media (max-width: 960px) {
+  .game-shell { --activity-height: 160px; --activity-bottom: max(100px, calc(env(safe-area-inset-bottom) + 82px)); }
+  .activity-log { right: 18px; }
+  .game-shell .camera-access { bottom: calc(var(--activity-reserved) + 128px); }
+}
+@media (max-width: 520px) {
+  .game-shell { --activity-height: 156px; --activity-bottom: max(86px, calc(env(safe-area-inset-bottom) + 74px)); --activity-gap: 10px; --offer-top: 128px; }
+  .activity-log { left: 12px; right: 12px; width: auto; max-width: none; }
+}
+/* Short landscape: keep the log beside, not on top of, the action drawer. */
+@media (max-height: 520px) and (min-width: 600px) {
+  .game-shell { --activity-height: min(180px, calc(100% - 20px)); --activity-bottom: max(10px, env(safe-area-inset-bottom)); --offer-top: 82px; }
+  .activity-log { width: 30vw; right: 18px; }
+  .game-shell .game-drawer { bottom: 80px; }
+  .game-shell .delivery-offer-card { max-height: calc(100% - 162px); }
+  .game-shell[data-log-expanded=true] .delivery-offer-card { left: 18px; right: calc(30vw + 30px); width: auto; }
+  .game-shell[data-log-expanded=true] .game-drawer { left: 18px; right: calc(30vw + 30px); width: auto; max-width: none; }
+  .game-shell .map-task { right: calc(30vw + 30px); bottom: 80px; }
+  .game-shell .camera-access { bottom: 80px; }
+}

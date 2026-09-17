@@ -65,12 +65,12 @@ export function fallbackExploration(s: PlaySession): PlaySession {
   if (!s.play.pending || s.play.scene) return s;
   if (s.game.gameOver) return { ...s, play: { ...s.play, pending: null } };
   const [scene, seed] = authoredScene(s.play.pending, s.game.seed, s.play.history);
-  return { ...s, game: { ...s.game, seed }, play: { ...s.play, pending: null, scene } };
+  return { ...s, game: log({ ...s.game, seed }, `事件：${s.play.mode === 'generative' ? '人工回退奇遇' : '经典奇遇'}「${scene.title}」`, `${scene.id}-scene`), play: { ...s.play, pending: null, scene } };
 }
 export function receiveGeneratedScene(s: PlaySession, expectedId: string, raw: unknown): PlaySession {
   if (s.play.mode !== 'generative' || s.play.pending?.id !== expectedId || s.game.gameOver || s.game.pendingEventId || s.game.activeOrder || s.game.cultivation.trial) return s;
   const scene = validateScene(raw, s.play.pending);
-  return scene ? { ...s, play: { ...s.play, pending: null, scene } } : fallbackExploration(s);
+  return scene ? { ...s, game: log(s.game, `事件：AI 奇遇「${scene.title}」`, `${scene.id}-scene`), play: { ...s.play, pending: null, scene } } : fallbackExploration(s);
 }
 export function sceneChoiceBlocked(game: GameState, approach: keyof typeof PROFILES): boolean {
   const p = PROFILES[approach];
@@ -100,7 +100,7 @@ export function resolveScene(s: PlaySession, choiceId: string): PlaySession {
     }
   }
   const result = game.gameOver ? '身体没能支撑到行动完成，这段奇遇到此中止。' : choice.result;
-  game = log(game, `${scene.source === 'ai' ? 'AI 奇遇' : '经典奇遇'}「${scene.title}」：${result}`, `${scene.id}-result`);
+  game = log(game, `${scene.source === 'ai' ? 'AI 奇遇' : '经典奇遇'}「${scene.title}」 · 选择「${choice.label}」：${result}`, `${scene.id}-result`);
   const memory: SceneMemory = { title: scene.title, choice: choice.label, result, source: scene.source, day: game.day };
   return { ...s, game, play: { ...s.play, scene: null, pending: null, history: [...s.play.history, memory].slice(-12) } };
 }
