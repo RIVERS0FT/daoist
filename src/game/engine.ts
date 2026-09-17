@@ -1,5 +1,7 @@
-import { EVENT_MAP, EVENTS } from './events';
-import type { ActionContext, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NumericStatKey, Weather } from './types';
+import { EVENT_MAP, EVENTS } from './content';
+import { ENDING_MAP } from './endings';
+import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
+import type { ActionContext, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
 const MERCHANTS = ['老王牛肉面', '金记烧腊', '川味小馆', '月桂咖啡', '北门饺子馆', '深夜食堂', '阿婆砂锅粥', '七号便利店'];
 const CUSTOMERS = ['幸福家园 4 栋 404', '云景花园 8 栋', '东城医院住院部', '城南软件园 A3', '老城区梧桐里', '青云山脚 17 号', '大学城 6 号宿舍', '河畔公寓 12F'];
@@ -9,12 +11,28 @@ export const RENT = 850;
 
 export function createInitialState(seed = Date.now() >>> 0): GameState {
   return {
-    version: 1, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
+    version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
     energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, qi: 0, insight: 1,
     karma: 0, darkQi: 0, realmLevel: 0, completedOrders: 0, totalIncome: 0, rentDueDay: 7,
-    activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, gameOver: false,
+    activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, relationships: createInitialRelationships(), endingId: null, gameOver: false,
     log: [makeLog(1, 7 * 60, '新的一个月开始了。七天后要先交第一笔房租。', 'normal')],
   };
+}
+
+export function migrateGameState(raw: unknown): GameState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  if (source.version !== 1 && source.version !== 2) return null;
+  const seed = typeof source.seed === 'number' ? source.seed : 0x5a17d311;
+  const base = createInitialState(seed);
+  const merged = {
+    ...base,
+    ...source,
+    version: 2,
+    relationships: mergeRelationships(source.relationships as Partial<GameState['relationships']> | undefined),
+    endingId: typeof source.endingId === 'string' ? source.endingId : null,
+  } as GameState;
+  return clampState(merged);
 }
 
 function makeLog(day: number, minute: number, text: string, tone: LogEntry['tone'] = 'normal'): LogEntry {
@@ -22,7 +40,12 @@ function makeLog(day: number, minute: number, text: string, tone: LogEntry['tone
 }
 
 function appendLog(state: GameState, text: string, tone: LogEntry['tone'] = 'normal'): GameState {
-  return { ...state, log: [makeLog(state.day, state.minute, text, tone), ...state.log].slice(0, 60) };
+  return { ...state, log: [makeLog(state.day, state.minute, text, tone), ...state.log].slice(0, 80) };
+}
+
+export function appendNarrativeLine(state: GameState, text: string): GameState {
+  if (!text.trim()) return state;
+  return appendLog(state, `人物片段：${text.trim().slice(0, 240)}`, 'normal');
 }
 
 function nextRandom(state: GameState): [number, GameState] {
@@ -68,13 +91,14 @@ export function breakthroughCost(level: number): number {
 
 function clampState(state: GameState): GameState {
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
-  const next = {
+  const next: GameState = {
     ...state,
     money: Math.max(-9999, Math.round(state.money)), energy: clamp(state.energy, 0, 100), health: clamp(state.health, 0, 100),
     stress: clamp(state.stress, 0, 100), reputation: clamp(state.reputation, 0, 100), bikeBattery: clamp(state.bikeBattery, 0, 100),
     qi: clamp(state.qi, 0, 9999), insight: clamp(state.insight, 0, 99), karma: clamp(state.karma, -99, 99), darkQi: clamp(state.darkQi, 0, 99),
+    relationships: clampRelationships(state.relationships),
   };
-  if (next.health <= 0) return appendLog({ ...next, gameOver: true }, '你的身体彻底撑不住了。这一世的外卖修仙之路到此为止。', 'bad');
+  if (next.health <= 0 && !next.gameOver) return appendLog({ ...next, gameOver: true }, '你的身体彻底撑不住了。这一世的外卖修仙之路到此为止。', 'bad');
   return next;
 }
 
@@ -97,6 +121,7 @@ function startNewDay(state: GameState): GameState {
     next = { ...next, health: next.health - 4, stress: next.stress + 4 };
     next = appendLog(next, '长期缺觉开始影响身体。', 'bad');
   }
+  if (next.day === 30) next = appendLog(next, '第三十天到了。你已经可以选择收束这一阶段的人生，也可以继续生活，等更多结局条件成熟。', 'mystic');
   return clampState(next);
 }
 
@@ -124,33 +149,36 @@ function setStat(state: GameState, key: NumericStatKey, delta: number): GameStat
 function applyEffect(state: GameState, effect: EventEffect): GameState {
   if (effect.type === 'stat') return setStat(state, effect.key, effect.delta);
   if (effect.type === 'time') return advanceTime(state, effect.minutes);
+  if (effect.type === 'relationship') return { ...state, relationships: changeRelationship(state.relationships, effect.npcId, effect.key, effect.delta, state.day) };
+  if (effect.type === 'relationship-route') return { ...state, relationships: setRelationshipRoute(state.relationships, effect.npcId, effect.route, state.day) };
   return { ...state, flags: { ...state.flags, [effect.key]: effect.value } };
 }
 
-function eventEligible(state: GameState, eventId: string, context: ActionContext): boolean {
+function eventEligible(state: GameState, eventId: string, context: ActionContext, npcId?: NpcId): boolean {
   const event = EVENT_MAP.get(eventId);
   if (!event || !event.contexts.includes(context)) return false;
+  if (npcId && event.npcId !== npcId) return false;
   if (state.recentEvents.slice(0, 5).includes(event.id)) return false;
   return event.condition ? event.condition(state) : true;
 }
 
-function maybeTriggerEvent(state: GameState, context: ActionContext, baseChance: number): GameState {
+function maybeTriggerEvent(state: GameState, context: ActionContext, baseChance: number, npcId?: NpcId): GameState {
   if (state.pendingEventId || state.gameOver) return state;
   let next = state;
   const nightBonus = (next.minute >= 20 * 60 || next.minute < 6 * 60) ? 0.08 : 0;
   const darkBonus = Math.min(0.08, next.darkQi * 0.005);
   const [roll, rolled] = nextRandom(next);
   next = rolled;
-  if (roll > Math.min(0.82, baseChance + nightBonus + darkBonus)) return next;
-  const candidates = EVENTS.filter((event) => eventEligible(next, event.id, context));
+  if (roll > Math.min(0.96, baseChance + nightBonus + darkBonus)) return next;
+  const candidates = EVENTS.filter((event) => eventEligible(next, event.id, context, npcId));
   if (!candidates.length) return next;
   const totalWeight = candidates.reduce((sum, event) => sum + event.weight, 0);
   const [choiceRoll, chosenState] = nextRandom(next);
   next = chosenState;
   let cursor = choiceRoll * totalWeight;
   const chosen = candidates.find((event) => { cursor -= event.weight; return cursor <= 0; }) ?? candidates[candidates.length - 1];
-  next = { ...next, pendingEventId: chosen.id, recentEvents: [chosen.id, ...next.recentEvents].slice(0, 12) };
-  return appendLog(next, `事件：${chosen.title}`, 'mystic');
+  next = { ...next, pendingEventId: chosen.id, recentEvents: [chosen.id, ...next.recentEvents].slice(0, 16) };
+  return appendLog(next, `事件：${chosen.title}`, chosen.npcId ? 'normal' : 'mystic');
 }
 
 const isNightMinute = (minute: number) => minute >= 20 * 60 || minute < 6 * 60;
@@ -177,7 +205,7 @@ function acceptOrder(state: GameState): GameState {
   [order, next] = generateOrder(next);
   next = { ...next, activeOrder: order };
   next = appendLog(next, `接单：${order.merchant} → ${order.customer}，预计 ${order.estimatedMinutes} 分钟，基础收入 ¥${order.reward}。`, order.strange ? 'mystic' : 'normal');
-  return maybeTriggerEvent(clampState(next), 'delivery', 0.22);
+  return maybeTriggerEvent(clampState(next), 'delivery', 0.26);
 }
 
 function completeOrder(state: GameState): GameState {
@@ -199,7 +227,7 @@ function completeOrder(state: GameState): GameState {
     stress: next.stress + (variance > 10 ? 3 : -1), activeOrder: null };
   next = appendLog(next, `送达：耗时 ${actualMinutes + (lowBatteryPenalty ? 15 : 0)} 分钟，收入 ¥${income}。`, 'good');
   if (lowBatteryPenalty) next = appendLog(next, '电量不足，最后一段只能推车，订单收入也受了影响。', 'bad');
-  return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.78 : 0.54);
+  return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
 }
 
 function cultivate(state: GameState, minutes: number): GameState {
@@ -247,17 +275,17 @@ export function runAction(state: GameState, action: GameAction): GameState {
       next = advanceTime(next, 30);
       next = { ...next, money: next.money - 18, energy: next.energy + 22, health: next.health + 4, stress: next.stress - 5 };
       next = appendLog(clampState(next), '吃了一顿热饭，精神恢复了一些。', 'good');
-      return maybeTriggerEvent(next, 'life', 0.16);
+      return maybeTriggerEvent(next, 'life', 0.18);
     case 'rest':
       next = advanceTime(next, 60); next = { ...next, energy: next.energy + 24, stress: next.stress - 10 };
-      next = appendLog(clampState(next), '休息一小时，脑子终于没那么紧绷。', 'good'); return maybeTriggerEvent(next, 'life', 0.18);
+      next = appendLog(clampState(next), '休息一小时，脑子终于没那么紧绷。', 'good'); return maybeTriggerEvent(next, 'life', 0.2);
     case 'sleep':
       next = advanceTime(next, 360); next = { ...next, energy: next.energy + 62, health: next.health + 8, stress: next.stress - 16 };
-      next = appendLog(clampState(next), '睡了六小时。城市没有因为你休息而停下来。', 'good'); return maybeTriggerEvent(next, 'life', 0.2);
+      next = appendLog(clampState(next), '睡了六小时。城市没有因为你休息而停下来。', 'good'); return maybeTriggerEvent(next, 'life', 0.22);
     case 'charge-bike':
       if (next.money < 6) return appendLog(next, '换电需要 ¥6。', 'bad');
       next = advanceTime(next, 18); next = { ...next, money: next.money - 6, bikeBattery: next.bikeBattery + 72 };
-      next = appendLog(clampState(next), '换上满电电池，继续跑单。', 'good'); return maybeTriggerEvent(next, 'life', 0.14);
+      next = appendLog(clampState(next), '换上满电电池，继续跑单。', 'good'); return maybeTriggerEvent(next, 'life', 0.16);
     case 'meditate-1h': return cultivate(next, 60);
     case 'meditate-3h': return cultivate(next, 180);
     case 'study':
@@ -267,6 +295,19 @@ export function runAction(state: GameState, action: GameAction): GameState {
   }
 }
 
+export function socializeNpc(state: GameState, npcId: NpcId): GameState {
+  if (state.pendingEventId || state.gameOver || state.activeOrder) return state;
+  const current = state.relationships[npcId];
+  if (!current?.met) return appendLog(state, '你们还没有真正认识，暂时没有联系方式。', 'normal');
+  let next = advanceTime(state, 45);
+  next = { ...next, energy: next.energy - 3, stress: next.stress - 2 };
+  next = appendLog(clampState(next), '你给熟人留出了一点时间。修仙和跑单之外，人也需要关系。', 'normal');
+  const withEvent = maybeTriggerEvent(next, 'social', 0.96, npcId);
+  if (withEvent.pendingEventId) return withEvent;
+  next = { ...withEvent, relationships: changeRelationship(withEvent.relationships, npcId, 'affinity', 2, withEvent.day) };
+  return appendLog(clampState(next), '没有发生什么大事，只是聊了聊近况。关系也会在普通日子里慢慢长出来。', 'good');
+}
+
 export function resolveEventChoice(state: GameState, choiceId: string): GameState {
   if (!state.pendingEventId) return state;
   const event = EVENT_MAP.get(state.pendingEventId);
@@ -274,8 +315,20 @@ export function resolveEventChoice(state: GameState, choiceId: string): GameStat
   const choice = event.choices.find((item) => item.id === choiceId);
   if (!choice) return state;
   if (choice.requires && state[choice.requires.key] < choice.requires.min) return appendLog(state, `无法选择：${choice.requires.label}。`, 'bad');
+  if (choice.relationshipRequires) {
+    const req = choice.relationshipRequires;
+    if (state.relationships[req.npcId][req.key] < req.min) return appendLog(state, `无法选择：${req.label}。`, 'bad');
+  }
   let next: GameState = { ...state, pendingEventId: null };
   for (const effect of choice.effects ?? []) next = applyEffect(next, effect);
   next = clampState(next);
-  return appendLog(next, `${event.title}：${choice.result}`, event.category.includes('灵异') || event.category.includes('修炼') || event.category.includes('机缘') ? 'mystic' : 'normal');
+  const tone = event.npcId ? 'good' : event.category.includes('灵异') || event.category.includes('修炼') || event.category.includes('机缘') ? 'mystic' : 'normal';
+  return appendLog(next, `${event.title}：${choice.result}`, tone);
+}
+
+export function selectEnding(state: GameState, endingId: string): GameState {
+  if (state.gameOver || state.pendingEventId || state.activeOrder) return state;
+  const ending = ENDING_MAP.get(endingId);
+  if (!ending || !ending.condition(state)) return appendLog(state, '这个结局还没有真正成为你的可能。', 'bad');
+  return appendLog({ ...state, endingId, gameOver: true }, `结局：${ending.title}`, 'mystic');
 }
