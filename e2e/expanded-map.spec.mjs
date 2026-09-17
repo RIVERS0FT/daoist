@@ -31,6 +31,8 @@ test('task points are absent without an order; locating and browsing never move 
   await page.getByRole('button', { name: '定位玩家' }).click();
   await expect(page.getByTestId('player-marker')).toBeInViewport();
   const size = await page.locator('.city-artwork').getAttribute('viewBox'); expect(size).toBe('0 0 2400 1600');
+  const title = await page.locator('.map-title').boundingBox(), location = await page.locator('.map-location').boundingBox();
+  expect(location.y).toBeGreaterThanOrEqual(title.y + title.height);
   expect(await readStore(page)).toEqual(before); expect(outside).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('expanded-map-idle.png'), fullPage: true });
@@ -43,6 +45,8 @@ test('only the active order has pins; completion clears them and persists the ri
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
   await page.getByRole('button', { name: '定位配送终点' }).click();
   await expect(page.getByTestId('delivery-dropoff')).toBeInViewport();
+  const pin = await page.getByTestId('delivery-dropoff').boundingBox(), card = await page.locator('.map-task').boundingBox();
+  expect(pin.x < card.x + card.width && pin.x + pin.width > card.x && pin.y < card.y + card.height && pin.y + pin.height > card.y).toBe(false);
   const before = await readStore(page); await page.getByTestId('delivery-dropoff').click();
   await expect(page.locator('#drawer-heading')).toHaveText('配送任务'); expect((await readStore(page)).game).toEqual(before.game);
   await nav(page, '地图').click(); await page.screenshot({ path: info.outputPath('expanded-map-order.png'), fullPage: true });

@@ -1,7 +1,8 @@
 /* v0.6: task-only stops and a persistent, independently saved rider. */
-.map-location { position: absolute; top: 76px; left: 30px; z-index: 3; max-width: calc(100% - 190px); font-size: 11px; color: #acb9a2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.map-location { position: absolute; top: 88px; left: 30px; z-index: 3; max-width: calc(100% - 190px); font-size: 11px; color: #acb9a2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .map-location strong { color: #f2d7a2; font-weight: 500; }
-.map-viewport { top: 104px; }
+.map-viewport { top: 118px; }
+@media (min-width: 521px) and (min-height: 521px) { .map-viewport { bottom: 190px; } }
 .zoom-tools { display: grid; grid-template-columns: repeat(2, 44px); }
 .game-shell .zoom-tools button { border: 0; }
 .game-shell .zoom-tools button:nth-child(odd) { border-right: 1px solid #3f4f3c; }

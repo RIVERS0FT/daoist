@@ -51,7 +51,7 @@ test('AI scene choices persist across reload and finish offline without switchin
   });
   await ready(page, 'generative'); await configure(page);
   await page.getByRole('button', { name: '测试连接', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('relay 可达'); expect(generations).toBe(0);
+  await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('relay 可达'); expect(generations).toBe(0);
   await page.getByLabel(/^想尝试的虚构行动/).fill('看看桥下的纸鹤，但不强行改变任何人的关系。');
   await page.getByRole('button', { name: /^生成下一段奇遇/ }).click();
   await expect(page.getByRole('heading', { name: scene.title, exact: true })).toBeVisible();
@@ -79,7 +79,7 @@ test('AI service error transparently falls back to authored choices', async ({ p
   await mockRelay(page, async (route, headers) => { await route.fulfill({ status: 503, headers, json: { error: 'unavailable' } }); });
   await ready(page, 'generative'); await configure(page);
   await page.getByRole('button', { name: /^生成下一段奇遇/ }).click();
-  await expect(page.getByRole('status')).toContainText('503');
+  await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('503');
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
   await page.getByRole('navigation', { name: '游戏导航' }).getByRole('button', { name: '跑单', exact: true }).click();
@@ -89,7 +89,7 @@ test('unconfigured generation is honest and classic fallback remains playable', 
   await ready(page, 'generative');
   await expect(page.getByText(/^AI 尚未就绪/)).toBeVisible();
   await page.getByRole('button', { name: /^生成下一段奇遇/ }).click();
-  await expect(page.getByRole('status')).toContainText('尚未配置');
+  await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('尚未配置');
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
   await expect(page.locator('.clock-block strong')).toContainText('07:20');
