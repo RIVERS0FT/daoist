@@ -16,13 +16,13 @@ async function orderAt(page, { empty = false, legacy = false, target = 'dropoff-
   return order;
 }
 async function finish(page, pushing = false) {
-  await nav(page, '跑单').click(); await page.getByRole('button', { name: pushing ? /^推车送达/ : /^完成配送/ }).click();
+  await nav(page, '跑单').click(); await page.getByRole('button', { name: pushing ? /^推车完成配送/ : /^执行配送/ }).click();
   await nav(page, '地图').click(); return readStore(page);
 }
-test('task points are absent without an order; locating and browsing never move the rider', async ({ page }, info) => {
+test('available delivery tasks appear on the map while browsing never moves the rider', async ({ page }, info) => {
   const outside = []; page.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1:4173/')) outside.push(r.url()); });
   await ready(page); const before = await readStore(page);
-  await expect(page.locator('.delivery-pin')).toHaveCount(0); await expect(page.locator('.route-pin')).toHaveCount(0);
+  await expect(page.getByTestId('delivery-offer')).toHaveCount(4); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
   await expect(page.getByRole('button', { name: '定位配送终点' })).toBeDisabled();
   await page.getByRole('button', { name: '地点', exact: true }).click();
@@ -37,10 +37,10 @@ test('task points are absent without an order; locating and browsing never move 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('expanded-map-idle.png'), fullPage: true });
 });
-test('only the active order has pins; completion clears them and persists the rider at its destination', async ({ page }, info) => {
+test('active delivery keeps only its destination pin; completion persists the rider there', async ({ page }, info) => {
   await ready(page); const order = await orderAt(page);
-  await expect(page.locator('.delivery-pin')).toHaveCount(2);
-  await expect(page.getByTestId('delivery-pickup')).toHaveAttribute('data-location-id', order.pickupId);
+  await expect(page.getByTestId('delivery-offer')).toHaveCount(0); await expect(page.locator('.delivery-pin')).toHaveCount(1);
+  await expect(page.getByTestId('delivery-pickup')).toHaveCount(0);
   await expect(page.getByTestId('delivery-dropoff')).toHaveAttribute('data-location-id', order.dropoffId);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', 'station');
   await page.getByRole('button', { name: '定位配送终点' }).click();
@@ -51,25 +51,25 @@ test('only the active order has pins; completion clears them and persists the ri
   await expect(page.locator('#drawer-heading')).toHaveText('配送任务'); expect((await readStore(page)).game).toEqual(before.game);
   await nav(page, '地图').click(); await page.screenshot({ path: info.outputPath('expanded-map-order.png'), fullPage: true });
   const arrived = await finish(page); expect(arrived.game.position.locationId).toBe(order.dropoffId);
-  await expect(page.locator('.delivery-pin')).toHaveCount(0); await expect(page.locator('.delivery-line')).toHaveCount(0);
+  await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0); await expect(page.locator('.delivery-line')).toHaveCount(0);
   await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id', order.dropoffId);
   await page.getByRole('button', { name: '定位玩家' }).click(); await expect(page.getByTestId('player-marker')).toBeInViewport();
   await expect(page.locator('.map-location')).toContainText(order.customer);
   expect((await disk(page))[`slot:${arrived.id}`].session.game.position).toEqual(arrived.game.position);
   await page.screenshot({ path: info.outputPath('expanded-map-arrival.png'), fullPage: true });
   await page.reload(); await continueRecent(page); await nav(page, '地图').click();
-  expect((await readStore(page)).game.position).toEqual(arrived.game.position); await expect(page.locator('.delivery-pin')).toHaveCount(0);
+  expect((await readStore(page)).game.position).toEqual(arrived.game.position); await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
 });
 test('zero power cannot move the rider; cancellation stays put while explicit pushing arrives', async ({ page }) => {
   await ready(page); await orderAt(page, { empty: true }); const before = await readStore(page);
-  await nav(page, '跑单').click(); await expect(page.getByRole('button', { name: /^完成配送/ })).toBeDisabled();
+  await nav(page, '跑单').click(); await expect(page.getByRole('button', { name: /^执行配送/ })).toBeDisabled();
   await page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); useGameStore.getState().act('complete-order'); });
   expect((await readStore(page)).game).toEqual(before.game);
   await page.getByRole('button', { name: /^取消当前订单/ }).click(); await nav(page, '地图').click();
-  await expect(page.locator('.delivery-pin')).toHaveCount(0); expect((await readStore(page)).game.position).toEqual(before.game.position);
+  await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0); await expect(page.getByTestId('delivery-offer')).toHaveCount(4); expect((await readStore(page)).game.position).toEqual(before.game.position);
   const order = await orderAt(page, { empty: true }); const arrived = await finish(page, true);
   expect(arrived.game.position.locationId).toBe(order.dropoffId); expect(arrived.game.bikeBattery).toBe(0);
-  await expect(page.locator('.delivery-pin')).toHaveCount(0);
+  await expect(page.getByTestId('delivery-dropoff')).toHaveCount(0);
 });
 test('old v4 slots acquire an initial position and separate slots retain separate last arrivals', async ({ page }) => {
   await ready(page, '港区骑手'); const order = await orderAt(page, { legacy: true });
