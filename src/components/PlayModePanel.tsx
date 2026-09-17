@@ -40,8 +40,7 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
 
   return <section className="panel play-mode-panel" aria-label="游玩模式与自由奇遇">
     <div className="section-heading"><h2>{settingsOnly ? '剧情与服务设置' : '自由奇遇'}</h2></div>
-    <div className="mode-locked"><strong>{play.mode === 'classic' ? '经典剧情' : 'AI 生成式剧情'}</strong><span>剧情模式已在创建存档时确定，本局不可切换。体验另一种模式，请返回开始页新建存档。</span></div>
-    <p className="play-explanation">{play.mode === 'classic' ? '按原有故事跑单、修炼、经营关系，也可以探索人工编写的自由奇遇。本局始终使用经典剧情。' : '选择一个方向，让 AI 根据当前虚构世界与最近的奇遇记忆生成下一段故事。实际时间、资源和关系影响由本地规则结算，AI 不能直接改写主线或结局。'}</p>
+    <div className="mode-locked"><strong>{play.mode === 'classic' ? '经典剧情' : 'AI 生成式剧情'}</strong><span>本存档固定</span></div>
     {play.mode === 'generative' && <details className="ai-settings" open={settingsOnly || undefined}>
       <summary>AI 服务设置 · {aiSettings.endpoint ? '已配置地址' : '尚未配置服务'}</summary>
       <form onSubmit={(event) => { event.preventDefault(); store.configureAi({ endpoint, consent }, token); }}>
@@ -52,24 +51,24 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
         <div className="play-controls"><button type="submit">保存接入设置</button><button type="button" disabled={play.mode !== 'generative' || !aiSettings.endpoint || !aiSettings.consent || Boolean(play.pending) || store.aiStatus === 'checking'} onClick={() => { void store.testAi(); }}>测试连接</button></div>
       </form>
     </details>}
-    {play.mode === 'generative' && (!aiSettings.endpoint || !aiSettings.consent) && <p className="play-warning">AI 尚未就绪：请配置 relay 并保存授权。现在仍可探索，但会明确回退到经典剧情。</p>}
+    {play.mode === 'generative' && (!aiSettings.endpoint || !aiSettings.consent) && <p className="play-warning">AI 尚未就绪：配置并授权后才会请求生成服务；未就绪时使用人工回退。</p>}
     {!settingsOnly && <div className="exploration-form">
       <label>奇遇方向<select value={effectiveFocus} onChange={(event) => setFocus(event.target.value as SceneFocus)} disabled={busy}>
-        <option value="city">城市日常</option><option value="cultivation">修炼奇遇</option><option value="social" disabled={!contacts.length}>熟人故事{contacts.length ? '' : '（先在原剧情中认识 NPC）'}</option>
+        <option value="city">城市日常</option><option value="cultivation">修炼奇遇</option><option value="social" disabled={!contacts.length}>熟人故事{contacts.length ? '' : '（先认识 NPC）'}</option>
       </select></label>
       {effectiveFocus === 'social' && <label>一起经历的人<select value={selectedNpc ?? ''} onChange={(event) => setNpcId(event.target.value as NpcId)} disabled={busy}>{contacts.map((npc) => <option key={npc.id} value={npc.id}>{npc.name} · {npc.role}</option>)}</select></label>}
-      {play.mode === 'generative' && <label className="intent-field">想尝试的虚构行动（可选）<textarea value={intent} onChange={(event) => setIntent(event.target.value)} maxLength={200} rows={2} disabled={busy} placeholder="例如：我想调查巷口反复出现的纸鹤，也可以谨慎地离开。" /><small>主题会影响生成内容，但不会绕过资源限制、人物路线或结局条件。</small></label>}
+      {play.mode === 'generative' && <label className="intent-field">虚构行动（可选）<textarea value={intent} onChange={(event) => setIntent(event.target.value)} maxLength={200} rows={2} disabled={busy} placeholder="例如：调查巷口反复出现的纸鹤。" /></label>}
       <button className="explore-button" type="button" disabled={busy || game.energy < 2} onClick={() => { void store.explore(effectiveFocus, effectiveFocus === 'social' ? selectedNpc || undefined : undefined, intent); }}>
-        {play.mode === 'generative' ? '生成下一段奇遇' : '探索经典奇遇'}<small>先花 15 分钟 · 精力 -2 · 选择另计时间</small>
+        {play.mode === 'generative' ? '生成下一段奇遇' : '探索经典奇遇'}<small>15 分钟 · 精力 -2 · 选择另计</small>
       </button>
     </div>}
-    <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式没有 AI 网络请求。' : '等待主动探索。')}</p>
-    {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>取消本次生成，使用人工回退（模式不变）</button>}
+    <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式 · 无 AI 请求' : '等待探索')}</p>
+    {!settingsOnly && play.pending && <button className="fallback-button" type="button" onClick={store.fallback}>取消生成并使用人工回退</button>}
     {store.saveError && <p className="play-warning" role="alert">{store.saveError}</p>}
     {!settingsOnly && play.scene && <section ref={sceneElement} tabIndex={-1} className="generated-scene" aria-live="polite" aria-label="当前自由奇遇">
       <div className="eyebrow">{play.scene.source === 'ai' ? 'AI 生成奇遇' : '经典人工奇遇'} · {FOCUS_LABELS[play.scene.focus]}{play.scene.npcId ? ` · ${NPC_MAP.get(play.scene.npcId)?.name}` : ''}</div>
       <h3>{play.scene.title}</h3><p>{play.scene.description}</p>
-      {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">这是旧档保留的 AI 场景，完成本段无需联网；后续采用经典剧情。</p>}
+      {play.mode === 'classic' && play.scene.source === 'ai' && <p className="play-explanation">旧档保留的 AI 场景，可离线完成。</p>}
       <div className="generated-choices">{play.scene.choices.map((choice) => <button type="button" key={choice.id} disabled={sceneChoiceBlocked(game, choice.approach) || store.loadBlocked || store.slotBusy || store.saveStatus !== 'saved'} onClick={() => store.chooseEvent(choice.id)}>
         <strong>{choice.label}</strong><small>{profileSummary(choice.approach, Boolean(play.scene?.npcId))}</small>
       </button>)}</div>
