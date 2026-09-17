@@ -63,3 +63,16 @@ test('map gestures do not capture panel scroll and stored player restores indepe
  await expect(page.getByTestId('player-marker')).toHaveAttribute('data-location-id','dropoff-forest');
  await expect(page.getByTestId('map-viewport')).toHaveAttribute('data-following','true');await expect(page.getByTestId('player-marker')).toBeInViewport();
 });
+
+test('overview combines nearby landmarks into clickable groups without changing game state',async({page},info)=>{
+ await ready(page);const before=await readStore(page);
+ await page.locator('.camera-access summary').click();await page.getByRole('button',{name:'显示全图',exact:true}).click();await page.locator('.camera-access summary').click();
+ await expect(page.locator('.landmark-cluster').first()).toBeVisible();
+ const boxes=await page.locator('.map-pin:not(.delivery-pin)').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
+ for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+  const a=boxes[i],b=boxes[j];expect(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y).toBe(false);
+ }
+ await page.screenshot({path:info.outputPath('camera-clustered-atlas.png'),fullPage:true});
+ const small=await camera(page);await page.locator('.landmark-cluster').first().click();await expect.poll(async()=>(await camera(page)).scale).toBeGreaterThan(small.scale);
+ expect(await readStore(page)).toEqual(before);
+});

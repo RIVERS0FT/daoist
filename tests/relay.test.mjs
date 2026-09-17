@@ -64,3 +64,10 @@ test('relay enforces provider budgets without automatic retries', async (t) => {
   assert.equal((await post({ protocol: 1, type: 'scene', context })).status, 200);
   assert.equal((await post({ protocol: 1, type: 'scene', context })).status, 429); assert.equal(calls, 1);
 });
+
+test('foundation realm is accepted but unimplemented realms and cultivation inventories remain private',()=>{
+ assert.equal(sanitizeContext({...context,realmLevel:10}).realmLevel,10);
+ assert.equal(sanitizeContext({...context,realmLevel:11}),null);
+ assert.equal(sanitizeContext({...context,realmLevel:10,cultivation:{mana:80}}),null);
+ assert.equal(sanitizeContext({...context,realmLevel:10,position:{locationId:'station'}}),null);
+});
