@@ -36,11 +36,11 @@ test('navigation and map browsing never advance time, change saves or invoke AI'
   }
   await nav(page, '地图').click();
   await page.getByRole('button', { name: '地点', exact: true }).click();
-  await expect(page.locator('.place-directory > button')).toHaveCount(12);
+  await expect(page.locator('.place-directory > button')).toHaveCount(10);
   await page.locator('.place-directory').getByRole('button', { name: /青云山脚/ }).click();
   await expect(page.locator('#drawer-heading')).toHaveText('夜间修行');
   await page.getByRole('button', { name: '关闭面板，返回地图' }).click();
-  await page.getByRole('button', { name: '放大地图' }).click(); await page.getByRole('button', { name: '回到骑手驿站' }).click();
+  await page.getByRole('button', { name: '放大地图' }).click(); await page.getByRole('button', { name: '定位玩家' }).click();
   expect(await world(page)).toEqual(before);
   await nav(page, '跑单').focus(); await page.keyboard.press('Enter'); await expect(page.locator('.game-drawer')).toBeFocused();
   await page.keyboard.press('Escape'); await expect(nav(page, '跑单')).toBeFocused();
@@ -84,6 +84,8 @@ test('v3 world and mode survive new UI; relationships and endings remain reachab
 test('short landscape keeps navigation and scrollable panel controls reachable', async ({ page }, info) => {
   await page.setViewportSize({ width: 844, height: 390 }); await ready(page); await nav(page, '奇遇').click();
   await expect(page.getByRole('button', { name: '关闭面板，返回地图' })).toBeVisible();
+  await page.getByRole('button', { name: '关闭面板，返回地图' }).click();
+  await nav(page, '奇遇').click();
   await page.getByRole('button', { name: /^探索经典奇遇/ }).click(); await page.getByRole('button', { name: /^到此为止/ }).click();
   const dock = await page.getByRole('navigation', { name: '游戏导航' }).boundingBox(); expect(dock.y + dock.height).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

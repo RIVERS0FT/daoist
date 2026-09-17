@@ -1,4 +1,4 @@
-# Architecture v0.5
+# Architecture v0.6
 
 ## Stack and layout
 
@@ -17,7 +17,7 @@ React + TypeScript + Vite，Zustand，IndexedDB，CSS；GitHub Actions / Pages�
 
 ## Save envelope
 
-当前会话格式为 `PlaySession = { version: 4, game: GameState(v2 + bike), play: PlayState }`。每槽外层为 `SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session }`，存入 `saves` 下的 `slot:<id>`。内部世界版本与磁盘封装版本分开，避免为了 UI 模式破坏原有 RPG 模型。
+当前会话格式为 `PlaySession = { version: 4, game: GameState(v2 + bike + position), play: PlayState }`。每槽外层为 `SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session }`，存入 `saves` 下的 `slot:<id>`。内部世界版本与磁盘封装版本分开，避免为了 UI 模式破坏原有 RPG 模型。
 
 `play` 持有 mode、sequence、pending request、完整 scene、最近 12 条已解决奇遇 history。没有 provider key 或 relay token。地址和授权为独立本机设置；访问口令仅为 store 闭包内字符串。
 
@@ -55,7 +55,7 @@ relay 自己持有供应商密钥、固定上游 URL、访问口令、Origin 白
 
 ## Map UI composition
 
-`src/App.tsx` 管理临时面板與导航焦点，不保存地图浏览状态、不写世界数据。`src/game/cityMap.ts` 提供可测试的地点坐标、功能入口与配送区域映射。`components/CityMap.tsx` 渲染本地 SVG、原生地图滚动及缩放。`components/GamePanels.tsx` 复用现有行动、人物、结局和事件视图；所有实际行动仍调用 store。`PlayModePanel` 的 settingsOnly 视图复用同一份模式/relay 配置逻辑，不复制请求状态。`map.css` 在基础样式之后载入，控制整屏布局、320px 和横屏适配。
+`src/App.tsx` 管理临时面板與导航焦点，不保存地图浏览状态、不写世界数据。`src/game/cityMap.ts` 只提供常驻功能地标；`deliveryLocations.ts` 提供配送坐标、稳定地点 ID 和位置迁移验证。`components/CityMap.tsx` 渲染本地 SVG、原生地图滚动及缩放。`components/GamePanels.tsx` 复用现有行动、人物、结局和事件视图；所有实际行动仍调用 store。`PlayModePanel` 的 settingsOnly 视图复用同一份模式/relay 配置逻辑，不复制请求状态。`map.css` 在基础样式之后载入，`deliveryMap.css` 补充临时点、玩家标记与定位工具的桌面/320px/横屏适配。
 
 面板是非模态区域：主地图与固定导航仍可使用。关闭/Escape 恢复焦点，更多菜单打开后焦点进入首项。AI 场景和人工事件通过 store 状态变化自动显示；关闭界面不会丢弃 pending 内容。存档失败在全局显示。AI 协议不变；存档升级到 v4 并保留旧备份。CI 附带仅含 git 跟踪文件的 source-snapshot 压缩包，便于复现 UI 验证，不包含 .git 凭证、未跟踪环境文件或 node_modules。
 
@@ -64,3 +64,13 @@ relay 自己持有供应商密钥、固定上游 URL、访问口令、Origin 白
 `StartScreen` 是启动入口：只有新建或进入存档后才能显示地图和执行行动。模式只作为 `newGame(name, mode)` 的创建参数，不导出运行时切换 API。`returnToStart` 取消请求、保存已付款探索的人工回退并等待自动写入。失败时留在当前世界，显式确认后才能放弃未保存改动，磁盘数据不被删除。
 
 全局保存指示器区分 saving / saved / error。生成场景的选项在保存完成前不可结算。没有手动保存按钮；自动重试只影响存储，不推进游戏时钟。浏览器清理网站数据会删除本机存档，不宣称云同步。
+
+## Delivery geography and saved position (v0.6)
+
+`game.position = { version: 1, locationId }` 是 v4 会话内的增量字段，不改变 IndexedDB 数据库、槽版本或 AI 协议。`migrateGameState` 通过 `normalizePosition` 读取；缺字段时创建驿站位置，未来版本、未知地点或损坏结构返回 null，让既有存储保护机制阻止覆盖。
+
+新订单保存 pickupId/dropoffId 及既有地址文字。`orderMapPoints` 先查稳定 ID，再按旧名称解析；已发布的 8 个商家与 8 个顾客均有独立点位。未知旧名称沿用安全区域回退（取餐驿站 / 送达幸福家园），不重写订单数值。所有地图查询都是纯函数，不消耗随机数。
+
+`completeOrder` 在资源检查、耗时结算及存活检查之后更新位置，再结算收入/触发后续事件；骑行与推车共享此路径。拒绝、取消、选中地图地标都不设置 position。Store 不新增位置写入口，现有逐槽串行自动保存负责持久化；异步 AI 结果和设置无权修改位置。
+
+`CityMap` 接收 position，独立渲染玩家标记与条件化的两个任务图钉；永久地点目录不包含配送点。镜头在读取位置/成功到达时居中，缩放保持当前镜头目标。定位按钮只改变滚动位置。地图仍可拖动、触控和键盘平移，无浏览器定位、地图网络请求或墙钟定时器。

@@ -1,11 +1,10 @@
+import { DELIVERY_PICKUPS, DELIVERY_DROPOFFS, initialPosition, normalizePosition, orderMapPoints } from './deliveryLocations';
 import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstimate, initialBike, normalizeBike, pushingCosts, repairCost, ridingBlockReason, upgradeCost } from './bike';
 import { EVENT_MAP, EVENTS } from './content';
 import { ENDING_MAP } from './endings';
 import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
 import type { ActionContext, BikeUpgrade, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
-const MERCHANTS = ['老王牛肉面', '金记烧腊', '川味小馆', '月桂咖啡', '北门饺子馆', '深夜食堂', '阿婆砂锅粥', '七号便利店'];
-const CUSTOMERS = ['幸福家园 4 栋 404', '云景花园 8 栋', '东城医院住院部', '城南软件园 A3', '老城区梧桐里', '青云山脚 17 号', '大学城 6 号宿舍', '河畔公寓 12F'];
 const WEATHERS: Weather[] = ['clear', 'clear', 'cloudy', 'cloudy', 'rain', 'storm'];
 
 export const RENT = 850;
@@ -13,7 +12,7 @@ export const RENT = 850;
 export function createInitialState(seed = Date.now() >>> 0): GameState {
   return {
     version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
-    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), qi: 0, insight: 1,
+    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), position: initialPosition(), qi: 0, insight: 1,
     karma: 0, darkQi: 0, realmLevel: 0, completedOrders: 0, totalIncome: 0, rentDueDay: 7,
     activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, relationships: createInitialRelationships(), endingId: null, gameOver: false,
     log: [makeLog(1, 7 * 60, '新的一个月开始了。七天后要先交第一笔房租。', 'normal')],
@@ -27,12 +26,14 @@ export function migrateGameState(raw: unknown): GameState | null {
   const seed = typeof source.seed === 'number' ? source.seed : 0x5a17d311;
   const base = createInitialState(seed);
   const bike = normalizeBike(source.bike);
-  if (!bike) return null;
+  const position = normalizePosition(source.position);
+  if (!bike || !position) return null;
   const merged = {
     ...base,
     ...source,
     version: 2,
     bike,
+    position,
     relationships: mergeRelationships(source.relationships as Partial<GameState['relationships']> | undefined),
     endingId: typeof source.endingId === 'string' ? source.endingId : null,
   } as GameState;
@@ -189,8 +190,11 @@ const isNightMinute = (minute: number) => minute >= 20 * 60 || minute < 6 * 60;
 
 function generateOrder(state: GameState): [DeliveryOrder, GameState] {
   let next = state;
-  let merchant: string, customer: string, distanceTenths: number, rewardBonus: number, timeJitter: number, strangeRoll: number;
-  [merchant, next] = pick(next, MERCHANTS); [customer, next] = pick(next, CUSTOMERS);
+  const [pickup, pickupState] = pick(next, DELIVERY_PICKUPS);
+  const [dropoff, dropoffState] = pick(pickupState, DELIVERY_DROPOFFS);
+  next = dropoffState;
+  const merchant = pickup.name, customer = dropoff.name;
+  let distanceTenths: number, rewardBonus: number, timeJitter: number, strangeRoll: number;
   [distanceTenths, next] = randomInt(next, 12, 72); [rewardBonus, next] = randomInt(next, 0, 8);
   [timeJitter, next] = randomInt(next, 0, 12); [strangeRoll, next] = randomInt(next, 0, 99);
   const distanceKm = distanceTenths / 10;
@@ -199,7 +203,7 @@ function generateOrder(state: GameState): [DeliveryOrder, GameState] {
   const weather = next.weather === 'storm' ? 1.45 : next.weather === 'rain' ? 1.2 : 1;
   const reward = Math.round((7 + distanceKm * 2.1 + rewardBonus) * peak * weather);
   const estimatedMinutes = Math.round(10 + distanceKm * 4.2 + timeJitter);
-  return [{ id: `${next.day}-${next.minute}-${next.seed}`, merchant, customer, distanceKm, reward, estimatedMinutes, acceptedAtDay: next.day, acceptedAtMinute: next.minute, strange: strangeRoll < (isNightMinute(next.minute) ? 14 : 4) }, next];
+  return [{ id: `${next.day}-${next.minute}-${next.seed}`, merchant, customer, pickupId: pickup.id, dropoffId: dropoff.id, distanceKm, reward, estimatedMinutes, acceptedAtDay: next.day, acceptedAtMinute: next.minute, strange: strangeRoll < (isNightMinute(next.minute) ? 14 : 4) }, next];
 }
 
 function acceptOrder(state: GameState): GameState {
@@ -228,9 +232,9 @@ function completeOrder(state: GameState, pushing = false): GameState {
     bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
     bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) }, activeOrder: null }, actualMinutes);
   if (next.gameOver) return next;
-  next = { ...next, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
+  next = { ...next, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
     reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
-  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
+  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
 }
 
