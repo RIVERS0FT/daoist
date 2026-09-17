@@ -7,14 +7,20 @@ async function rawLegacy(page, value) {
     r.onsuccess = () => { const db = r.result, tx = db.transaction('saves', 'readwrite'); tx.objectStore('saves').put(raw, 'autosave'); tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(tx.error); }; };
   }), value);
 }
-test('start page offers creation-only modes and has no manual save control', async ({ page }, info) => {
+test('start page requires a player name, offers creation-only modes and has no manual save control', async ({ page }, info) => {
   await page.goto('./'); await expect(page.locator('.start-screen')).toBeVisible();
   await expect(page.locator('.game-shell')).toHaveCount(0); await expect(page.getByRole('button', { name: /手动保存/ })).toHaveCount(0);
   await page.getByRole('button', { name: /新建存档/ }).click();
   await expect(page.getByRole('radio')).toHaveCount(2);
+  const playerName = page.getByLabel('玩家名称', { exact: true });
+  await expect(playerName).toHaveAttribute('required', '');
+  await page.getByRole('button', { name: '开始这一世', exact: true }).click();
+  await expect(page.locator('.start-screen')).toBeVisible(); await expect(page.locator('.game-shell')).toHaveCount(0);
+  await playerName.fill('起名测试');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('start-page.png'), fullPage: true });
   await page.getByRole('button', { name: '开始这一世', exact: true }).click();
+  await expect(page.getByRole('banner', { name: '顶部状态栏' }).getByRole('heading', { level: 1 })).toHaveText('起名测试');
   await nav(page, '奇遇').click(); await expect(page.getByRole('radio')).toHaveCount(0);
   await expect(page.locator('.mode-locked')).toContainText('本局不可切换');
 });
@@ -26,7 +32,7 @@ test('two slots keep independent modes, upgrades and automatically saved progres
   await menu(page); await newGame(page, 'generative', '生成式仙途');
   const second = await readStore(page); expect(second.id).not.toBe(first.id); expect(second.game.bike.speed).toBe(0); expect(second.play.mode).toBe('generative');
   await menu(page); await expect(page.locator('.save-card')).toHaveCount(2);
-  await page.getByRole('button', { name: '进入存档：跑单人生', exact: true }).click();
+  await page.getByRole('button', { name: '进入玩家存档：跑单人生', exact: true }).click();
   const restored = await readStore(page); expect(restored.game).toEqual(first.game); expect(restored.play.mode).toBe('classic');
   await page.reload(); await expect(page.locator('.start-screen')).toBeVisible(); await continueRecent(page);
   expect((await readStore(page)).game.bike.speed).toBe(1);
