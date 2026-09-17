@@ -102,7 +102,7 @@ export default function App() {
         {(pendingPanel || game.activeOrder) && <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : '查看配送'}<Icon name="arrow" size={17} /></button>}
       </aside>}
       {panel && <section ref={drawer} className="game-drawer" tabIndex={-1} aria-labelledby="drawer-heading">
-        <header className="drawer-heading"><div><span className="eyebrow">{place && place.panel === panel ? place.name : currentSlot?.name ?? '青岚市'}</span><h2 id="drawer-heading">{PANEL_TITLES[panel]}</h2></div><button className="drawer-close" type="button" aria-label="关闭面板，返回地图" onClick={closePanel}><Icon name="close" /></button></header>
+        <header className="drawer-heading"><div>{place && place.panel === panel && <span className="eyebrow">{place.name}</span>}<h2 id="drawer-heading">{PANEL_TITLES[panel]}</h2></div><button className="drawer-close" type="button" aria-label="关闭面板，返回地图" onClick={closePanel}><Icon name="close" /></button></header>
         <div className="drawer-body" key={panel}>
           {pendingPanel && panel !== pendingPanel && <button type="button" className="pending-link" onClick={() => openPanel(pendingPanel)}>{game.gameOver ? '查看本世结局' : '有待处理的内容，点击继续'}<Icon name="arrow" size={16} /></button>}
           {place && place.panel === panel && <div className="place-intro"><span>{place.district}</span><p>{place.description}</p></div>}
