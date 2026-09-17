@@ -41,14 +41,14 @@ test('zero battery and insufficient range disable riding; upgraded charging rest
   const s = await readStore(page); s.game.bikeBattery = 0; s.game.bike.battery = 2;
   s.game.activeOrder = { id: 'ride-test', merchant: '老王牛肉面', customer: '幸福家园 4 栋 404', distanceKm: 5, reward: 30, estimatedMinutes: 40, acceptedAtDay: 1, acceptedAtMinute: 420, strange: false };
   await replaceWorld(page, { version: 4, game: s.game, play: s.play }); await nav(page, '跑单').click();
-  await expect(page.getByRole('button', { name: /^完成配送/ })).toBeDisabled();
-  await expect(page.getByRole('button', { name: /^推车送达/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^执行配送/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^推车完成配送/ })).toBeEnabled();
   const before = await readStore(page);
   await page.evaluate(async () => { const { useGameStore } = await import('/Daoist-Delivery/src/game/store.ts'); useGameStore.getState().act('complete-order'); });
   expect((await readStore(page)).game).toEqual(before.game);
   await page.getByRole('button', { name: /^换电补满/ }).click(); expect((await readStore(page)).game.bikeBattery).toBe(180);
-  await expect(page.getByRole('button', { name: /^完成配送/ })).toBeEnabled();
-  await page.getByRole('button', { name: /^完成配送/ }).click();
+  await expect(page.getByRole('button', { name: /^执行配送/ })).toBeEnabled();
+  await page.getByRole('button', { name: /^执行配送/ }).click();
   const completed = await readStore(page); expect(completed.game.completedOrders).toBe(1); expect(completed.game.bikeBattery).toBe(168);
 });
 test('legacy v3 migrates once, preserves its original backup, NPC route and AI mode', async ({ page }) => {
