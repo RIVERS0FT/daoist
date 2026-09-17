@@ -1,0 +1,27 @@
+.cult-hero { background: linear-gradient(125deg, #304133, #1d2926); border: 1px solid #657256; border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+.cult-hero h3 { margin: 6px 0; font: 25px Georgia, 'Songti SC', serif; color: #eddaa6; }
+.cult-hero p { color: #afc2aa; font-size: 12px; }
+.cult-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.cult-metrics span { display:flex; justify-content:space-between; gap:8px; color:#bcc8b5; font-size:12px; }
+.cult-metrics b { color: #f1e4bf; font-weight: 500; }
+.cult-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; margin-bottom:16px; background:#121e18; border-radius:10px; }
+.cult-tabs button { min-height:44px; background:transparent; border:1px solid transparent; border-radius:7px; color:#b8c5ae; cursor:pointer; }
+.cult-tabs button[aria-pressed=true] { background:#38412e; color:#f1dfaa; border-color:#677652; }
+.cult-guide { border-left:2px solid #c9b176; padding:10px 12px; color:#e0d7bc; font-size:12px; line-height:1.8; background:#293325; }
+.cult-cards { display:grid; gap:14px; }
+.cult-card { padding:14px; background:#202e25; border:1px solid #485a42; border-radius:12px; min-width:0; }
+.cult-card h3 { margin:0; color:#dedcbd; font-size:15px; }
+.cult-card p { font-size:12px; line-height:1.8; color:#b9c3ad; overflow-wrap:anywhere; }
+.cult-card-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.cult-card-heading > span { font-size:11px; color:#d8c28b; }
+.cult-action { min-width:0; margin-block:8px; }
+.cultivation-panel .action-button { width:100%; min-height:64px; }
+.cult-time, .cult-reason { margin:5px 3px 0 !important; font-size:10px !important; line-height:1.6; }
+.cult-time { color:#96a98f !important; }.cult-reason { color:#d5ad96 !important; }
+.cult-strategies { border:1px solid #56674b; border-radius:8px; padding:10px; min-width:0; }
+.cult-strategies legend { font-size:11px; color:#bbc7ad; }
+.cult-strategies label, .cult-aid { display:flex; align-items:center; gap:8px; min-height:44px; font-size:12px; cursor:pointer; color:#cbd5be; }
+.cultivation-panel input { width:18px; height:18px; flex-shrink:0; accent-color:#d9bc7e; }
+.cult-probability { display:flex; align-items:center; gap:14px; margin-block:12px; }
+.cult-probability strong { font-size:27px; font-weight:500; color:#eed298; }.cult-probability span { font-size:11px; color:#b2c4a6; }
+@media(max-width:520px) { .cult-hero { padding:14px; }.cult-card { padding:12px; }.cult-metrics { gap:12px; }.cult-probability { align-items:flex-start; }.cult-tabs { gap:1px; } }

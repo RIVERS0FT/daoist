@@ -35,7 +35,7 @@ export default function App() {
   const drawer = useRef<HTMLElement>(null), mapNav = useRef<HTMLButtonElement>(null), opener = useRef<HTMLElement | null>(null);
   const event = game.pendingEventId ? EVENT_MAP.get(game.pendingEventId) : null;
   const night = game.minute >= 1200 || game.minute < 360;
-  const pendingPanel: PanelId | null = game.gameOver ? 'endings' : event ? 'event' : play.pending || play.scene ? 'exploration' : null;
+  const pendingPanel: PanelId | null = game.gameOver ? 'endings' : event ? 'event' : play.pending || play.scene ? 'exploration' : game.cultivation.trial ? 'cultivation' : null;
   const openPanel = useCallback((next: PanelId) => {
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setPanel(next); setMore(false);
@@ -62,7 +62,8 @@ export default function App() {
     if (game.gameOver) openPanel('endings');
     else if (game.pendingEventId) openPanel('event');
     else if (play.pending || play.scene) openPanel('exploration');
-  }, [hydrated, loadBlocked, screen, activeSlotId, game.gameOver, game.pendingEventId, play.pending?.id, play.scene?.id, openPanel]);
+    else if (game.cultivation.trial) openPanel('cultivation');
+  }, [hydrated, loadBlocked, screen, activeSlotId, game.gameOver, game.pendingEventId, game.cultivation.trial?.stage, play.pending?.id, play.scene?.id, openPanel]);
   useEffect(() => { if (panel) drawer.current?.focus({ preventScroll: true }); }, [panel]);
   useEffect(() => { if (more) document.querySelector<HTMLButtonElement>('#more-navigation button')?.focus({ preventScroll: true }); }, [more]);
   useEffect(() => {
@@ -89,10 +90,10 @@ export default function App() {
     </header>
     {saveError && <div className="storage-alert" role="alert">{saveError}<button type="button" onClick={() => openNav('settings')}>打开设置</button></div>}
     <section className="map-stage" aria-label="城市地图主界面">
-      <CityMap order={game.activeOrder} position={game.position} selected={selected} onOrder={() => { setPlace(null); openPanel('delivery'); }} onPlace={openPlace} onPlaces={() => openNav('places')} />
+      <CityMap key={activeSlotId} panelOpen={Boolean(panel)} order={game.activeOrder} position={game.position} selected={selected} onOrder={() => { setPlace(null); openPanel('delivery'); }} onPlace={openPlace} onPlaces={() => openNav('places')} />
       {!panel && <aside className={`map-task ${pendingPanel ? 'requires-attention' : ''}`}>
         <span className="eyebrow">{pendingPanel ? '有一段故事等你继续' : game.activeOrder ? '当前配送' : '今日行程'}</span>
-        <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.activeOrder ? `${game.activeOrder.merchant} → ${game.activeOrder.customer}` : '下一站，去哪里？'}</strong>
+        <strong>{game.gameOver ? '这一世的故事已收束' : event ? event.title : play.pending ? '奇遇生成中' : play.scene ? play.scene.title : game.cultivation.trial ? '内景筑基试炼待续' : game.activeOrder ? `${game.activeOrder.merchant} → ${game.activeOrder.customer}` : '下一站，去哪里？'}</strong>
         <p>{pendingPanel ? '可以浏览地图，处理完当前故事后再行动。' : game.activeOrder ? `${game.activeOrder.distanceKm.toFixed(1)} km · 预计 ${deliveryEstimate(game.activeOrder, game.bike)} 分钟 · 完成后移动至送达点` : '白天奔走在人间，夜晚修一程仙途。'}</p>
         <button type="button" onClick={() => openNav(pendingPanel ?? 'delivery')}>{pendingPanel ? '继续处理' : game.activeOrder ? '查看配送' : '前往接单'}<Icon name="arrow" size={17} /></button>
       </aside>}

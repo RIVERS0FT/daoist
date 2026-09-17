@@ -1,0 +1,23 @@
+/* Camera transforms replace native content scrolling. Touch is captured only on this surface. */
+.map-viewport.camera-viewport { overflow: hidden; touch-action: none; overscroll-behavior: none; }
+.camera-viewport .map-world { position:absolute; left:0; top:0; margin:0; transform-origin:0 0; will-change:transform; }
+.camera-viewport.is-panning { cursor:grabbing; }
+.camera-viewport .map-pin { transform-origin:0 0; transform:scale(var(--map-inverse, 1)) translate(-50%, -39%); }
+.camera-viewport .player-marker { transform-origin:0 0; transform:scale(var(--map-inverse, 1)) translate(-50%, calc(-100% - 30px)); }
+.camera-viewport .delivery-line { vector-effect:non-scaling-stroke; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin):not(.selected) strong,
+.camera-viewport .map-world[data-detail=overview] .map-pin:not(.delivery-pin):not(.selected) small { visibility:hidden; }
+.camera-viewport .map-world[data-detail=overview] .map-pin:hover strong,
+.camera-viewport .map-world[data-detail=overview] .map-pin:focus-visible strong { visibility:visible !important; }
+.camera-access { position:absolute; z-index:11; bottom:155px; left:30px; font-size:11px; }
+.camera-access > summary { min-height:44px; display:flex; align-items:center; padding:0 12px; list-style:none; color:#d2d9c0; border:1px solid #5d6d51; background:#1c2c23f5; border-radius:10px; cursor:pointer; }
+.camera-access > summary::after { content:'⌃'; margin-left:12px; }.camera-access[open] > summary::after { content:'⌄'; }
+.camera-menu { position:absolute; bottom:52px; left:0; width:280px; max-width:calc(100vw - 28px); max-height:min(380px, 50dvh); overflow-y:auto; background:#1c2a21; border:1px solid #687453; border-radius:12px; padding:14px; box-shadow:0 8px 22px #0005; touch-action:pan-y; }
+.camera-menu p { font-size:11px; line-height:1.7; color:#afbea4; margin:0 0 10px; }
+.camera-menu-buttons, .camera-directions { display:flex; gap:6px; margin-bottom:12px; }
+.camera-menu button { min-height:44px; min-width:44px; flex:1; border:1px solid #576749; background:#2a3a2a; color:#e1d8b2; border-radius:6px; cursor:pointer; font-size:11px; }
+.camera-menu label { display:block; color:#c4ccb4; font-size:11px; }.camera-menu select { display:block; min-height:44px; width:100%; margin-block:7px 10px; border:1px solid #53634a; background:#18291d; color:#d6dfca; padding:7px; border-radius:6px; }
+@media(max-width:780px) { .camera-access { left:18px; } }
+@media(max-width:520px) { .camera-access { left:14px; bottom:184px; }.camera-menu { max-height:42dvh; } }
+@media(max-height:520px) { .camera-access { left:18px; bottom:80px; }.camera-access > summary { min-height:36px; }.camera-menu { bottom:44px; max-height:140px; width:300px; } }
+@media(prefers-reduced-motion:reduce) { .camera-viewport .pin-emblem { transition:none; } }

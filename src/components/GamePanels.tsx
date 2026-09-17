@@ -1,3 +1,4 @@
+export { CultivationPanel } from './CultivationPanel';
 import { playerMapPoint } from '../game/deliveryLocations';
 import { bikeStats, deliveryCosts, deliveryEstimate, pushingCosts, ridingBlockReason } from '../game/bike';
 import { BikePanel } from './BikePanel';
@@ -8,7 +9,7 @@ import { NPC_MAP, NPCS, relationshipLabel, relationshipScore } from '../game/npc
 import { useGameStore } from '../game/store';
 import type { GameAction, GameState, NpcId, NumericStatKey } from '../game/types';
 
-function useExplorationBusy() { return useGameStore((s) => Boolean(s.play.pending || s.play.scene || s.loadBlocked || s.slotBusy)); }
+function useExplorationBusy() { return useGameStore((s) => Boolean(s.play.pending || s.play.scene || s.game.cultivation.trial || s.loadBlocked || s.slotBusy)); }
 export function StatBar({ label, value, max = 100, suffix = '', danger = false }: { label: string; value: number; max?: number; suffix?: string; danger?: boolean }) {
   const width = Math.max(0, Math.min(100, (value / max) * 100));
   return <div className="stat-row"><div className="stat-label"><span>{label}</span><strong>{Math.round(value)}{suffix}</strong></div><div className="bar"><span className={danger ? 'danger' : ''} style={{ width: `${width}%` }} /></div></div>;
@@ -102,15 +103,6 @@ export function LifePanel() {
   return <section className="panel"><p className="panel-note">凡俗生活也是修行的一部分。照顾身体，给下一趟旅程留些余力。</p><div className="action-grid">
     <ActionButton action="eat" title="吃顿热饭" meta="30 分钟 · ¥18" disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta="60 分钟 · 恢复精力" disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta="360 分钟 · 大幅恢复" disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta={`18 分钟 · ¥6 · 补满至 ${bikeStats(game.bike).capacity}`} disabled={disabled || game.money < 6 || game.bikeBattery >= bikeStats(game.bike).capacity} />
   </div><div className="rent-box"><span>房租 ¥{RENT}</span><strong>第 {game.rentDueDay} 天到期</strong></div></section>;
-}
-export function CultivationPanel() {
-  const game = useGameStore((s) => s.game);
-  const disabled = Boolean(game.pendingEventId) || game.gameOver;
-  const nextCost = breakthroughCost(game.realmLevel);
-  const night = game.minute >= 1200 || game.minute < 360;
-  return <section className="panel"><div className="cultivation-summary"><span>{realmName(game.realmLevel)}</span><strong>{Math.round(game.qi)} <small>灵气</small></strong><p>{night ? '夜色正浓，当前修炼效率提升。' : '白天也能吐纳，夜晚修炼效率更高。'}</p></div><div className="action-grid">
-    <ActionButton action="meditate-1h" title="吐纳一小时" meta="60 分钟 · 稳定积累灵气" disabled={disabled} /><ActionButton action="meditate-3h" title="闭关三小时" meta="180 分钟 · 高收益高消耗" disabled={disabled} /><ActionButton action="study" title="整理修炼笔记" meta="90 分钟 · 悟性 +1" disabled={disabled} /><ActionButton action="breakthrough" title={game.realmLevel >= 9 ? '炼气圆满' : `尝试突破 · ${nextCost} 灵气`} meta="240 分钟 · 存在失败风险" disabled={disabled || game.realmLevel >= 9 || game.qi < nextCost} />
-  </div></section>;
 }
 export function JournalPanel() {
   const game = useGameStore((s) => s.game);

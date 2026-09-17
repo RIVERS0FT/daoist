@@ -1,7 +1,8 @@
+import type { CultivationCommand } from './cultivation';
 import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
-import { resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
+import { runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
 import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
 import { loadSlots, saveSlot, SaveConflictError } from './storage';
@@ -23,6 +24,7 @@ interface GameStore {
   configureAi: (settings: AiSettings, relayToken: string) => void;
   explore: (focus: SceneFocus, npcId?: NpcId, intent?: string) => Promise<void>;
   fallback: () => void; testAi: () => Promise<void>;
+  cultivate: (command: CultivationCommand) => void;
   act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
   chooseEvent: (choiceId: string) => void; chooseEnding: (endingId: string) => void;
 }
@@ -34,7 +36,7 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
     const gate = new RequestGate(), unsaved = new Map<string, PlaySession>();
     let relayToken = '', settingsInitialized = false, hydration: Promise<void> | null = null;
     let saves = Promise.resolve(), writeRevision = 0, retry: ReturnType<typeof setTimeout> | undefined;
-    const session = (): PlaySession => ({ version: 4, game: get().game, play: get().play });
+    const session = (): PlaySession => ({ version: 5, game: get().game, play: get().play });
     const playing = () => get().hydrated && get().screen === 'playing' && Boolean(get().activeSlotId) && !get().slotBusy && !get().loadBlocked;
     const replaceSlot = (slot: SlotEntry) => set((state) => ({ slots: [...state.slots.filter((entry) => entry.id !== slot.id), slot].sort((a, b) => b.updatedAt - a.updatedAt) }));
     const persist = (value: PlaySession, id = get().activeSlotId) => {
@@ -165,6 +167,11 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
           const result = await deps.test(get().play.mode, get().aiSettings, relayToken, ticket.signal);
           if (gate.current(ticket)) set({ aiStatus: result.ok ? 'success' : 'error', aiMessage: result.ok ? 'relay 可达且支持生成协议；实际模型结果以生成奇遇为准。' : result.error });
         } catch { if (gate.current(ticket)) set({ aiStatus: 'error', aiMessage: '连接测试失败，请检查服务配置。' }); }
+      },
+      cultivate: (command) => {
+        const s = get();
+        if (!playing() || s.saveStatus !== 'saved' || s.play.pending || s.play.scene) return;
+        commit({ ...session(), game: runCultivationAction(s.game, command) });
       },
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },

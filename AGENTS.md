@@ -4,7 +4,7 @@ This repository is a single-player Web RPG about delivering food by day and cult
 
 ## Read before modifying
 
-Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.md`, `docs/MAP_INTERFACE.md`, then directly affected code. Call out conflicts before implementation. The v0.3 dual-mode design intentionally extends the earlier short-dialogue-only AI policy at the user's request.
+Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.md`, `docs/MAP_INTERFACE.md`, `docs/CULTIVATION.md`, then directly affected code. Call out conflicts before implementation. The v0.3 dual-mode design intentionally extends the earlier short-dialogue-only AI policy at the user's request.
 
 ## Non-negotiable game rules
 
@@ -15,7 +15,7 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - Preserve serializable NPC memories, relationship metrics, flags and route locks. Romance is not the default destination: friendship, peers, family-like bonds, partnership, estrangement and solitude remain valid.
 - Core play never requires AI or a backend. Classic mode must issue zero AI requests, including after NPC choices, reloads and switching save slots.
 - Core rule randomness comes from saved seeds. AI scene text is external content, saved before choices and reused without rerolling on reload.
-- Preserve the v2 world (with additive versioned vehicle and player-position data) inside the v4 session envelope; migrate legacy v1/v2/v3 saves without clearing progress. Preserve the original autosave as a backup and migrate it exactly once into an independent slot. Reject unknown future save versions rather than silently overwriting them.
+- Preserve the v2 world (with additive versioned vehicle and player-position data) inside the v5 session envelope; migrate legacy v1/v2/v3/v4 saves without clearing progress. Preserve the original autosave as a backup and migrate it exactly once into an independent slot. Reject unknown future save versions rather than silently overwriting them.
 - UI renders state and dispatches commands. Pure simulation and session transitions live in `src/game/`; network and storage remain adapters.
 
 ## Dual-mode AI rules
@@ -57,5 +57,15 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - `deliveryLocations.ts` owns the 2400×1600 atlas, 24 pickup / 40 dropoff IDs and versioned player-position validation. IDs are durable save identifiers; never rename or reuse them.
 - Only the active order renders pickup/dropoff markers and its route. Delivery-only stops must not appear in permanent `MAP_PLACES` or its directory; functional landmarks remain accessible.
 - Commit the destination in the pure engine only after delivery succeeds, before any post-delivery event. Accepting, rejecting, cancelling, browsing, panning and zooming do not move the player. An aborted/fatal delivery cannot claim arrival.
-- Retain the v4 session envelope with additive `game.position`. Missing legacy positions start at the station; do not invent historical coordinates or regenerate active orders. Preserve old address lookup and all prior progress. Reject unknown position schemas without overwriting saves.
+- Retain `game.position` inside the v5 session envelope (v0.8 extends v0.6). Missing legacy positions start at the station; do not invent historical coordinates or regenerate active orders. Preserve old address lookup and all prior progress. Reject unknown position schemas without overwriting saves.
 - Each slot persists its own position automatically. Camera focus is temporary UI state and follows the restored/updated player; locating a marker is not a travel action. Do not send position data to AI or add real-time ticks.
+
+## Cultivation and camera (v0.8)
+
+- The user-approved scope extends the realm cap to foundation entry (`realmLevel = 10`) and upgrades the envelope to v5. `docs/CULTIVATION.md` owns the exact costs, recipes and trial rules. Large sect management, active travel and combat remain deferred.
+- One active manual, independent mana, bounded inventory/proficiency/preparation, per-bottleneck experience and a serializable inner trial live in `game.cultivation`. Never reduce old realms or require old saves to repeat novice teaching. Unknown schemas, IDs or incomplete v5 data must be protected.
+- Retain each original pre-v5 slot once under `backup:pre-v5:<id>` in the same transaction as its first upgraded write. Never overwrite a backup. The original legacy autosave remains preserved separately.
+- Preview is free and RNG-free. Pay costs before advancing time, stop at fatal midnight, and do not reward after death. Long meditation settles per hour and stops at an authored event without charging unplayed hours. Trial choices are stage-bound, saved before the next choice; all other gameplay is locked during a trial, with a resource-free timed retreat.
+- Main-manual effects do not stack. Light steps consume mana and only reduce fatigue on two successful rides; riding still requires the full battery and wear costs. Switching manuals cancels remaining light steps.
+- The map controller owns transforms and pointer capture outside the game store. RAF is rendering only, never a gameplay tick. Zoom anchors at the cursor/pinch centroid; handle pinch-to-drag, cancellation, click suppression and keyboard access. Map-only touch capture must not disable browser zoom globally or capture panel scrolling.
+- Manual panning/gesture navigation suspends follow; Locate Player resumes it. Read/slot restore initially focuses the player. Camera state is temporary and does not enter saves or AI context. Existing task-only delivery markers and fixed gameplay modes remain unchanged.

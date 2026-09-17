@@ -23,7 +23,7 @@ const keys = (v, permitted) => Object.keys(v).every((key) => permitted.includes(
 
 export function sanitizeContext(raw) {
   if (!record(raw) || !keys(raw, ['focus', 'intent', 'day', 'minute', 'weather', 'realmLevel', 'npc', 'memories'])) return null;
-  if (!Object.hasOwn(ACTIONS, raw.focus) || !text(raw.intent, 200) || !integer(raw.day, 10000000) || !integer(raw.minute, 1439) || !integer(raw.realmLevel, 9) || !['clear', 'cloudy', 'rain', 'storm'].includes(raw.weather)) return null;
+  if (!Object.hasOwn(ACTIONS, raw.focus) || !text(raw.intent, 200) || !integer(raw.day, 10000000) || !integer(raw.minute, 1439) || !integer(raw.realmLevel, 10) || !['clear', 'cloudy', 'rain', 'storm'].includes(raw.weather)) return null;
   if (!Array.isArray(raw.memories) || raw.memories.length > 4 || raw.memories.some((m) => !record(m) || !keys(m, ['title', 'choice', 'result']) || !text(m.title, 60) || !text(m.choice, 80) || !text(m.result, 400))) return null;
   let npc;
   if (raw.focus === 'social') {

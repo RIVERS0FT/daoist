@@ -6,6 +6,7 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { browserName: 'chromium', viewport: { width: 1280, height: 900 } } },
     { name: 'mobile-320', use: { browserName: 'chromium', viewport: { width: 320, height: 900 }, isMobile: true, hasTouch: true } },
+    { name: 'webkit-mobile', testMatch: /(?:map-gestures|cultivation)\.spec\.mjs/, use: { browserName: 'webkit', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
   webServer: { command: 'npm run dev -- --host 127.0.0.1 --port 4173', url: 'http://127.0.0.1:4173/Daoist-Delivery/', reuseExistingServer: false, timeout: 30000 },
 });

@@ -1,3 +1,6 @@
+import type { CultivationCommand } from './cultivation';
+import { initialCultivation, normalizeCultivation, runCultivation, realmName, breakthroughCost } from './cultivation';
+export { realmName, breakthroughCost } from './cultivation';
 import { DELIVERY_PICKUPS, DELIVERY_DROPOFFS, initialPosition, normalizePosition, orderMapPoints } from './deliveryLocations';
 import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstimate, initialBike, normalizeBike, pushingCosts, repairCost, ridingBlockReason, upgradeCost } from './bike';
 import { EVENT_MAP, EVENTS } from './content';
@@ -12,7 +15,7 @@ export const RENT = 850;
 export function createInitialState(seed = Date.now() >>> 0): GameState {
   return {
     version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
-    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), position: initialPosition(), qi: 0, insight: 1,
+    energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), position: initialPosition(), cultivation: initialCultivation(), qi: 0, insight: 1,
     karma: 0, darkQi: 0, realmLevel: 0, completedOrders: 0, totalIncome: 0, rentDueDay: 7,
     activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, relationships: createInitialRelationships(), endingId: null, gameOver: false,
     log: [makeLog(1, 7 * 60, '新的一个月开始了。七天后要先交第一笔房租。', 'normal')],
@@ -27,13 +30,17 @@ export function migrateGameState(raw: unknown): GameState | null {
   const base = createInitialState(seed);
   const bike = normalizeBike(source.bike);
   const position = normalizePosition(source.position);
-  if (!bike || !position) return null;
+  const level = source.realmLevel ?? 0, day = source.day ?? 1;
+  if (typeof level !== 'number' || !Number.isInteger(level) || level < 0 || level > 10 || typeof day !== 'number' || !Number.isSafeInteger(day) || day < 1) return null;
+  const cultivation = normalizeCultivation(source.cultivation, level, day);
+  if (!bike || !position || !cultivation) return null;
   const merged = {
     ...base,
     ...source,
     version: 2,
     bike,
     position,
+    cultivation,
     relationships: mergeRelationships(source.relationships as Partial<GameState['relationships']> | undefined),
     endingId: typeof source.endingId === 'string' ? source.endingId : null,
   } as GameState;
@@ -86,14 +93,6 @@ export function formatTime(minute: number): string {
   return `${h}:${m}`;
 }
 
-export function realmName(level: number): string {
-  return level <= 0 ? '凡人' : `炼气${['一', '二', '三', '四', '五', '六', '七', '八', '九'][Math.min(8, level - 1)]}层`;
-}
-
-export function breakthroughCost(level: number): number {
-  return level <= 0 ? 30 : 45 + level * 28;
-}
-
 function clampState(state: GameState): GameState {
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
   const next: GameState = {
@@ -133,7 +132,7 @@ function startNewDay(state: GameState): GameState {
 export function advanceTime(state: GameState, minutes: number): GameState {
   let remaining = Math.max(0, Math.round(minutes));
   let next = state;
-  while (remaining > 0) {
+  while (remaining > 0 && !next.gameOver) {
     const untilMidnight = 1440 - next.minute;
     if (remaining < untilMidnight) {
       next = { ...next, minute: next.minute + remaining };
@@ -168,7 +167,7 @@ function eventEligible(state: GameState, eventId: string, context: ActionContext
 }
 
 function maybeTriggerEvent(state: GameState, context: ActionContext, baseChance: number, npcId?: NpcId): GameState {
-  if (state.pendingEventId || state.gameOver) return state;
+  if (state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   let next = state;
   const nightBonus = (next.minute >= 20 * 60 || next.minute < 6 * 60) ? 0.08 : 0;
   const darkBonus = Math.min(0.08, next.darkQi * 0.005);
@@ -225,14 +224,15 @@ function completeOrder(state: GameState, pushing = false): GameState {
   if (!pushing) [variance, next] = randomInt(next, -4, 14);
   const weatherDelay = next.weather === 'storm' ? 10 : next.weather === 'rain' ? 5 : 0;
   const actualMinutes = pushing ? foot.minutes : Math.max(8, deliveryEstimate(order, next.bike) + variance + weatherDelay + (next.energy < 25 ? 8 : 0));
-  const energyCost = pushing ? foot.energy : Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18));
+  const useLightSteps = !pushing && state.cultivation.lightSteps > 0;
+  const energyCost = pushing ? foot.energy : Math.max(1, Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18)) - (useLightSteps ? 3 : 0));
   const income = pushing ? foot.income : order.reward;
   // All requirements are checked before RNG, time, payment or order state can change.
   next = advanceTime({ ...next, energy: Math.max(0, next.energy - energyCost),
     bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
     bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) }, activeOrder: null }, actualMinutes);
   if (next.gameOver) return next;
-  next = { ...next, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
+  next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
     reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
   next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
@@ -248,42 +248,13 @@ function upgradeBike(state: GameState, id: BikeUpgrade): GameState {
     `电动车${BIKE_UPGRADES.find((item) => item.id === id)!.label}升至 ${next.bike[id] + 1} 级：¥${cost}，45 分钟。升级不自动充电或维修。`, 'good');
 }
 
-function cultivate(state: GameState, minutes: number): GameState {
-  if (state.gameOver) return state;
-  let next = advanceTime(state, minutes);
-  let roll: number;
-  [roll, next] = randomInt(next, 0, 4);
-  const phase = phaseFor(state.minute);
-  const multiplier = phase === '深夜' ? 1.65 : phase === '夜晚' ? 1.4 : phase === '早晨' ? 1.15 : 0.85;
-  const manualBonus = next.flags.small_cycle_notes === true ? 2 : 0;
-  const hours = minutes / 60;
-  const gain = Math.max(1, Math.round((3 + roll + manualBonus + next.insight * 0.18) * multiplier * hours));
-  next = { ...next, qi: next.qi + gain, energy: next.energy - Math.round(8 * hours), stress: next.stress - Math.round(2 * hours) };
-  next = appendLog(next, `吐纳 ${hours} 小时，获得 ${gain} 灵气。`, 'mystic');
-  return maybeTriggerEvent(clampState(next), 'cultivation', minutes >= 180 ? 0.48 : 0.34);
-}
-
-function breakthrough(state: GameState): GameState {
-  if (state.gameOver || state.realmLevel >= 9) return state;
-  const cost = breakthroughCost(state.realmLevel);
-  if (state.qi < cost) return appendLog(state, `突破失败：至少需要 ${cost} 灵气。`, 'bad');
-  let next = advanceTime(state, 240);
-  let roll: number;
-  [roll, next] = randomInt(next, 0, 999);
-  const chance = Math.min(0.94, 0.66 + next.insight * 0.025 + next.health * 0.0015 - next.stress * 0.0015);
-  next = { ...next, qi: next.qi - cost, energy: next.energy - 18 };
-  if (roll / 1000 <= chance) {
-    next = { ...next, realmLevel: next.realmLevel + 1, health: next.health + 5, stress: next.stress - 8 };
-    next = appendLog(next, `突破成功：你踏入了${realmName(next.realmLevel)}。`, 'mystic');
-  } else {
-    next = { ...next, health: next.health - 14, stress: next.stress + 10, darkQi: next.darkQi + 1 };
-    next = appendLog(next, '突破失败，灵气散乱，经脉受损。', 'bad');
-  }
-  return maybeTriggerEvent(clampState(next), 'cultivation', 0.42);
+export function runCultivationAction(state: GameState, command: CultivationCommand): GameState {
+  const next = runCultivation(state, command, advanceTime, value => maybeTriggerEvent(value, 'cultivation', .28));
+  return next !== state && command.type === 'study' ? maybeTriggerEvent(next, 'cultivation', .3) : next;
 }
 
 export function runAction(state: GameState, action: GameAction): GameState {
-  if (state.pendingEventId || state.gameOver) return state;
+  if (state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   if (action.startsWith('upgrade-bike-')) return upgradeBike(state, action.slice(13) as BikeUpgrade);
   let next = state;
   switch (action) {
@@ -319,18 +290,16 @@ export function runAction(state: GameState, action: GameAction): GameState {
       if (next.gameOver) return next;
       return appendLog({ ...next, bike: { ...next.bike, condition: bikeStats(next.bike).maxCondition } }, `电动车已修好：¥${cost}，30 分钟，耐久补满。`, 'good');
     }
-    case 'meditate-1h': return cultivate(next, 60);
-    case 'meditate-3h': return cultivate(next, 180);
-    case 'study':
-      next = advanceTime(next, 90); next = { ...next, energy: next.energy - 7, insight: next.insight + 1, stress: next.stress + 1 };
-      next = appendLog(clampState(next), '你把零碎的修炼笔记重新整理了一遍，悟性有所增长。', 'mystic'); return maybeTriggerEvent(next, 'cultivation', 0.3);
-    case 'breakthrough': return breakthrough(next);
+    case 'meditate-1h': return runCultivationAction(next, { type: 'meditate', hours: 1 });
+    case 'meditate-3h': return runCultivationAction(next, { type: 'meditate', hours: 3 });
+    case 'study': return runCultivationAction(next, { type: 'study' });
+    case 'breakthrough': return runCultivation(next, { type: 'breakthrough', strategy: 'steady', aid: false }, advanceTime);
     default: return state;
   }
 }
 
 export function socializeNpc(state: GameState, npcId: NpcId): GameState {
-  if (state.pendingEventId || state.gameOver || state.activeOrder) return state;
+  if (state.pendingEventId || state.gameOver || state.activeOrder || state.cultivation.trial) return state;
   const current = state.relationships[npcId];
   if (!current?.met) return appendLog(state, '你们还没有真正认识，暂时没有联系方式。', 'normal');
   let next = advanceTime(state, 45);
@@ -361,7 +330,7 @@ export function resolveEventChoice(state: GameState, choiceId: string): GameStat
 }
 
 export function selectEnding(state: GameState, endingId: string): GameState {
-  if (state.gameOver || state.pendingEventId || state.activeOrder) return state;
+  if (state.gameOver || state.pendingEventId || state.activeOrder || state.cultivation.trial) return state;
   const ending = ENDING_MAP.get(endingId);
   if (!ending || !ending.condition(state)) return appendLog(state, '这个结局还没有真正成为你的可能。', 'bad');
   return appendLog({ ...state, endingId, gameOver: true }, `结局：${ending.title}`, 'mystic');

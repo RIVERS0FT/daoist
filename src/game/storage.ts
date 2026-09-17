@@ -79,7 +79,12 @@ export async function saveSlot(slot: SaveSlot, expectedRevision: number | null):
           if (expectedRevision === null ? previous !== null : !previous?.session || previous.revision !== expectedRevision || previous.session.play.mode !== slot.session.play.mode) {
             conflict = true; tx.abort(); return;
           }
-          store.put(next, key);
+          // Keep the exact pre-v5 slot once; backup and upgraded save commit atomically.
+          const rawPrevious = request.result as SaveSlot | undefined;
+          if (rawPrevious && (rawPrevious.session.version as number) < 5) {
+            const backupKey = `backup:pre-v5:${slot.id}`, backup = store.get(backupKey);
+            backup.onsuccess = () => { if (backup.result === undefined) store.add(rawPrevious, backupKey); store.put(next, key); };
+          } else store.put(next, key);
         } catch (error) { failure = error; tx.abort(); }
       };
       tx.oncomplete = () => resolve(next);

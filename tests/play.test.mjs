@@ -21,7 +21,7 @@ function started(focus = 'city') {
   return play.beginExploration(s, focus, focus === 'social' ? 'lin_xiaoman' : undefined, '遇见一段新的故事');
 }
 function generated(focus = 'city') { const s = started(focus); return play.receiveGeneratedScene(s, s.play.pending.id, focus === 'social' ? social : city); }
-const snapshot = (store) => ({ version: 4, game: store.getState().game, play: store.getState().play });
+const snapshot = (store) => ({ version: 5, game: store.getState().game, play: store.getState().play });
 async function storeWith(deps = {}, mode = 'classic') {
   const rows = new Map();
   const store = createGameStore({
@@ -47,7 +47,7 @@ test('v1 save migrates without losing money, time, flags or delivery progress', 
   const old = { ...play.createSession(42).game, version: 1, day: 18, minute: 920, money: 779, completedOrders: 36, flags: { old_coin: true } };
   delete old.relationships; delete old.endingId;
   const migrated = play.migrateSession(old);
-  assert.equal(migrated.version, 4); assert.equal(migrated.play.mode, 'classic');
+  assert.equal(migrated.version, 5); assert.equal(migrated.play.mode, 'classic');
   for (const key of ['day', 'minute', 'money', 'completedOrders']) assert.equal(migrated.game[key], old[key]);
   assert.deepEqual(migrated.game.flags, old.flags); assert.equal(Object.keys(migrated.game.relationships).length, 5);
 });
@@ -234,4 +234,15 @@ test('200 exploration cycles retain bounded state and memory', () => {
     assert.ok(s.game.minute >= 0 && s.game.minute < 1440); assert.ok(s.play.history.length <= 12); assert.ok(s.game.log.length <= 80);
   }
   assert.equal(s.play.sequence, 200); assert.equal(s.play.history.length, 12);
+});
+
+test('cultivation store commands share pending scene locks and cannot double-consume a saved trial stage', async () => {
+  const store=await storeWith();store.getState().cultivate({type:'train'});store.getState().cultivate({type:'train'});await store.getState().flushSaves();
+  assert.equal(store.getState().game.cultivation.manuals.breath,8);
+  await store.getState().explore('city');const before=snapshot(store);store.getState().cultivate({type:'train'});assert.deepEqual(snapshot(store),before);
+});
+test('a blocked autosave keeps cultivation in memory and blocks further costly commands', async () => {
+  const store=await storeWith({save:async (_slot,rev)=>{if(rev!==null)throw new Error('full');}});
+  store.getState().cultivate({type:'train'});await store.getState().flushSaves();const before=snapshot(store);
+  store.getState().cultivate({type:'train'});assert.deepEqual(snapshot(store),before);assert.equal(store.getState().saveStatus,'error');
 });

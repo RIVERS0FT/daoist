@@ -82,7 +82,7 @@ test('v1/v2/v3 saves acquire a base vehicle without losing progress, modes or me
     const s = createSession(66, 'generative'); s.game.day = 21; s.game.money = 765; s.game.bikeBattery = 17;
     s.game.flags.kept = true; s.game.relationships.zhou_ye.route = 'close-friend'; delete s.game.bike;
     const raw = version === 3 ? { ...s, version: 3 } : { ...s.game, version };
-    const next = migrateSession(raw); assert.equal(next.version, 4); assert.equal(next.game.day, 21); assert.equal(next.game.money, 765);
+    const next = migrateSession(raw); assert.equal(next.version, 5); assert.equal(next.game.day, 21); assert.equal(next.game.money, 765);
     assert.equal(next.game.bikeBattery, 17); assert.equal(next.game.bike.speed, 0); assert.equal(next.game.bike.condition, 100);
     assert.equal(next.game.relationships.zhou_ye.route, 'close-friend'); assert.equal(next.game.flags.kept, true);
     assert.equal(next.play.mode, version === 3 ? 'generative' : 'classic');
