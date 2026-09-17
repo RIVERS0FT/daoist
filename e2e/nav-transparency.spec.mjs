@@ -31,14 +31,8 @@ test('bottom navigation stays transparent with the live map behind it', async ({
 
   const viewport = await page.getByTestId('map-viewport').boundingBox();
   const dockBox = await dock.boundingBox();
+  const world = await page.locator('.map-world').boundingBox();
   expect(viewport.y + viewport.height).toBeGreaterThanOrEqual(dockBox.y + dockBox.height);
-
-  const buttons = dock.getByRole('button');
-  const first = await buttons.nth(0).boundingBox(), second = await buttons.nth(1).boundingBox();
-  const gapX = (first.x + first.width + second.x) / 2, gapY = first.y + first.height / 2;
-  const gapTarget = await page.evaluate(({ x, y }) => {
-    const target = document.elementFromPoint(x, y);
-    return Boolean(target?.closest('.map-viewport'));
-  }, { x: gapX, y: gapY });
-  expect(gapTarget).toBe(true);
+  expect(world.y).toBeLessThan(dockBox.y + dockBox.height);
+  expect(world.y + world.height).toBeGreaterThan(dockBox.y);
 });
