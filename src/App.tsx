@@ -8,6 +8,7 @@ import { Icon } from './components/Icon';
 import { MapLogOverlay } from './components/MapLogOverlay';
 import { PlayModePanel } from './components/PlayModePanel';
 import { RelationshipsPanel } from './components/RelationshipsPanel';
+import { SystemPanel } from './components/SystemPanel';
 import { MAP_PLACES, PANEL_TITLES } from './game/cityMap';
 import type { MapPlace, PanelId, PlaceId } from './game/cityMap';
 import { EVENT_MAP } from './game/content';
@@ -21,7 +22,7 @@ const NAV = [
   { id: 'exploration', label: '奇遇', icon: 'spark' },
 ] as const;
 const MORE = [
-  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' },
+  { id: 'life', icon: 'home' }, { id: 'character', icon: 'wallet' }, { id: 'system', icon: 'spark' },
   { id: 'endings', icon: 'flag' }, { id: 'help', icon: 'book' }, { id: 'settings', icon: 'settings' },
 ] as const;
 
@@ -107,7 +108,7 @@ export default function App() {
           {pendingPanel && panel !== pendingPanel && <button type="button" className="pending-link" onClick={() => openPanel(pendingPanel)}>{game.gameOver ? '查看本世结局' : '有待处理的内容，点击继续'}<Icon name="arrow" size={16} /></button>}
           {place && place.panel === panel && <div className="place-intro"><span>{place.district}</span><p>{place.description}</p></div>}
           {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
-          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}
+          {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'system' && <SystemPanel />}
           {panel === 'exploration' && <PlayModePanel />}
           {panel === 'help' && <HelpPanel />}
           {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>存档 · {currentSlot?.name}</h3><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
