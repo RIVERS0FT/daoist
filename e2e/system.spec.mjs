@@ -5,7 +5,7 @@ test('system page shows balance and persists an exchange', async ({ page }) => {
   await page.goto('/Daoist-Delivery/');
   await newGame(page, 'classic', '系统测试');
   const current = await readStore(page);
-  await replaceWorld(page, { ...current, game: { ...current.game, deliveryCoins: 12 } });
+  await replaceWorld(page, { version: 5, game: { ...current.game, deliveryCoins: 12 }, play: current.play });
 
   await page.getByRole('button', { name: '更多导航', exact: true }).click();
   await page.getByRole('button', { name: '外卖系统', exact: true }).click();
