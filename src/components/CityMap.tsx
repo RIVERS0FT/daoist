@@ -108,8 +108,8 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
       <button type="button" className="delivery-offer-close" aria-label="关闭配送任务详情" onClick={() => setSelectedOfferId(null)}><Icon name="close" size={16} /></button>
       <span className="eyebrow">{selectedOffer.strange ? '异常配送任务' : '配送任务'}</span>
       <h3>{selectedOffer.customer}</h3>
-      <p className="delivery-offer-merchant">取餐 {selectedOffer.merchant} · 取餐已并入配送执行</p>
-      <div className="delivery-offer-meta"><span>{selectedOffer.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(selectedOffer, game.bike)} 分钟</span><strong>¥{selectedOffer.reward}</strong><span>+{deliveryCoinReward(selectedOffer)} 外卖币</span></div>
+      <p className="delivery-offer-merchant">取餐 {selectedOffer.merchant} · 路程按当前位置 → 商家 → 顾客计算</p>
+      <div className="delivery-offer-meta"><span>{selectedOffer.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(selectedOffer, game.bike, selectedOffer.distanceKm, game.weather, game.energy)} 分钟</span><strong>¥{selectedOffer.reward}</strong><span>+{deliveryCoinReward(selectedOffer)} 外卖币</span></div>
       <div className="delivery-requirements" aria-label="配送要求">
         <span>骑行电量：需 {selectedCosts?.battery ?? 0} / 当前 {Math.round(game.bikeBattery)}</span>
         <span>车辆耐久：需 {selectedCosts?.wear ?? 0} / 当前 {Math.round(game.bike.condition)}</span>
