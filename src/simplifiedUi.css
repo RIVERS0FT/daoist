@@ -73,3 +73,38 @@
 .system-lock{color:#b08e83;font-size:.67rem;line-height:1.4}
 .system-exchange-button{width:100%;margin-top:auto}
 @media(max-width:520px){.system-shop-grid{grid-template-columns:1fr}.system-balance>strong{font-size:1.65rem}.system-item p{min-height:0}}
+
+
+/* System story, quests and achievements */
+.system-story{display:grid;gap:7px;padding:14px;border:1px solid #554b36;border-radius:12px;background:linear-gradient(135deg,#1f1d16,#171b16)}
+.system-story h3{margin:0;font-family:Georgia,"Songti SC",serif;font-size:1.05rem;color:#ded2aa}
+.system-story>p{margin:0;color:#aeb4a6;font-size:.75rem;line-height:1.7}
+.system-story-history{margin-top:4px;border-top:1px solid #3a3c31;padding-top:7px}
+.system-story-history summary{cursor:pointer;color:#a59d82;font-size:.68rem}
+.system-story-history ol{display:grid;gap:6px;margin:9px 0 0;padding-left:18px}
+.system-story-history li{color:#8f9687;font-size:.68rem}
+.system-story-history li strong,.system-story-history li span{display:block}
+.system-story-history li strong{color:#c4bea8}.system-story-history li span{margin-top:2px}
+.system-section{border:1px solid #3b4938;border-radius:11px;background:#141b15;overflow:hidden}
+.system-section>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:12px 13px;list-style:none;color:#d9d4bf;font-size:.78rem}
+.system-section>summary::-webkit-details-marker{display:none}
+.system-section>summary span{color:#8f9b89;font-size:.66rem;font-weight:400}
+.system-section[open]>summary{border-bottom:1px solid #334031;background:#19221a}
+.system-task-list{display:grid;gap:8px;padding:10px}
+.system-task{display:grid;gap:8px;padding:11px;border:1px solid #344033;border-radius:9px;background:#101611}
+.system-task.complete{border-color:#655c3d;background:#171910}.system-task.claimed{opacity:.7}
+.system-task-head{display:flex;align-items:start;justify-content:space-between;gap:10px}
+.system-task-head h3{margin:0 0 4px;font-size:.82rem;color:#d8d1bb}
+.system-task-head p{margin:0;color:#929c8e;font-size:.68rem;line-height:1.5}
+.system-task-head>strong{flex:0 0 auto;color:#b8aa75;font-size:.65rem;font-weight:600;text-align:right}
+.system-task-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:7px;border-top:1px solid #2e382d}
+.system-task-foot span{color:#9da690;font-size:.66rem}
+.system-task-foot button{min-width:70px;padding:6px 9px;color:#e2dcc8;background:#242c21;border:1px solid #4c5946;border-radius:7px;cursor:pointer;font-size:.68rem}
+.system-task-foot button:disabled{cursor:not-allowed;opacity:.48}
+.system-shop>.system-note{padding:10px 12px 0}
+.system-shop>.system-shop-grid{padding:10px}
+@media(max-width:520px){
+  .system-task-head{display:grid}
+  .system-task-head>strong{text-align:left}
+  .system-task-foot{align-items:flex-start}
+}
