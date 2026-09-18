@@ -6,6 +6,7 @@ import { EVENT_MAP } from '../game/content';
 import { availableEndings, ENDING_MAP } from '../game/endings';
 import { breakthroughCost, formatTime, realmName, RENT } from '../game/engine';
 import { NPC_MAP, NPCS, relationshipLabel, relationshipScore } from '../game/npcs';
+import { deliveryCoinReward } from '../game/system';
 import { useGameStore } from '../game/store';
 import type { GameAction, GameState, NpcId, NumericStatKey } from '../game/types';
 
@@ -74,7 +75,7 @@ export function CharacterPanel() {
   return <section className="panel stats-panel">
     <div className="section-heading"><h3>角色状态</h3><span>{realmName(game.realmLevel)}</span></div><div className="money">¥{game.money}</div>
     <StatBar label="精力" value={game.energy} danger={game.energy < 25} /><StatBar label="健康" value={game.health} danger={game.health < 35} /><StatBar label="压力" value={game.stress} danger={game.stress > 70} /><StatBar label="电量" value={game.bikeBattery} max={bikeStats(game.bike).capacity} suffix={` / ${bikeStats(game.bike).capacity}`} danger={game.bikeBattery < 20} />
-    <div className="mini-grid">{[['灵气', game.qi], ['悟性', game.insight], ['信誉', game.reputation], ['因果', game.karma], ['阴气', game.darkQi], ['完成订单', game.completedOrders]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    <div className="mini-grid">{[['灵气', game.qi], ['外卖币', game.deliveryCoins], ['悟性', game.insight], ['信誉', game.reputation], ['因果', game.karma], ['阴气', game.darkQi], ['完成订单', game.completedOrders]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
     <div className={`rent-box ${rentDays <= 2 ? 'urgent' : ''}`}><span>房租 ¥{RENT}</span><strong>{rentDays >= 0 ? `${rentDays} 天后` : '已逾期'}</strong></div>
   </section>;
 }
@@ -86,11 +87,11 @@ export function DeliveryPanel() {
   return <section className="panel action-panel">
     <p className="delivery-location">当前位置：{playerMapPoint(game.position).name}</p>
     {reason && <p className="play-warning" role="alert">{reason}</p>}
-    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单' : '配送中'}</div><h3>{order.merchant} → {order.customer}</h3><p>取餐与送达合并为一次配送执行。</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(order, game.bike)} 分钟</span><span>¥{order.reward}</span></div>
+    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单' : '配送中'}</div><h3>{order.merchant} → {order.customer}</h3><p>取餐与送达合并为一次配送执行。</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(order, game.bike)} 分钟</span><span>¥{order.reward}</span><span>+{deliveryCoinReward(order)} 外卖币</span></div>
       <ActionButton action="complete-order" title="执行配送" meta={`含取餐与送达 · 骑行 · 电量 -${costs?.battery} · 耐久 -${costs?.wear}`} disabled={disabled || Boolean(reason)} />
       <div className="delivery-recovery"><ActionButton action="push-order" title="推车完成配送" meta={`${foot.minutes} 分钟 · 精力 -${foot.energy} · 收入 ¥${foot.income}`} disabled={disabled || game.energy < foot.energy} /><ActionButton action="cancel-order" title="取消当前订单" meta="5 分钟 · 信誉 -2" disabled={disabled} /></div>
     </div> : <div className="delivery-map-only"><div className="eyebrow">地图配送</div><h3>从地图选择配送任务</h3><p>返回地图，点击标有“单”的配送任务点查看距离、收入、电量与耐久要求；确认后直接完成配送。</p></div>}
-    <div className="info-row"><span>已完成 {game.completedOrders} 单</span><span>累计 ¥{game.totalIncome}</span></div>
+    <div className="info-row"><span>已完成 {game.completedOrders} 单</span><span>累计 ¥{game.totalIncome}</span><span>外卖币 {game.deliveryCoins}</span></div>
     <BikePanel />
   </section>;
 }
