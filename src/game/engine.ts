@@ -28,6 +28,7 @@ export function migrateGameState(raw: unknown): GameState | null {
   const source = raw as Record<string, unknown>;
   if (source.version !== 1 && source.version !== 2) return null;
   const seed = typeof source.seed === 'number' ? source.seed : 0x5a17d311;
+  if (source.deliveryCoins !== undefined && (typeof source.deliveryCoins !== 'number' || !Number.isSafeInteger(source.deliveryCoins) || source.deliveryCoins < 0 || source.deliveryCoins > 999999)) return null;
   const base = createInitialState(seed);
   const bike = normalizeBike(source.bike);
   const position = normalizePosition(source.position);
