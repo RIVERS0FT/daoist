@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { deliveryCosts, deliveryEstimate } from '../game/bike';
 import { deliveryOffers } from '../game/deliveryBoard';
+import { deliveryCoinReward } from '../game/system';
 import { clusterLandmarks } from '../game/mapCamera';
 import { createMapController } from '../map/controller';
 import type { MapController, CameraStatus } from '../map/controller';
@@ -93,7 +94,7 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
         </button>; })}
         {offers.map((offer) => {
           const point = orderMapPoints(offer).dropoff;
-          return <button type="button" key={offer.id} className={`map-pin delivery-pin offer ${selectedOfferId === offer.id ? 'selected' : ''}`} data-offer-id={offer.id} data-location-id={point.id} data-map-x={point.x} data-map-y={point.y} data-testid="delivery-offer" style={{ left: point.x, top: point.y }} aria-label={`配送任务：${offer.merchant} 到 ${point.name}，${offer.distanceKm.toFixed(1)} 公里，收入 ${offer.reward} 元`} onClick={() => setSelectedOfferId(offer.id)}>
+          return <button type="button" key={offer.id} className={`map-pin delivery-pin offer ${selectedOfferId === offer.id ? 'selected' : ''}`} data-offer-id={offer.id} data-location-id={point.id} data-map-x={point.x} data-map-y={point.y} data-testid="delivery-offer" style={{ left: point.x, top: point.y }} aria-label={`配送任务：${offer.merchant} 到 ${point.name}，${offer.distanceKm.toFixed(1)} 公里，收入 ${offer.reward} 元，外卖币 ${deliveryCoinReward(offer)} 枚`} onClick={() => setSelectedOfferId(offer.id)}>
             <span className="pin-emblem"><b className="route-pin">单</b></span><strong>{point.name}</strong><small>{point.district} · ¥{offer.reward}</small>
           </button>;
         })}
@@ -108,7 +109,7 @@ export function CityMap({ order, position, selected, panelOpen, onPlace, onOrder
       <span className="eyebrow">{selectedOffer.strange ? '异常配送任务' : '配送任务'}</span>
       <h3>{selectedOffer.customer}</h3>
       <p className="delivery-offer-merchant">取餐 {selectedOffer.merchant} · 取餐已并入配送执行</p>
-      <div className="delivery-offer-meta"><span>{selectedOffer.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(selectedOffer, game.bike)} 分钟</span><strong>¥{selectedOffer.reward}</strong></div>
+      <div className="delivery-offer-meta"><span>{selectedOffer.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(selectedOffer, game.bike)} 分钟</span><strong>¥{selectedOffer.reward}</strong><span>+{deliveryCoinReward(selectedOffer)} 外卖币</span></div>
       <div className="delivery-requirements" aria-label="配送要求">
         <span>骑行电量：需 {selectedCosts?.battery ?? 0} / 当前 {Math.round(game.bikeBattery)}</span>
         <span>车辆耐久：需 {selectedCosts?.wear ?? 0} / 当前 {Math.round(game.bike.condition)}</span>
