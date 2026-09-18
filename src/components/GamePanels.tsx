@@ -4,11 +4,12 @@ import { bikeStats, deliveryCosts, deliveryEstimate, pushingCosts, ridingBlockRe
 import { BikePanel } from './BikePanel';
 import { EVENT_MAP } from '../game/content';
 import { availableEndings, ENDING_MAP } from '../game/endings';
-import { breakthroughCost, formatTime, realmName, RENT } from '../game/engine';
+import { breakthroughCost, formatTime, gameActionPlan, realmName, RENT, socializePlan } from '../game/engine';
 import { NPC_MAP, NPCS, relationshipLabel, relationshipScore } from '../game/npcs';
 import { deliveryCoinReward } from '../game/system';
 import { useGameStore } from '../game/store';
 import type { GameAction, GameState, NpcId, NumericStatKey } from '../game/types';
+import { deliveryRouteDistanceKm } from '../game/travel';
 
 function useExplorationBusy() { return useGameStore((s) => Boolean(s.play.pending || s.play.scene || s.game.cultivation.trial || s.loadBlocked || s.slotBusy)); }
 export function StatBar({ label, value, max = 100, suffix = '', danger = false }: { label: string; value: number; max?: number; suffix?: string; danger?: boolean }) {
@@ -51,7 +52,7 @@ export function RelationshipsPanel({ npcId }: { npcId?: NpcId }) {
         <p className="npc-bio">{relationship.met ? npc.shortBio : npc.storyHint}</p>
         {relationship.met ? <><div className="relationship-score"><span>关系</span><strong>{relationshipScore(relationship)}</strong></div>
           <div className="relationship-metrics"><span>好感 {relationship.affinity}</span><span>信任 {relationship.trust}</span><span>羁绊 {relationship.bond}</span><span>情感 {relationship.romance}</span></div>
-          <button className="social-button" type="button" disabled={busy} onClick={() => socialize(npc.id)}>联系 / 见面 <small>45 分钟</small></button>
+          <button className="social-button" type="button" disabled={busy} onClick={() => socialize(npc.id)}>联系 / 见面 <small>{socializePlan(game, npc.id).totalMinutes} 分钟 · 路程 {socializePlan(game, npc.id).distanceKm.toFixed(1)} km</small></button>
         </> : <div className="npc-unknown">尚未相遇</div>}
       </article>;
     })}</div>
@@ -82,13 +83,15 @@ export function CharacterPanel() {
 export function DeliveryPanel() {
   const game = useGameStore((s) => s.game);
   const disabled = Boolean(game.pendingEventId) || game.gameOver;
-  const order = game.activeOrder, reason = order ? ridingBlockReason(game) : null, foot = pushingCosts(game);
-  const costs = order ? deliveryCosts(order, game.bike) : null;
+  const order = game.activeOrder, routeDistance = order ? deliveryRouteDistanceKm(game, order) : 0;
+  const reason = order ? ridingBlockReason(game, routeDistance) : null, foot = pushingCosts(game, routeDistance);
+  const costs = order ? deliveryCosts(order, game.bike, routeDistance) : null;
+  const rideMinutes = order ? deliveryEstimate(order, game.bike, routeDistance, game.weather, game.energy) : 0;
   return <section className="panel action-panel">
     <p className="delivery-location">当前位置：{playerMapPoint(game.position).name}</p>
     {reason && <p className="play-warning" role="alert">{reason}</p>}
-    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单' : '配送中'}</div><h3>{order.merchant} → {order.customer}</h3><p>取餐与送达合并为一次配送执行。</p><div className="order-meta"><span>{order.distanceKm.toFixed(1)} km</span><span>约 {deliveryEstimate(order, game.bike)} 分钟</span><span>¥{order.reward}</span><span>+{deliveryCoinReward(order)} 外卖币</span></div>
-      <ActionButton action="complete-order" title="执行配送" meta={`含取餐与送达 · 骑行 · 电量 -${costs?.battery} · 耐久 -${costs?.wear}`} disabled={disabled || Boolean(reason)} />
+    {order ? <div className={`order-card ${order.strange ? 'strange' : ''}`}><div className="eyebrow">{order.strange ? '异常订单' : '配送中'}</div><h3>{order.merchant} → {order.customer}</h3><p>取餐与送达合并为一次配送执行，路程从你当前地图位置起算。</p><div className="order-meta"><span>{routeDistance.toFixed(1)} km</span><span>约 {rideMinutes} 分钟</span><span>¥{order.reward}</span><span>+{deliveryCoinReward(order, routeDistance)} 外卖币</span></div>
+      <ActionButton action="complete-order" title="执行配送" meta={`地图路程 ${routeDistance.toFixed(1)} km · ${rideMinutes} 分钟 · 电量 -${costs?.battery} · 耐久 -${costs?.wear}`} disabled={disabled || Boolean(reason)} />
       <div className="delivery-recovery"><ActionButton action="push-order" title="推车完成配送" meta={`${foot.minutes} 分钟 · 精力 -${foot.energy} · 收入 ¥${foot.income}`} disabled={disabled || game.energy < foot.energy} /><ActionButton action="cancel-order" title="取消当前订单" meta="5 分钟 · 信誉 -2" disabled={disabled} /></div>
     </div> : <div className="delivery-map-only"><div className="eyebrow">地图配送</div><h3>从地图选择配送任务</h3><p>返回地图，点击标有“单”的配送任务点查看距离、收入、电量与耐久要求；确认后直接完成配送。</p></div>}
     <div className="info-row"><span>已完成 {game.completedOrders} 单</span><span>累计 ¥{game.totalIncome}</span><span>外卖币 {game.deliveryCoins}</span></div>
@@ -98,8 +101,9 @@ export function DeliveryPanel() {
 export function LifePanel() {
   const game = useGameStore((s) => s.game);
   const disabled = Boolean(game.pendingEventId) || game.gameOver;
+  const eat = gameActionPlan(game, 'eat'), rest = gameActionPlan(game, 'rest'), sleep = gameActionPlan(game, 'sleep'), charge = gameActionPlan(game, 'charge-bike');
   return <section className="panel"><div className="action-grid">
-    <ActionButton action="eat" title="吃顿热饭" meta="30 分钟 · ¥18" disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta="60 分钟 · 恢复精力" disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta="360 分钟 · 大幅恢复" disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta={`18 分钟 · ¥6 · 补满至 ${bikeStats(game.bike).capacity}`} disabled={disabled || game.money < 6 || game.bikeBattery >= bikeStats(game.bike).capacity} />
+    <ActionButton action="eat" title="吃顿热饭" meta={`${eat.totalMinutes} 分钟 · 路程 ${eat.distanceKm.toFixed(1)} km · ¥18`} disabled={disabled || game.money < 18} /><ActionButton action="rest" title="休息一下" meta={`${rest.totalMinutes} 分钟 · 路程 ${rest.distanceKm.toFixed(1)} km`} disabled={disabled} /><ActionButton action="sleep" title="睡六小时" meta={`${sleep.totalMinutes} 分钟 · 路程 ${sleep.distanceKm.toFixed(1)} km`} disabled={disabled} /><ActionButton action="charge-bike" title="换电" meta={`${charge.totalMinutes} 分钟 · 路程 ${charge.distanceKm.toFixed(1)} km · ¥6 · 补满至 ${bikeStats(game.bike).capacity}`} disabled={disabled || game.money < 6 || game.bikeBattery >= bikeStats(game.bike).capacity} />
   </div><div className="rent-box"><span>房租 ¥{RENT}</span><strong>第 {game.rentDueDay} 天到期</strong></div></section>;
 }
 export function JournalPanel() {
