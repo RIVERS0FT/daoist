@@ -31,7 +31,7 @@ export function SystemPanel() {
 
   return <section className="panel system-panel">
     <div className="system-balance">
-      <div><span className="eyebrow">配送修仙系统 · 阶段 {story.unlocked}</span><h3>外卖币 {game.deliveryCoins}</h3></div>
+      <div><span className="eyebrow">配送修仙系统 · 阶段 {story.unlocked}</span><h3>系统中枢</h3></div>
       <strong>{game.deliveryCoins}<small> 币</small></strong>
     </div>
 
