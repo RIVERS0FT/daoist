@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const { createInitialState, runAction, migrateGameState } = require('../.test-dist/engine.js');
 const { createSession, migrateSession } = require('../.test-dist/play.js');
 const { bikeStats, deliveryCosts, pushingCosts, ridingBlockReason, MAX_BIKE_LEVEL, BIKE_UPGRADES, upgradeCost } = require('../.test-dist/bike.js');
+const { deliveryRouteDistanceKm } = require('../.test-dist/travel.js');
 function delivery() {
   const s = createInitialState(5678);
   s.activeOrder = { id: 'test-order', merchant: '老王牛肉面', customer: '幸福家园', distanceKm: 5, reward: 30, estimatedMinutes: 40, acceptedAtDay: 1, acceptedAtMinute: 420, strange: false };
@@ -20,11 +21,11 @@ test('zero battery blocks both accepting and riding without changing time, RNG, 
 });
 test('battery and durability must cover the entire ride; exact boundaries consume to zero', () => {
   for (const kind of ['battery', 'wear']) {
-    const s = delivery(), cost = deliveryCosts(s.activeOrder, s.bike);
+    const s = delivery(), distance = deliveryRouteDistanceKm(s, s.activeOrder), cost = deliveryCosts(s.activeOrder, s.bike, distance);
     if (kind === 'battery') s.bikeBattery = cost.battery - 0.1; else s.bike.condition = cost.wear - 0.1;
-    assert.strictEqual(runAction(s, 'complete-order'), s); assert.ok(ridingBlockReason(s));
+    assert.strictEqual(runAction(s, 'complete-order'), s); assert.ok(ridingBlockReason(s, distance));
   }
-  const s = delivery(), cost = deliveryCosts(s.activeOrder, s.bike);
+  const s = delivery(), distance = deliveryRouteDistanceKm(s, s.activeOrder), cost = deliveryCosts(s.activeOrder, s.bike, distance);
   s.bikeBattery = cost.battery; s.bike.condition = cost.wear;
   const next = runAction(s, 'complete-order');
   assert.equal(next.bikeBattery, 0); assert.equal(next.bike.condition, 0); assert.equal(next.completedOrders, 1);
@@ -33,7 +34,7 @@ test('battery and durability must cover the entire ride; exact boundaries consum
 });
 test('pushing is an explicit, slower stamina-paid recovery and never rides on empty', () => {
   const s = delivery(); s.bikeBattery = 0; s.bike.condition = 0;
-  const cost = pushingCosts(s), next = runAction(s, 'push-order');
+  const cost = pushingCosts(s, deliveryRouteDistanceKm(s, s.activeOrder)), next = runAction(s, 'push-order');
   assert.equal(next.minute, s.minute + cost.minutes); assert.equal(next.energy, s.energy - cost.energy);
   assert.equal(next.bikeBattery, 0); assert.equal(next.bike.condition, 0); assert.equal(next.completedOrders, 1);
   assert.equal(next.money, s.money + cost.income);
