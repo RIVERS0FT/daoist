@@ -1,4 +1,4 @@
-# Architecture v0.9
+# Architecture v0.10
 
 ## Stack and module boundaries
 
@@ -6,7 +6,8 @@ React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub A
 
 - `types.ts`, `engine.ts`: the v2 world plus versioned vehicle, position and cultivation data; deterministic actions, one game clock, resource limits, vehicles and authored events.
 - `deliveryBoard.ts`: derived deterministic delivery candidates for the current world and exact one-action map delivery dispatch; there is no separate acceptance transition. It does not add a save schema and never sends candidate data to AI.
-- `cultivation.ts`: manuals, items, recipes, preparation, breakthrough previews/settlement and the inner foundation trial. Receives the clock as an argument, avoiding engine cycles. Exact rules live in `CULTIVATION.md`.
+- `cultivation.ts`: manuals, items, recipes, preparation, breakthrough previews/settlement and the inner foundation trial.
+- `system.ts`: deterministic delivery-coin rewards and the allowlisted exchange catalog. It reuses cultivation item IDs, advances the shared game clock through an injected function, and never depends on React or AI. Receives the clock as an argument, avoiding engine cycles. Exact rules live in `CULTIVATION.md`.
 - `events.ts`, `npcEvents.ts`, `content.ts`, `npcs.ts`, `endings.ts`: data-driven story choices, relationship routes, eligibility, weights, repeat suppression and canonical endings. No story rules in React.
 - `generation.ts`, `play.ts`: allowlisted AI action profiles, strict scene validation, authored fallback, session transitions, memories and migration.
 - `store.ts`: the only UI write entry. Owns slot identity, pending locks, request cancellation and serial autosave. Map offer execution enters through `deliverDeliveryOffer(offerId)`; `cultivate` waits for the preceding save before accepting another costly command.
@@ -20,7 +21,7 @@ React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub A
 Current format:
 
 ```ts
-PlaySession = { version: 5, game: GameState /* v2 + bike + position + cultivation */, play: PlayState }
+PlaySession = { version: 5, game: GameState /* v2 + bike + position + cultivation + deliveryCoins */, play: PlayState }
 SaveSlot = { version: 1, id, name, createdAt, updatedAt, revision, session: PlaySession }
 ```
 
@@ -30,7 +31,7 @@ Delivery-board candidates are intentionally not persisted. They are a pure local
 
 The first legacy import atomically creates `slot:legacy-autosave` and `meta:legacy-import`; the original `autosave` remains untouched. Before the first write upgrading an existing pre-v5 slot, the same transaction adds its exact raw record at `backup:pre-v5:<id>` if absent, then writes the upgraded slot. Later writes never overwrite this backup. Unknown slots remain visible as protected entries.
 
-Old worlds retain money, time, RNG seed, orders, vehicle upgrades, location, NPC relationships, flags and endings. Missing positions start at the station, never a guessed historical address. Missing cultivation gets the baseline manual with proficiency appropriate to the existing realm; no rare items or invented history. Stable IDs must never be renamed or reused. The v5 envelope causes older clients to reject new data rather than silently discard fields.
+Old worlds retain money, time, RNG seed, orders, vehicle upgrades, location, NPC relationships, flags and endings. Missing `deliveryCoins` migrates additively to 0; a present balance must be a bounded non-negative safe integer or the save is rejected rather than normalized silently. Missing positions start at the station, never a guessed historical address. Missing cultivation gets the baseline manual with proficiency appropriate to the existing realm; no rare items or invented history. Stable IDs must never be renamed or reused. The v5 envelope causes older clients to reject new data rather than silently discard fields.
 
 Each state transition captures the slot ID and queues a write. Every transaction checks the expected revision and immutable story mode, preventing delayed writes or another tab from overwriting newer progress. A save is successful only after transaction completion; database connections close afterward. Temporary errors retry automatically with a global warning. Conflicts/future schemas stop writing. Returning to the start page waits for pending saves; unsaved memory changes may be discarded only after explicit confirmation, without deleting disk data.
 
@@ -43,6 +44,14 @@ Exploration pays 15 minutes and 2 energy before requesting a scene. Classic mode
 The network gate combines AbortController and revision tickets. Menu return, slot changes or configuration changes abort pending work and invalidate late results; a result must match both slot and request ID. HTTP timeouts are 20 seconds, responses at most 32 KiB, no automatic network retries, no redirecting tokens, credentials omitted and no referrer. All model prose renders as text. Fallback is visibly authored, never labelled model success.
 
 The relay owns provider keys, upstream URL, authentication, exact allowed origins, concurrency and budgets. Browser settings contain only public relay URL and consent; the optional access token stays in page memory. Neither save data nor source contains provider credentials. Minimal fictional requests contain time/weather/realm, optional known non-estranged NPC context and recent scene memories, never coordinates, cultivation inventory, full logs, delivery-board candidates or real personal information. v0.8 only expands the relay's allowed realmLevel to 10; an old relay rejecting foundation requests still leads to visible authored fallback.
+
+## Delivery cultivation system
+
+`completeDelivery` is the only delivery settlement point that grants delivery coins, so map one-action jobs, restored legacy jobs and explicit pushing share one rule. Reward is deterministic from the committed order: `min(4, 1 + floor(distanceKm / 3) + strangeBonus)`. Coins are awarded only after delivery time completes and survival is confirmed, alongside money, order count and position; rejected, cancelled or fatal attempts receive none.
+
+`system.ts` owns the exchange catalog, unlock counts, inventory-cap checks and settlement. `store.ts.exchangeSystemItem(id)` is the only UI write entry and persists through the normal serial autosave. Each valid exchange pays coins before advancing five game minutes; if the shared clock ends the run during that time, no item is awarded. The exchange catalog only grants existing cultivation inventory IDs and cannot change routes, flags, realm or AI state.
+
+Delivery coins are intentionally excluded from `NumericStatKey`, AI profiles and generation payloads. Neither authored event effects nor model output can mint or spend them.
 
 ## Cultivation and time
 
@@ -75,6 +84,8 @@ Only the map surface sets `touch-action: none` and uses a non-passive wheel hand
 Player restore starts focused and following. Manual gestures, wheel zoom or keyboard panning pause follow; Locate Player resumes it. Gameplay arrival moves the camera only while following. Camera state is temporary, not saved, and cannot alter game time, RNG or position.
 
 ## Verification and delivery
+
+System regression covers deterministic coin rewards, no reward on failed delivery, additive legacy migration, malformed-balance protection, unlock/insufficient/cap rejection, five-minute exchange settlement, autosave persistence and the 320px system panel.
 
 Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus cultivation/gesture/delivery-board flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, exact one-action map delivery, task refresh after actions, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
 
