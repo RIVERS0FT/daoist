@@ -3,8 +3,7 @@ import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
 import { deliverDeliveryOffer as deliverMapDeliveryOffer } from './deliveryBoard';
-import { advanceTime, runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
-import { redeemSystemExchange } from './system';
+import { runCultivationAction, resolveEventChoice, runAction, runSystemExchange, selectEnding, socializeNpc } from './engine';
 import type { SystemExchangeId } from './system';
 import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
@@ -25,9 +24,9 @@ interface GameStore {
   flushSaves: () => Promise<void>;
   initAiSettings: (defaultEndpoint?: string) => void;
   configureAi: (settings: AiSettings, relayToken: string) => void;
-  explore: (focus: SceneFocus, npcId?: NpcId, intent?: string) => Promise<void>;
+  explore: (focus: SceneFocus, npcId?: NpcId, intent?: string, preferred?: string | null) => Promise<void>;
   fallback: () => void; testAi: () => Promise<void>;
-  cultivate: (command: CultivationCommand) => void;
+  cultivate: (command: CultivationCommand, preferred?: string | null) => void;
   deliverDeliveryOffer: (offerId: string) => void;
   exchangeSystemItem: (id: SystemExchangeId) => void;
   act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
@@ -143,9 +142,9 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
           set({ aiSettings: next, aiStatus: 'idle', aiMessage: stored ? '接入配置已保存。访问口令只在本次页面会话有效。' : '配置仅在当前页面有效：浏览器禁用了本机设置存储。' });
         } catch (error) { set({ aiStatus: 'error', aiMessage: error instanceof Error ? error.message : '设置无效。' }); }
       },
-      explore: async (focus, npcId, intent = '') => {
+      explore: async (focus, npcId, intent = '', preferred = null) => {
         if (!canAct()) return;
-        const before = session(), started = beginExploration(before, focus, npcId, intent);
+        const before = session(), started = beginExploration(before, focus, npcId, intent, preferred);
         if (started === before) { set({ aiStatus: 'error', aiMessage: '暂时无法探索：请完成配送，保留至少 2 精力，并选择已认识且未疏远的人物。' }); return; }
         commit(started);
         if (!started.play.pending) return;
@@ -173,13 +172,13 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
           if (gate.current(ticket)) set({ aiStatus: result.ok ? 'success' : 'error', aiMessage: result.ok ? 'relay 可达且支持生成协议；实际模型结果以生成奇遇为准。' : result.error });
         } catch { if (gate.current(ticket)) set({ aiStatus: 'error', aiMessage: '连接测试失败，请检查服务配置。' }); }
       },
-      cultivate: (command) => {
+      cultivate: (command, preferred = null) => {
         const s = get();
         if (!playing() || s.saveStatus !== 'saved' || s.play.pending || s.play.scene) return;
-        commit({ ...session(), game: runCultivationAction(s.game, command) });
+        commit({ ...session(), game: runCultivationAction(s.game, command, preferred) });
       },
       deliverDeliveryOffer: (offerId) => { if (canAct()) commit({ ...session(), game: deliverMapDeliveryOffer(get().game, offerId) }); },
-      exchangeSystemItem: (id) => { if (canAct()) commit({ ...session(), game: redeemSystemExchange(get().game, id, advanceTime) }); },
+      exchangeSystemItem: (id) => { if (canAct()) commit({ ...session(), game: runSystemExchange(get().game, id) }); },
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },
       chooseEvent: (choiceId) => {
