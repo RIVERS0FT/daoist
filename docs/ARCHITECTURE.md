@@ -1,4 +1,4 @@
-# Architecture v0.12
+# Architecture v0.13
 
 ## Stack and module boundaries
 
@@ -8,7 +8,7 @@ React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub A
 - `deliveryBoard.ts`: derived deterministic delivery candidates for the current world and exact one-action map delivery dispatch; there is no separate acceptance transition. It does not add a save schema and never sends candidate data to AI.
 - `cultivation.ts`: manuals, items, recipes, preparation, breakthrough previews/settlement and the inner foundation trial.
 - `system.ts`: deterministic delivery-coin rewards, instant exchange catalog, authored system chapters, missions, achievements and fixed rewards. It reuses cultivation item IDs and namespaced `game.flags` claim markers, never advances the clock, never moves the player and never depends on React or AI.
-- `events.ts`, `npcEvents.ts`, `content.ts`, `npcs.ts`, `endings.ts`: data-driven story choices, relationship routes, eligibility, weights, repeat suppression and canonical endings. No story rules in React.
+- `events.ts`, `deliveryEvents.ts`, `npcEvents.ts`, `content.ts`, `npcs.ts`, `endings.ts`: data-driven story choices, delivery-specific multi-choice encounters, relationship routes, eligibility, weights, repeat suppression and canonical endings. No story rules in React.
 - `generation.ts`, `play.ts`: allowlisted AI action profiles, strict scene validation, authored fallback, session transitions, memories and migration.
 - `store.ts`: the only UI write entry. Owns slot identity, pending locks, request cancellation and serial autosave. Map offer execution enters through `deliverDeliveryOffer(offerId)`; `cultivate` waits for the preceding save before accepting another costly command.
 - `storage.ts`: IndexedDB transactions, revision/mode checks, migration backups and transaction-completion acknowledgement.
@@ -86,7 +86,7 @@ Player restore starts focused and following. Manual gestures, wheel zoom or keyb
 
 ## Verification and delivery
 
-Travel regression covers map-distance monotonicity, zero same-location commute, functional-position persistence, current→pickup→dropoff delivery distance and life/social/cultivation arrivals. System regression covers zero-time/zero-position exchange, chapter unlocks, one-time task/achievement claims, hidden achievement gating, inventory caps, legacy migration and autosave persistence.
+Travel regression covers map-distance monotonicity, zero same-location commute, functional-position persistence, current→pickup→dropoff delivery distance and life/social/cultivation arrivals. System regression covers zero-time/zero-position exchange, chapter unlocks, one-time task/achievement claims, hidden achievement gating, inventory caps, legacy migration and autosave persistence. Delivery-event regression validates unique IDs, at least three branches per new event, branch-specific effects, requirements, canonical registration and browser choice rendering.
 
 Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus cultivation/gesture/delivery-board flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, exact one-action map delivery, task refresh after actions, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
 
