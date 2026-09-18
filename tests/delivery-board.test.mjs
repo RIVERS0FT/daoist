@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { deliverDeliveryOffer, deliveryOffers } from '../.test-dist/deliveryBoard.js';
 import { createInitialState, runAction } from '../.test-dist/engine.js';
+import { deliveryRouteDistanceKm } from '../.test-dist/travel.js';
 
 test('delivery board is stable for the same state and exposes distinct task destinations', () => {
   const game = createInitialState(123456);
@@ -11,6 +12,7 @@ test('delivery board is stable for the same state and exposes distinct task dest
   assert.deepEqual(second, first);
   assert.equal(new Set(first.map((offer) => offer.dropoffId)).size, first.length);
   assert.ok(first.every((offer) => offer.pickupId && offer.dropoffId));
+  assert.ok(first.every((offer) => offer.distanceKm === deliveryRouteDistanceKm(game, offer)));
 });
 
 test('successful player actions refresh the visible task board', () => {
@@ -29,7 +31,7 @@ test('dispatching a map task completes that exact delivery with no separate acce
   assert.equal(next.activeOrder, null);
   assert.equal(next.completedOrders, game.completedOrders + 1);
   assert.equal(next.position.locationId, selected.dropoffId);
-  assert.ok(next.minute >= game.minute + 8);
+  assert.ok(next.minute > game.minute);
   assert.notEqual(next.minute, game.minute + 2);
   assert.ok(next.log.some((entry) => entry.text.includes(selected.customer) && entry.text.includes('送达')));
 });

@@ -1,12 +1,14 @@
 import type { CultivationCommand } from './cultivation';
-import { initialCultivation, normalizeCultivation, runCultivation, realmName, breakthroughCost } from './cultivation';
+import { cultivationPlan, initialCultivation, normalizeCultivation, runCultivation, realmName, breakthroughCost } from './cultivation';
 export { realmName, breakthroughCost } from './cultivation';
 import { DELIVERY_PICKUPS, DELIVERY_DROPOFFS, initialPosition, normalizePosition, orderMapPoints } from './deliveryLocations';
 import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstimate, initialBike, normalizeBike, pushingCosts, repairCost, ridingBlockReason, upgradeCost } from './bike';
 import { EVENT_MAP, EVENTS } from './content';
 import { ENDING_MAP } from './endings';
 import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
-import { deliveryCoinReward } from './system';
+import { deliveryCoinReward, redeemSystemExchange, systemExchangePlan } from './system';
+import type { SystemExchangeId } from './system';
+import { actionDestination, deliveryRouteDistanceFromPoints, deliveryRouteDistanceKm, npcDestination, travelPlan } from './travel';
 import type { ActionContext, BikeUpgrade, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
 const WEATHERS: Weather[] = ['clear', 'clear', 'cloudy', 'cloudy', 'rain', 'storm'];
@@ -148,6 +150,51 @@ export function advanceTime(state: GameState, minutes: number): GameState {
   return next;
 }
 
+export function gameActionPlan(state: GameState, action: GameAction) {
+  const baseMinutes = action.startsWith('upgrade-bike-') ? 45
+    : action === 'eat' ? 30 : action === 'rest' ? 60 : action === 'sleep' ? 360
+    : action === 'charge-bike' ? 18 : action === 'repair-bike' ? 30 : action === 'cancel-order' ? 5
+    : action === 'meditate-1h' ? 60 : action === 'meditate-3h' ? 180 : action === 'study' ? 90 : action === 'breakthrough' ? 240 : 0;
+  const travel = travelPlan(state, actionDestination(action));
+  return { ...travel, baseMinutes, totalMinutes: baseMinutes + travel.minutes };
+}
+
+function arriveForAction(state: GameState, destinationId: string | null): GameState {
+  const plan = travelPlan(state, destinationId);
+  if (!plan.minutes) return destinationId && state.position.locationId !== plan.destination.id
+    ? { ...state, position: { version: 1, locationId: plan.destination.id } } : state;
+  let next = advanceTime(state, plan.minutes);
+  if (next.gameOver) return next;
+  next = { ...next, position: { version: 1, locationId: plan.destination.id } };
+  return appendLog(next, `前往${plan.destination.name}：地图路程 ${plan.distanceKm.toFixed(1)} km，通勤 ${plan.minutes} 分钟。`, 'normal');
+}
+
+function cultivationDestination(command: CultivationCommand, preferred?: string | null): string | null {
+  if (command.type === 'use') return null;
+  if (command.type === 'buy' || command.type === 'learn' || command.type === 'study') return 'bookshop';
+  if (command.type === 'gather') return 'mountain';
+  if (preferred === 'mountain' || preferred === 'rooftop') return preferred;
+  return 'rooftop';
+}
+
+export function cultivationActionPlan(state: GameState, command: CultivationCommand, preferred?: string | null) {
+  const base = cultivationPlan(state, command);
+  const destinationId = cultivationDestination(command, preferred);
+  const travel = travelPlan(state, destinationId);
+  return { ...base, destinationId, destination: travel.destination, distanceKm: travel.distanceKm, travelMinutes: travel.minutes, totalMinutes: base.minutes + travel.minutes };
+}
+
+export function socializePlan(state: GameState, npcId: NpcId) {
+  const travel = travelPlan(state, npcDestination(npcId));
+  return { ...travel, baseMinutes: 45, totalMinutes: 45 + travel.minutes };
+}
+
+export function systemActionPlan(state: GameState, id: SystemExchangeId) {
+  const base = systemExchangePlan(state, id);
+  const travel = travelPlan(state, 'station');
+  return { ...base, destination: travel.destination, distanceKm: travel.distanceKm, travelMinutes: travel.minutes, totalMinutes: (base.exchange?.minutes ?? 0) + travel.minutes };
+}
+
 function setStat(state: GameState, key: NumericStatKey, delta: number): GameState {
   return { ...state, [key]: state[key] + delta } as GameState;
 }
@@ -195,21 +242,20 @@ function generateOrder(state: GameState): [DeliveryOrder, GameState] {
   const [dropoff, dropoffState] = pick(pickupState, DELIVERY_DROPOFFS);
   next = dropoffState;
   const merchant = pickup.name, customer = dropoff.name;
-  let distanceTenths: number, rewardBonus: number, timeJitter: number, strangeRoll: number;
-  [distanceTenths, next] = randomInt(next, 12, 72); [rewardBonus, next] = randomInt(next, 0, 8);
-  [timeJitter, next] = randomInt(next, 0, 12); [strangeRoll, next] = randomInt(next, 0, 99);
-  const distanceKm = distanceTenths / 10;
+  let rewardBonus: number, strangeRoll: number;
+  [rewardBonus, next] = randomInt(next, 0, 8); [strangeRoll, next] = randomInt(next, 0, 99);
+  const distanceKm = deliveryRouteDistanceFromPoints(state, pickup, dropoff);
   const phase = phaseFor(next.minute);
   const peak = phase === '午高峰' || phase === '晚高峰' ? 1.35 : 1;
   const weather = next.weather === 'storm' ? 1.45 : next.weather === 'rain' ? 1.2 : 1;
   const reward = Math.round((7 + distanceKm * 2.1 + rewardBonus) * peak * weather);
-  const estimatedMinutes = Math.round(10 + distanceKm * 4.2 + timeJitter);
+  const estimatedMinutes = Math.max(1, Math.ceil(distanceKm / 18 * 60));
   return [{ id: `${next.day}-${next.minute}-${next.seed}`, merchant, customer, pickupId: pickup.id, dropoffId: dropoff.id, distanceKm, reward, estimatedMinutes, acceptedAtDay: next.day, acceptedAtMinute: next.minute, strange: strangeRoll < (isNightMinute(next.minute) ? 14 : 4) }, next];
 }
 
 function acceptOrder(state: GameState): GameState {
   if (state.activeOrder || state.gameOver || ridingBlockReason(state)) return state;
-  let next = advanceTime(state, 2);
+  let next = state;
   let order: DeliveryOrder;
   [order, next] = generateOrder(next);
   next = { ...next, activeOrder: order };
@@ -219,27 +265,26 @@ function acceptOrder(state: GameState): GameState {
 
 export function completeDelivery(state: GameState, order: DeliveryOrder, pushing = false): GameState {
   if (state.gameOver || state.pendingEventId || state.cultivation.trial) return state;
-  const costs = deliveryCosts(order, state.bike);
+  const distanceKm = deliveryRouteDistanceKm(state, order);
+  const costs = deliveryCosts(order, state.bike, distanceKm);
   if (!pushing && (state.bikeBattery <= 0 || state.bike.condition <= 0 || state.bikeBattery < costs.battery || state.bike.condition < costs.wear)) return state;
-  const foot = pushingCosts({ ...state, activeOrder: order });
+  const foot = pushingCosts({ ...state, activeOrder: order }, distanceKm);
   if (pushing && state.energy < foot.energy) return state;
-  let next = state, variance = 0;
-  if (!pushing) [variance, next] = randomInt(next, -4, 14);
-  const weatherDelay = next.weather === 'storm' ? 10 : next.weather === 'rain' ? 5 : 0;
-  const actualMinutes = pushing ? foot.minutes : Math.max(8, deliveryEstimate(order, next.bike) + variance + weatherDelay + (next.energy < 25 ? 8 : 0));
+  const actualMinutes = pushing ? foot.minutes : deliveryEstimate(order, state.bike, distanceKm, state.weather, state.energy);
   const useLightSteps = !pushing && state.cultivation.lightSteps > 0;
-  const energyCost = pushing ? foot.energy : Math.max(1, Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18)) - (useLightSteps ? 3 : 0));
+  const energyCost = pushing ? foot.energy : Math.max(1, Math.round(distanceKm * 1.5 + actualMinutes / 18) - (useLightSteps ? 3 : 0));
   const income = pushing ? foot.income : order.reward;
-  const deliveryCoins = deliveryCoinReward(order);
-  // All requirements are checked before RNG, time, payment or order state can change.
-  next = advanceTime({ ...next, energy: Math.max(0, next.energy - energyCost),
-    bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
-    bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) },
+  const deliveryCoins = deliveryCoinReward(order, distanceKm);
+  let next = advanceTime({ ...state, energy: Math.max(0, state.energy - energyCost),
+    bikeBattery: state.bikeBattery - (pushing ? 0 : costs.battery),
+    bike: { ...state.bike, condition: state.bike.condition - (pushing ? 0 : costs.wear) },
     activeOrder: state.activeOrder?.id === order.id ? null : state.activeOrder }, actualMinutes);
   if (next.gameOver) return next;
-  next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, deliveryCoins: next.deliveryCoins + deliveryCoins, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
-    reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
-  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}，外卖币 +${deliveryCoins}。`, pushing ? 'normal' : 'good');
+  next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation,
+    position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, deliveryCoins: next.deliveryCoins + deliveryCoins,
+    totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
+    reputation: next.reputation + (pushing ? 0 : 1), stress: next.stress + (pushing ? 3 : -1) };
+  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：地图路程 ${distanceKm.toFixed(1)} km，耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}，外卖币 +${deliveryCoins}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
 }
 
@@ -252,17 +297,30 @@ function upgradeBike(state: GameState, id: BikeUpgrade): GameState {
   if (!BIKE_UPGRADES.some((item) => item.id === id) || state.bike[id] >= MAX_BIKE_LEVEL) return state;
   const cost = upgradeCost(state.bike, id);
   if (state.money < cost) return state;
-  const next = advanceTime({ ...state, money: state.money - cost }, 45);
+  let next = arriveForAction(state, 'station');
+  if (next.gameOver || next.money < cost) return next;
+  next = advanceTime({ ...next, money: next.money - cost }, 45);
   if (next.gameOver) return next;
   return appendLog({ ...next, bike: { ...next.bike, [id]: next.bike[id] + 1 } },
-    `电动车${BIKE_UPGRADES.find((item) => item.id === id)!.label}升至 ${next.bike[id] + 1} 级：¥${cost}，45 分钟。升级不自动充电或维修。`, 'good');
+    `电动车${BIKE_UPGRADES.find((item) => item.id === id)!.label}升至 ${next.bike[id] + 1} 级：¥${cost}，施工 45 分钟。`, 'good');
 }
 
-export function runCultivationAction(state: GameState, command: CultivationCommand): GameState {
-  const next = runCultivation(state, command, advanceTime, value => maybeTriggerEvent(value, 'cultivation', .28));
-  return next !== state && command.type === 'study' ? maybeTriggerEvent(next, 'cultivation', .3) : next;
+export function runCultivationAction(state: GameState, command: CultivationCommand, preferred?: string | null): GameState {
+  const plan = cultivationPlan(state, command);
+  if (plan.reason) return state;
+  const destinationId = cultivationDestination(command, preferred);
+  let arrived = arriveForAction(state, destinationId);
+  if (arrived.gameOver) return arrived;
+  const next = runCultivation(arrived, command, advanceTime, value => maybeTriggerEvent(value, 'cultivation', .28));
+  return next !== arrived && command.type === 'study' ? maybeTriggerEvent(next, 'cultivation', .3) : next;
 }
 
+export function runSystemExchange(state: GameState, id: SystemExchangeId): GameState {
+  if (systemExchangePlan(state, id).reason) return state;
+  const arrived = arriveForAction(state, 'station');
+  if (arrived.gameOver) return arrived;
+  return redeemSystemExchange(arrived, id, advanceTime);
+}
 export function runAction(state: GameState, action: GameAction): GameState {
   if (state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   if (action.startsWith('upgrade-bike-')) return upgradeBike(state, action.slice(13) as BikeUpgrade);
@@ -273,37 +331,45 @@ export function runAction(state: GameState, action: GameAction): GameState {
     case 'push-order': return completeOrder(next, true);
     case 'cancel-order':
       if (!next.activeOrder) return next;
-      return appendLog(clampState(advanceTime({ ...next, activeOrder: null, reputation: next.reputation - 2, stress: next.stress + 2 }, 5)), '已取消配送：5 分钟，信誉 -2。', 'bad');
+      return appendLog(clampState(advanceTime({ ...next, activeOrder: null, reputation: next.reputation - 2, stress: next.stress + 2 }, 5)), '已取消配送：处理耗时 5 分钟，信誉 -2。', 'bad');
     case 'eat':
       if (next.money < 18) return appendLog(next, '余额不足，连一顿像样的饭都买不起。', 'bad');
-      next = advanceTime(next, 30);
-      next = { ...next, money: next.money - 18, energy: next.energy + 22, health: next.health + 4, stress: next.stress - 5 };
-      next = appendLog(clampState(next), '吃了一顿热饭，精神恢复了一些。', 'good');
+      next = arriveForAction(next, 'noodles'); if (next.gameOver || next.money < 18) return next;
+      next = advanceTime({ ...next, money: next.money - 18 }, 30);
+      if (next.gameOver) return next;
+      next = { ...next, energy: next.energy + 22, health: next.health + 4, stress: next.stress - 5 };
+      next = appendLog(clampState(next), '在老城食街吃了一顿热饭，精神恢复了一些。', 'good');
       return maybeTriggerEvent(next, 'life', 0.18);
     case 'rest':
-      next = advanceTime(next, 60); next = { ...next, energy: next.energy + 24, stress: next.stress - 10 };
-      next = appendLog(clampState(next), '休息一小时，脑子终于没那么紧绷。', 'good'); return maybeTriggerEvent(next, 'life', 0.2);
+      next = arriveForAction(next, 'home'); if (next.gameOver) return next;
+      next = advanceTime(next, 60); if (next.gameOver) return next;
+      next = { ...next, energy: next.energy + 24, stress: next.stress - 10 };
+      next = appendLog(clampState(next), '回到出租屋休息一小时，脑子终于没那么紧绷。', 'good'); return maybeTriggerEvent(next, 'life', 0.2);
     case 'sleep':
-      next = advanceTime(next, 360); next = { ...next, energy: next.energy + 62, health: next.health + 8, stress: next.stress - 16 };
-      next = appendLog(clampState(next), '睡了六小时。城市没有因为你休息而停下来。', 'good'); return maybeTriggerEvent(next, 'life', 0.22);
+      next = arriveForAction(next, 'home'); if (next.gameOver) return next;
+      next = advanceTime(next, 360); if (next.gameOver) return next;
+      next = { ...next, energy: next.energy + 62, health: next.health + 8, stress: next.stress - 16 };
+      next = appendLog(clampState(next), '回到出租屋睡了六小时。城市没有因为你休息而停下来。', 'good'); return maybeTriggerEvent(next, 'life', 0.22);
     case 'charge-bike': {
       if (next.money < 6 || next.bikeBattery >= bikeStats(next.bike).capacity) return next;
+      next = arriveForAction(next, 'charge'); if (next.gameOver || next.money < 6) return next;
       next = advanceTime({ ...next, money: next.money - 6 }, 18);
       if (next.gameOver) return next;
       next = { ...next, bikeBattery: bikeStats(next.bike).capacity };
-      return appendLog(clampState(next), '换上满电电池，电量已补满至当前容量上限。', 'good');
+      return appendLog(clampState(next), '在南街换电柜换上满电电池。', 'good');
     }
     case 'repair-bike': {
       const cost = repairCost(next.bike);
       if (!cost || next.money < cost) return next;
+      next = arriveForAction(next, 'station'); if (next.gameOver || next.money < cost) return next;
       next = advanceTime({ ...next, money: next.money - cost }, 30);
       if (next.gameOver) return next;
-      return appendLog({ ...next, bike: { ...next.bike, condition: bikeStats(next.bike).maxCondition } }, `电动车已修好：¥${cost}，30 分钟，耐久补满。`, 'good');
+      return appendLog({ ...next, bike: { ...next.bike, condition: bikeStats(next.bike).maxCondition } }, `在骑手驿站修好电动车：¥${cost}，维修 30 分钟，耐久补满。`, 'good');
     }
     case 'meditate-1h': return runCultivationAction(next, { type: 'meditate', hours: 1 });
     case 'meditate-3h': return runCultivationAction(next, { type: 'meditate', hours: 3 });
     case 'study': return runCultivationAction(next, { type: 'study' });
-    case 'breakthrough': return runCultivation(next, { type: 'breakthrough', strategy: 'steady', aid: false }, advanceTime);
+    case 'breakthrough': return runCultivationAction(next, { type: 'breakthrough', strategy: 'steady', aid: false });
     default: return state;
   }
 }
@@ -312,9 +378,12 @@ export function socializeNpc(state: GameState, npcId: NpcId): GameState {
   if (state.pendingEventId || state.gameOver || state.activeOrder || state.cultivation.trial) return state;
   const current = state.relationships[npcId];
   if (!current?.met) return appendLog(state, '你们还没有真正认识，暂时没有联系方式。', 'normal');
-  let next = advanceTime(state, 45);
+  let next = arriveForAction(state, npcDestination(npcId));
+  if (next.gameOver) return next;
+  next = advanceTime(next, 45);
+  if (next.gameOver) return next;
   next = { ...next, energy: next.energy - 3, stress: next.stress - 2 };
-  next = appendLog(clampState(next), '你给熟人留出了一点时间。修仙和跑单之外，人也需要关系。', 'normal');
+  next = appendLog(clampState(next), '你到了对方常活动的地点，留出四十五分钟见面。', 'normal');
   const withEvent = maybeTriggerEvent(next, 'social', 0.96, npcId);
   if (withEvent.pendingEventId) return withEvent;
   next = { ...withEvent, relationships: changeRelationship(withEvent.relationships, npcId, 'affinity', 2, withEvent.day) };

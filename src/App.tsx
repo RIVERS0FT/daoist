@@ -107,9 +107,9 @@ export default function App() {
         <div className="drawer-body" key={panel}>
           {pendingPanel && panel !== pendingPanel && <button type="button" className="pending-link" onClick={() => openPanel(pendingPanel)}>{game.gameOver ? '查看本世结局' : '有待处理的内容，点击继续'}<Icon name="arrow" size={16} /></button>}
           {place && place.panel === panel && <div className="place-intro"><span>{place.district}</span><p>{place.description}</p></div>}
-          {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel />}
+          {panel === 'delivery' && <DeliveryPanel />}{panel === 'life' && <LifePanel />}{panel === 'cultivation' && <CultivationPanel preferred={place?.panel === 'cultivation' ? place.id : null} />}
           {panel === 'relationships' && <RelationshipsPanel npcId={place?.npcId} />}{panel === 'character' && <CharacterPanel />}{panel === 'system' && <SystemPanel />}
-          {panel === 'exploration' && <PlayModePanel />}
+          {panel === 'exploration' && <PlayModePanel preferred={place?.panel === 'exploration' ? place.id : null} />}
           {panel === 'help' && <HelpPanel />}
           {panel === 'settings' && <><PlayModePanel settingsOnly /><div className="settings-save"><h3>存档 · {currentSlot?.name}</h3><button className="reset-button" type="button" disabled={slotBusy} onClick={resetGame}>返回开始页 / 管理存档</button>{saveError && <button className="reset-button" type="button" disabled={slotBusy} onClick={() => { if (window.confirm('确定放弃本页尚未保存的改动？磁盘中的存档会保留。')) void returnToStart(true); }}>放弃未保存改动，保留磁盘存档并返回</button>}</div></>}
           {panel === 'endings' && <EndingResult onReset={resetGame} />}

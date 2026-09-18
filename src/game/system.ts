@@ -14,8 +14,8 @@ export const SYSTEM_EXCHANGES = [
 
 export type SystemExchangeId = typeof SYSTEM_EXCHANGES[number]['id'];
 
-export function deliveryCoinReward(order: Pick<DeliveryOrder, 'distanceKm' | 'strange'>): number {
-  return Math.min(4, 1 + Math.floor(Math.max(0, order.distanceKm) / 3) + (order.strange ? 1 : 0));
+export function deliveryCoinReward(order: Pick<DeliveryOrder, 'distanceKm' | 'strange'>, distanceKm = order.distanceKm): number {
+  return Math.min(4, 1 + Math.floor(Math.max(0, distanceKm) / 3) + (order.strange ? 1 : 0));
 }
 
 export function systemExchangePlan(game: GameState, id: SystemExchangeId) {

@@ -38,7 +38,7 @@ test('classic exploration is playable with zero AI calls and no horizontal overf
   await page.getByRole('button', { name: /^探索经典奇遇/ }).click();
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
-  await expect(page.locator('.clock-block strong')).toContainText('07:20');
+  await expect(page.locator('.clock-block strong')).toContainText('07:30');
   expect(calls).toBe(0); expect(errors).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('classic.png'), fullPage: true });
@@ -67,7 +67,7 @@ test('AI scene choices persist across reload and finish offline without switchin
   await page.unroute(endpoint);
   await page.context().setOffline(true);
   await page.getByRole('button', { name: /^到此为止/ }).click();
-  await expect(page.locator('.clock-block strong')).toContainText('07:20');
+  await expect(page.locator('.clock-block strong')).toContainText('07:30');
   await expect.poll(async () => (await saved(page))?.play?.history?.length).toBe(1);
   expect((await saved(page)).play.mode).toBe('generative');
   expect(JSON.stringify(await saved(page))).not.toContain('test-relay-token-only');
@@ -92,5 +92,5 @@ test('unconfigured generation is honest and classic fallback remains playable', 
   await expect(page.getByRole('region', { name: '游玩模式与自由奇遇', exact: true }).getByRole('status')).toContainText('尚未配置');
   await expect(page.getByText('经典人工奇遇', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /^到此为止/ }).click();
-  await expect(page.locator('.clock-block strong')).toContainText('07:20');
+  await expect(page.locator('.clock-block strong')).toContainText('07:30');
 });

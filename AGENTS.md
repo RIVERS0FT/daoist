@@ -42,7 +42,7 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 
 - Keep the map as the default main view, persistent top status and bottom-left navigation. Map browsing is UI only, never a gameplay action.
 - Preserve all classic/generative, NPC, ending and recovery controls in accessible panels; never hide pending events or save errors without a recovery entry point.
-- Map geometry is local and fictional. No map tiles, geolocation, or implied free travel. Delivery lines are schematic, not real-time navigation. The player marker is the saved last confirmed location; only a successful riding/pushing delivery moves it to the destination.
+- Map geometry is local and fictional. No map tiles or geolocation. Map browsing never travels; canonical gameplay actions may include distance-derived travel under the v0.11 rules below. Delivery lines remain schematic rather than real-time navigation.
 
 ## Vehicles and automatic saves (v0.5)
 
@@ -84,3 +84,13 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - `game.deliveryCoins` is a bounded per-slot resource. Missing legacy values migrate to 0 without historical backfill; malformed present values protect the save instead of being silently repaired. Keep the world/session schema numbers unchanged for this additive field.
 - `system.ts` owns the allowlisted exchange catalog. Exchanges consume coins before advancing exactly five game minutes, use the shared clock and existing cultivation item IDs/caps, and award nothing after a fatal clock transition. They must not bypass pending stories, trials, generated scenes, active orders, medicine limits or breakthrough rules.
 - Delivery coins and system exchanges are local canonical rules: do not add them to `NumericStatKey`, authored arbitrary stat effects, AI payloads, model profiles or relay authority. UI only previews and dispatches through the store; autosave remains authoritative.
+
+## Map-distance action time (v0.11, overrides earlier delivery-only position rules)
+
+- Every location-bound gameplay action has an explicit map destination. Total displayed/settled duration is `travel minutes from game.position to destination + authored action minutes`. Opening a panel, clicking a landmark, previewing, panning, zooming and locating remain free and never move the player.
+- Functional landmark IDs are valid durable `PlayerPosition.locationId` values alongside delivery stops. A successful trip commits arrival before the local action; repeating an action at the same place adds zero travel minutes. If the clock kills the run before arrival, do not claim the destination or award the local action.
+- Delivery route distance is canonical `current player -> pickup -> dropoff` geometry. That route drives delivery time, battery/wear requirements, fatigue and distance-based rewards. Do not use random kilometers or the saved legacy `estimatedMinutes` as authoritative settlement.
+- Local travel uses atlas geometry, weather and current bike speed. If the bike cannot be ridden, ordinary commute falls back to walking so maintenance actions cannot deadlock. Ordinary commute changes time/position only; delivery remains the action that consumes bike battery/wear.
+- Destination mapping is local and deterministic: home for rest/sleep, food district for eating, charge point for swapping batteries, station for bike service/system exchange, authored NPC landmarks for meetings, cultivation landmarks/bookshop/mountain for relevant cultivation actions, and the selected/default exploration landmark for free encounters.
+- Generated/authored scene choices occur at the already-reached scene location, so their profile time has zero additional commute unless a future explicit destination is added. Position, coordinates, route distance and travel plans remain excluded from AI payloads.
+- Keep world version 2 and session version 5: this rule expands which existing stable location IDs may be stored, without inventing historical travel for legacy saves. Missing legacy position still starts at the station.

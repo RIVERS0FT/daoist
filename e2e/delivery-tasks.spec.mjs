@@ -43,7 +43,7 @@ test('delivery tasks are chosen from map and pickup is merged into one delivery 
   const card = page.getByTestId('delivery-offer-card');
   await expect(card).toBeVisible();
   await expect(card.locator('[aria-label="配送要求"]')).toBeVisible();
-  await expect(card.getByText(/取餐 .*取餐已并入配送执行/)).toBeVisible();
+  await expect(card.getByText(/取餐 .*当前位置.*商家.*顾客/)).toBeVisible();
   const before = await readStore(page);
   await card.getByRole('button', { name: '配送', exact: true }).click();
 

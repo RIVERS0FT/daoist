@@ -3,6 +3,7 @@ import { changeRelationship } from './npcs';
 import { authoredScene, initialPlay, isRecord, PROFILES, sceneText, validRequest, validateScene } from './generation';
 import type { PlayMode, PlayState, SceneFocus, SceneMemory, SceneRequest } from './generation';
 import type { GameState, NpcId, NumericStatKey, RelationshipField } from './types';
+import { explorationDestination, travelPlan } from './travel';
 
 export interface PlaySession { version: 5; game: GameState; play: PlayState }
 export function createSession(seed?: number, mode: PlayMode = 'classic'): PlaySession { return { version: 5, game: createInitialState(seed), play: { ...initialPlay(), mode: mode === 'generative' ? 'generative' : 'classic' } }; }
@@ -50,14 +51,28 @@ export function migrateSession(raw: unknown): PlaySession | null {
   return session;
 }
 
-export function beginExploration(s: PlaySession, focus: SceneFocus, npcId?: NpcId, intent = ''): PlaySession {
+export function explorationPlan(game: GameState, focus: SceneFocus, npcId?: NpcId, preferred?: string | null) {
+  const destinationId = explorationDestination(focus, npcId, preferred);
+  const travel = travelPlan(game, destinationId);
+  return { destinationId, ...travel, baseMinutes: 15, totalMinutes: 15 + travel.minutes };
+}
+
+export function beginExploration(s: PlaySession, focus: SceneFocus, npcId?: NpcId, intent = '', preferred?: string | null): PlaySession {
   if (sessionBusy(s) || s.game.activeOrder || s.play.sequence >= 999999999 || s.game.energy < 2) return s;
   const request = validRequest({ id: `encounter-${s.play.sequence + 1}`, focus, npcId, intent }, s.game);
   if (!request) return s;
-  const game = advanceTime({ ...s.game, energy: s.game.energy - 2 }, 15);
+  const plan = explorationPlan(s.game, focus, npcId, preferred);
+  let game = s.game;
+  if (plan.minutes) {
+    game = advanceTime(game, plan.minutes);
+    if (game.gameOver) return { ...s, game };
+    game = { ...game, position: { version: 1, locationId: plan.destination.id } };
+    game = log(game, `前往${plan.destination.name}：地图路程 ${plan.distanceKm.toFixed(1)} km，通勤 ${plan.minutes} 分钟。`, `${request.id}-travel`);
+  }
+  game = advanceTime({ ...game, energy: game.energy - 2 }, 15);
   return {
     ...s,
-    game: log(game, '你为一段自由奇遇留出时间：15 分钟，精力 -2。', `${request.id}-start`),
+    game: log(game, `开始自由奇遇：现场探索 15 分钟，精力 -2；总耗时 ${plan.totalMinutes} 分钟。`, `${request.id}-start`),
     play: { ...s.play, sequence: s.play.sequence + 1, pending: game.gameOver ? null : request },
   };
 }

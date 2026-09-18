@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { FOCUS_LABELS, profileSummary } from '../game/generation';
 import type { SceneFocus } from '../game/generation';
 import { NPC_MAP, NPCS } from '../game/npcs';
-import { sceneChoiceBlocked } from '../game/play';
+import { explorationPlan, sceneChoiceBlocked } from '../game/play';
 import { useGameStore } from '../game/store';
 import type { NpcId } from '../game/types';
 import '../playModes.css';
 
-export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean }) {
+export function PlayModePanel({ settingsOnly = false, preferred = null }: { settingsOnly?: boolean; preferred?: string | null }) {
   const store = useGameStore();
   const { game, play, aiSettings } = store;
   const [endpoint, setEndpoint] = useState(aiSettings.endpoint);
@@ -21,6 +21,7 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
   const selectedNpc = contacts.some((npc) => npc.id === npcId) ? npcId : contacts[0]?.id;
   const effectiveFocus = focus === 'social' && !contacts.length ? 'city' : focus;
   const busy = Boolean(game.pendingEventId || game.activeOrder || game.gameOver || play.pending || play.scene || store.loadBlocked);
+  const explorePlan = explorationPlan(game, effectiveFocus, effectiveFocus === 'social' ? selectedNpc || undefined : undefined, preferred);
 
   useEffect(() => { store.initAiSettings(import.meta.env.VITE_NARRATIVE_AI_ENDPOINT as string | undefined); }, [store.initAiSettings]);
   useEffect(() => { setEndpoint(aiSettings.endpoint); setConsent(aiSettings.consent); }, [aiSettings]);
@@ -58,8 +59,8 @@ export function PlayModePanel({ settingsOnly = false }: { settingsOnly?: boolean
       </select></label>
       {effectiveFocus === 'social' && <label>一起经历的人<select value={selectedNpc ?? ''} onChange={(event) => setNpcId(event.target.value as NpcId)} disabled={busy}>{contacts.map((npc) => <option key={npc.id} value={npc.id}>{npc.name} · {npc.role}</option>)}</select></label>}
       {play.mode === 'generative' && <label className="intent-field">虚构行动（可选）<textarea value={intent} onChange={(event) => setIntent(event.target.value)} maxLength={200} rows={2} disabled={busy} placeholder="例如：调查巷口反复出现的纸鹤。" /></label>}
-      <button className="explore-button" type="button" disabled={busy || game.energy < 2} onClick={() => { void store.explore(effectiveFocus, effectiveFocus === 'social' ? selectedNpc || undefined : undefined, intent); }}>
-        {play.mode === 'generative' ? '生成下一段奇遇' : '探索经典奇遇'}<small>15 分钟 · 精力 -2 · 选择另计</small>
+      <button className="explore-button" type="button" disabled={busy || game.energy < 2} onClick={() => { void store.explore(effectiveFocus, effectiveFocus === 'social' ? selectedNpc || undefined : undefined, intent, preferred); }}>
+        {play.mode === 'generative' ? '生成下一段奇遇' : '探索经典奇遇'}<small>{explorePlan.totalMinutes} 分钟 · 路程 {explorePlan.distanceKm.toFixed(1)} km · 精力 -2 · 选择另计</small>
       </button>
     </div>}
     <p className={`ai-status ${store.aiStatus}`} role="status" aria-live="polite">{store.aiMessage || (play.mode === 'classic' ? '经典模式 · 无 AI 请求' : '等待探索')}</p>

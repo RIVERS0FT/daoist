@@ -1,5 +1,6 @@
 import { completeDelivery, phaseFor } from './engine';
 import { DELIVERY_DROPOFFS, DELIVERY_PICKUPS } from './deliveryLocations';
+import { deliveryRouteDistanceFromPoints } from './travel';
 import type { DeliveryOrder, GameState } from './types';
 
 export const DELIVERY_OFFER_COUNT = 4;
@@ -29,7 +30,7 @@ function randomInt(seed: number, min: number, max: number): [number, number] {
 
 function boardSeed(state: GameState): number {
   const latest = state.log[0]?.id ?? 'new-save';
-  return hashText(`${state.day}|${state.minute}|${state.seed}|${state.weather}|${state.completedOrders}|${latest}`);
+  return hashText(`${state.day}|${state.minute}|${state.seed}|${state.weather}|${state.completedOrders}|${state.position.locationId}|${latest}`);
 }
 
 function isNightMinute(minute: number): boolean {
@@ -49,19 +50,17 @@ export function deliveryOffers(state: GameState, count = DELIVERY_OFFER_COUNT): 
   const weather = state.weather === 'storm' ? 1.45 : state.weather === 'rain' ? 1.2 : 1;
 
   for (let attempt = 0; offers.length < desired && attempt < desired * 8; attempt += 1) {
-    let pickupIndex: number, dropoffIndex: number, distanceTenths: number, rewardBonus: number, timeJitter: number, strangeRoll: number;
+    let pickupIndex: number, dropoffIndex: number, rewardBonus: number, strangeRoll: number;
     [pickupIndex, seed] = randomInt(seed, 0, DELIVERY_PICKUPS.length - 1);
     [dropoffIndex, seed] = randomInt(seed, 0, DELIVERY_DROPOFFS.length - 1);
     const pickup = DELIVERY_PICKUPS[pickupIndex], dropoff = DELIVERY_DROPOFFS[dropoffIndex];
     if (usedDropoffs.has(dropoff.id)) continue;
     usedDropoffs.add(dropoff.id);
-    [distanceTenths, seed] = randomInt(seed, 12, 72);
     [rewardBonus, seed] = randomInt(seed, 0, 8);
-    [timeJitter, seed] = randomInt(seed, 0, 12);
     [strangeRoll, seed] = randomInt(seed, 0, 99);
-    const distanceKm = distanceTenths / 10;
+    const distanceKm = deliveryRouteDistanceFromPoints(state, pickup, dropoff);
     const reward = Math.round((7 + distanceKm * 2.1 + rewardBonus) * peak * weather);
-    const estimatedMinutes = Math.round(10 + distanceKm * 4.2 + timeJitter);
+    const estimatedMinutes = Math.max(1, Math.ceil(distanceKm / 18 * 60));
     offers.push({
       id: `offer-${state.day}-${state.minute}-${attempt}-${seed.toString(36)}`,
       merchant: pickup.name,
