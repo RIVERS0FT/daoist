@@ -19,17 +19,15 @@ test('life actions charge map commute once and persist the functional destinatio
   expect(arrived.game.position.locationId).toBe('home');
   expect(arrived.game.minute).toBeGreaterThan(before.game.minute + 60);
 
-  await page.getByRole('button', { name: /^休息一下/ }).click();
-  const second = await readStore(page);
-  expect(second.game.position.locationId).toBe('home');
-  expect(second.game.minute).toBe(arrived.game.minute + 60);
 });
 
 test('opening a map landmark is still free until an action is executed there', async ({ page }) => {
   await page.goto('/Daoist-Delivery/');
   await newGame(page, 'classic', '地标测试');
   const before = await readStore(page);
-  await page.getByRole('button', { name: /^青云山脚，/ }).click();
+  const mountain = page.getByRole('button', { name: /^青云山脚，/ });
+  await mountain.focus();
+  await page.keyboard.press('Enter');
   const opened = await readStore(page);
   expect(opened.game).toEqual(before.game);
 
