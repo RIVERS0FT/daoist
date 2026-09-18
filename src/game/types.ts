@@ -58,6 +58,7 @@ export interface GameState {
   seed: number;
   weather: Weather;
   money: number;
+  deliveryCoins: number;
   energy: number;
   health: number;
   stress: number;
