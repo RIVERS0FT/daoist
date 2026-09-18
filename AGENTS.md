@@ -103,3 +103,12 @@ Read this file, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`, `docs/PLAY_MODES.
 - Mission/achievement rewards may grant bounded delivery coins or existing cultivation inventory IDs only. No direct realm increase, forced relationship route, ending selection, arbitrary stat injection or AI-authored reward is permitted.
 - Hidden achievements stay undisclosed until their local condition is met. Avoid real-time/daily check-in, offline accumulation, random paid pulls and unconditional cultivation injections; system rewards must follow actual in-game progress.
 - Both classic and generative saves use the exact same local system rules. Position, system claim state, reward catalogs and progress are never delegated to the model; system operations issue zero AI/network requests.
+
+## Multi-choice delivery events (v0.13)
+
+- Delivery completion may open an authored local event with multiple meaningful choices. New delivery-choice content belongs in `src/game/deliveryEvents.ts`; React only renders the event and dispatches a choice ID.
+- Every new delivery-choice event must expose at least three distinct choices unless a future documented exception requires fewer. Choices should represent materially different tradeoffs such as time, energy, money, reputation, karma, relationships, safety or supernatural investigation; do not create cosmetic duplicate buttons.
+- Delivery itself settles first through the canonical delivery engine. The resulting event then becomes `pendingEventId` and locks normal gameplay until one valid choice resolves it. Event choices may add extra time/resources but must not retroactively duplicate the delivery payout, external coins or destination arrival.
+- Resource-gated choices use existing typed requirements and remain disabled when unmet, while at least one feasible branch should normally remain available. Event effects continue to use the existing allowlisted stat/flag/relationship/time model.
+- Delivery-event randomness continues to use the saved local seed, eligibility weights and recent-event suppression. No event selection or choice outcome is delegated to AI; classic mode still issues zero AI requests and generative mode shares the same canonical event pool.
+- Tests must assert event ID uniqueness, three-choice minimum, branch-specific settlement, requirement blocking and browser rendering at desktop/mobile sizes.
