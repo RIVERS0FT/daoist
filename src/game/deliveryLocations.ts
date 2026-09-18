@@ -4,8 +4,21 @@ import type { DeliveryOrder, PlayerPosition } from './types';
 export interface MapPoint { id: string; name: string; district: string; x: number; y: number }
 export const MAP_WIDTH = 2400;
 export const MAP_HEIGHT = 1600;
-export const START_LOCATION: MapPoint = { id: 'station', name: '骑手驿站', district: '中心街区', x: 1000, y: 860 };
 const point = (id: string, name: string, district: string, x: number, y: number): MapPoint => ({ id, name, district, x, y });
+
+export const FUNCTIONAL_LOCATIONS: MapPoint[] = [
+  point('home', '梧桐里出租屋', '西城生活区', 410, 1050),
+  point('station', '骑手驿站', '中心街区', 1000, 860),
+  point('noodles', '老城食街', '老城商圈', 420, 470),
+  point('hospital', '东城医院', '东城街区', 1890, 580),
+  point('bookshop', '青禾旧书店', '文昌街', 1070, 490),
+  point('riverside', '清河步道', '清河沿岸', 1430, 980),
+  point('rooftop', '西城天台', '西城高处', 700, 240),
+  point('oldtown', '旧城小巷', '老城边缘', 250, 380),
+  point('mountain', '青云山脚', '城北山麓', 1840, 340),
+  point('charge', '南街换电柜', '南街', 960, 1400),
+];
+export const START_LOCATION: MapPoint = FUNCTIONAL_LOCATIONS.find((location) => location.id === 'station')!;
 
 export const DELIVERY_PICKUPS: MapPoint[] = [
   point('pickup-noodles', '老王牛肉面', '老城商圈', 420, 610),
@@ -78,7 +91,7 @@ export const DELIVERY_DROPOFFS: MapPoint[] = [
 const pickups = new Map(DELIVERY_PICKUPS.map((p) => [p.id, p]));
 const dropoffs = new Map(DELIVERY_DROPOFFS.map((p) => [p.id, p]));
 const byName = new Map([...DELIVERY_PICKUPS, ...DELIVERY_DROPOFFS].map((p) => [p.name, p]));
-const locations = new Map([START_LOCATION, ...DELIVERY_PICKUPS, ...DELIVERY_DROPOFFS].map((p) => [p.id, p]));
+const locations = new Map([...FUNCTIONAL_LOCATIONS, ...DELIVERY_PICKUPS, ...DELIVERY_DROPOFFS].map((p) => [p.id, p]));
 
 export const initialPosition = (): PlayerPosition => ({ version: 1, locationId: START_LOCATION.id });
 export function normalizePosition(raw: unknown): PlayerPosition | null {
@@ -88,8 +101,11 @@ export function normalizePosition(raw: unknown): PlayerPosition | null {
   if (p.version !== 1 || typeof p.locationId !== 'string' || !locations.has(p.locationId)) return null;
   return { version: 1, locationId: p.locationId };
 }
+export function mapPointById(locationId: string): MapPoint | null {
+  return locations.get(locationId) ?? null;
+}
 export function playerMapPoint(position: PlayerPosition): MapPoint {
-  return locations.get(position.locationId) ?? START_LOCATION;
+  return mapPointById(position.locationId) ?? START_LOCATION;
 }
 /** Named lookup keeps released v1–v4 orders intact; IDs keep new orders stable. */
 export function orderMapPoints(order: Pick<DeliveryOrder, 'merchant' | 'customer' | 'pickupId' | 'dropoffId'>) {
