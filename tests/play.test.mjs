@@ -66,7 +66,7 @@ test('future/invalid saves are rejected rather than overwritten', () => {
 test('AI scene has local IDs, guaranteed exit and immutable costs', () => {
   const s = generated();
   assert.equal(s.play.scene.source, 'ai'); assert.equal(s.play.scene.id, 'encounter-1');
-  assert.equal(s.play.scene.choices.at(-1).id, 'depart'); assert.equal(s.game.minute, 435);
+  assert.equal(s.play.scene.choices.at(-1).id, 'depart'); assert.equal(s.game.minute, 445);
   assert.equal(content.PROFILES.work.money, 0); assert.equal(content.PROFILES.work.gains.money, 12);
 });
 test('invalid model data cannot inject world values, route locks or execution', () => {
@@ -95,7 +95,7 @@ test('four provider options plus local exit survive save restoration', () => {
 });
 test('reload of an in-flight request falls back without a second time charge', () => {
   const s = started(), restored = play.migrateSession(JSON.parse(JSON.stringify(s)));
-  assert.equal(restored.game.minute, 435); assert.equal(restored.game.energy, s.game.energy);
+  assert.equal(restored.game.minute, 445); assert.equal(restored.game.energy, s.game.energy);
   assert.equal(restored.play.pending, null); assert.equal(restored.play.scene.source, 'authored');
 });
 test('choice is resolved exactly once and memories preserve the result', () => {
@@ -155,7 +155,7 @@ test('returning to the menu cancels AI, saves fallback, and ignores late data', 
   const running = store.getState().explore('city');
   await store.getState().returnToStart(); const expected = structuredClone(snapshot(store));
   wait.resolve({ ok: true, data: city }); await running;
-  assert.deepEqual(snapshot(store), expected); assert.equal(expected.game.minute, 435);
+  assert.deepEqual(snapshot(store), expected); assert.equal(expected.game.minute, 445);
   assert.equal(expected.play.scene.source, 'authored'); assert.equal(expected.play.mode, 'generative');
   assert.equal(store.getState().screen, 'start');
 });
@@ -172,14 +172,14 @@ test('double click cannot duplicate requests or exploration charges', async () =
   const store = await storeWith({ generate: () => { calls++; return wait.promise; } }, 'generative');
   const running = store.getState().explore('city');
   await store.getState().explore('city'); store.getState().act('sleep'); store.getState().chooseEnding('city-lights');
-  assert.equal(calls, 1); assert.equal(store.getState().game.minute, 435);
+  assert.equal(calls, 1); assert.equal(store.getState().game.minute, 445);
   wait.resolve({ ok: true, data: city }); await running; assert.equal(store.getState().play.scene.source, 'ai');
 });
 test('service failure is playable without retries and does not change locked mode', async () => {
   let calls = 0; const store = await storeWith({ generate: async () => { calls++; throw new Error('down'); } }, 'generative');
   await store.getState().explore('city'); assert.equal(store.getState().aiStatus, 'fallback');
   assert.equal(store.getState().play.scene.source, 'authored'); assert.equal(store.getState().play.mode, 'generative');
-  store.getState().chooseEvent('depart'); assert.equal(store.getState().game.minute, 440); assert.equal(calls, 1);
+  store.getState().chooseEvent('depart'); assert.equal(store.getState().game.minute, 450); assert.equal(calls, 1);
 });
 test('writes are serialized per slot and relay tokens never enter saved data', async () => {
   const written = []; let active = 0, maxActive = 0;
