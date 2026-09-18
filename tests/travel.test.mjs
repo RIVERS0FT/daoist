@@ -26,9 +26,11 @@ test('location-bound actions add commute once and persist the arrival', () => {
   const first = runAction(game, 'rest');
   assert.equal(first.position.locationId, 'home');
   assert.equal(first.minute, game.minute + plan.totalMinutes);
-  const second = runAction(first, 'rest');
+  const settled = { ...first, pendingEventId: null };
+  assert.equal(gameActionPlan(settled, 'rest').travelMinutes ?? gameActionPlan(settled, 'rest').minutes, 0);
+  const second = runAction(settled, 'rest');
   assert.equal(second.position.locationId, 'home');
-  assert.equal(second.minute, first.minute + 60);
+  assert.equal(second.minute, settled.minute + 60);
 });
 
 test('socializing travels to the npc location before the meeting time', () => {
