@@ -1,4 +1,4 @@
-# Architecture v0.11
+# Architecture v0.12
 
 ## Stack and module boundaries
 
@@ -7,7 +7,7 @@ React + strict TypeScript + Vite + Zustand + IndexedDB + local SVG/CSS. GitHub A
 - `types.ts`, `engine.ts`: the v2 world plus versioned vehicle, position and cultivation data; deterministic actions, one game clock, resource limits, vehicles and authored events.
 - `deliveryBoard.ts`: derived deterministic delivery candidates for the current world and exact one-action map delivery dispatch; there is no separate acceptance transition. It does not add a save schema and never sends candidate data to AI.
 - `cultivation.ts`: manuals, items, recipes, preparation, breakthrough previews/settlement and the inner foundation trial.
-- `system.ts`: deterministic delivery-coin rewards and the allowlisted exchange catalog. It reuses cultivation item IDs, advances the shared game clock through an injected function, and never depends on React or AI. Receives the clock as an argument, avoiding engine cycles. Exact rules live in `CULTIVATION.md`.
+- `system.ts`: deterministic delivery-coin rewards, instant exchange catalog, authored system chapters, missions, achievements and fixed rewards. It reuses cultivation item IDs and namespaced `game.flags` claim markers, never advances the clock, never moves the player and never depends on React or AI.
 - `events.ts`, `npcEvents.ts`, `content.ts`, `npcs.ts`, `endings.ts`: data-driven story choices, relationship routes, eligibility, weights, repeat suppression and canonical endings. No story rules in React.
 - `generation.ts`, `play.ts`: allowlisted AI action profiles, strict scene validation, authored fallback, session transitions, memories and migration.
 - `store.ts`: the only UI write entry. Owns slot identity, pending locks, request cancellation and serial autosave. Map offer execution enters through `deliverDeliveryOffer(offerId)`; `cultivate` waits for the preceding save before accepting another costly command.
@@ -72,7 +72,7 @@ The task board is stable while canonical world state is unchanged. Panning, zoom
 
 New map tasks complete in one settlement and therefore do not render an intermediate pickup/dropoff route. Their canonical distance is `current player -> pickup -> dropoff`; this live route drives delivery minutes, battery/wear requirements, fatigue and distance-based rewards. Existing active orders restored from older saves use the same live route with stable/fallback address resolution. Successful delivery commits the dropoff after survival checks; preview, rejection and cancellation do not move the player.
 
-Ten functional landmarks remain permanent and are opened directly from the atlas; the main map has no separate “地点” button. Clicking a landmark is still free. Once an action is executed, `engine.ts`/`play.ts` use `travel.ts` to add commute minutes from the saved current position, commit the functional destination on arrival, then settle the authored local action duration. Same-location actions have zero commute. Delivery addresses remain separate from the permanent landmark list. The city heading is reduced to `青岚市`; the old view menu is removed. Top status and bottom-left navigation remain visible. The navigation dock itself is transparent and the atlas DOM/paint area extends behind it, while camera math uses a bottom safe area so automatic positioning does not intentionally place important markers under the navigation. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
+Ten functional landmarks remain permanent and are opened directly from the atlas; the main map has no separate “地点” button. Clicking a landmark is still free. Once a physical action is executed, `engine.ts`/`play.ts` use `travel.ts` to add commute minutes from the saved current position, commit the functional destination on arrival, then settle the authored local action duration. Same-location actions have zero commute. System exchange/mission/achievement operations bypass `travel.ts` entirely and are instantaneous remote state transitions. Delivery addresses remain separate from the permanent landmark list. The city heading is reduced to `青岚市`; the old view menu is removed. Top status and bottom-left navigation remain visible. The navigation dock itself is transparent and the atlas DOM/paint area extends behind it, while camera math uses a bottom safe area so automatic positioning does not intentionally place important markers under the navigation. Non-modal panels have their own scroll area and preserve keyboard focus on close/Escape. Pending stories and inner trials reopen when restored and remain reachable after closing the panel. Save errors are global, never hidden behind an AI panel. No map network requests, GPS or provider keys are introduced.
 
 ## Camera lifecycle
 
@@ -86,7 +86,7 @@ Player restore starts focused and following. Manual gestures, wheel zoom or keyb
 
 ## Verification and delivery
 
-Travel regression covers map-distance monotonicity, zero same-location commute, functional-position persistence, current→pickup→dropoff delivery distance, life/social/cultivation/system arrival, and browser-visible total-duration previews. System regression still covers deterministic coin rewards, failed delivery, legacy migration, unlock/insufficient/cap rejection, exchange settlement and autosave persistence.
+Travel regression covers map-distance monotonicity, zero same-location commute, functional-position persistence, current→pickup→dropoff delivery distance and life/social/cultivation arrivals. System regression covers zero-time/zero-position exchange, chapter unlocks, one-time task/achievement claims, hidden achievement gating, inventory caps, legacy migration and autosave persistence.
 
 Run `npm test` for compiled game/store/relay tests, `npm run build` for strict production output, and `npm run test:e2e` for desktop/mobile Chromium plus cultivation/gesture/delivery-board flows on mobile WebKit. Test real IndexedDB, exact old-slot backups, slot isolation, saved trials, exact one-action map delivery, task refresh after actions, AI cancellation, classic zero-network behavior and no-cost camera interactions. Native CDP touch injection is Chromium-only; WebKit pointer tests are not a claim of physical iPhone/Safari testing. AI tests use mock providers, never production credentials.
 

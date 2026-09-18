@@ -3,8 +3,9 @@ import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
 import { deliverDeliveryOffer as deliverMapDeliveryOffer } from './deliveryBoard';
-import { runCultivationAction, resolveEventChoice, runAction, runSystemExchange, selectEnding, socializeNpc } from './engine';
-import type { SystemExchangeId } from './system';
+import { runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
+import { claimSystemAchievement, claimSystemMission, redeemSystemExchange } from './system';
+import type { SystemAchievementId, SystemExchangeId, SystemMissionId } from './system';
 import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
 import { loadSlots, saveSlot, SaveConflictError } from './storage';
@@ -29,6 +30,8 @@ interface GameStore {
   cultivate: (command: CultivationCommand, preferred?: string | null) => void;
   deliverDeliveryOffer: (offerId: string) => void;
   exchangeSystemItem: (id: SystemExchangeId) => void;
+  claimSystemMission: (id: SystemMissionId) => void;
+  claimSystemAchievement: (id: SystemAchievementId) => void;
   act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
   chooseEvent: (choiceId: string) => void; chooseEnding: (endingId: string) => void;
 }
@@ -178,7 +181,9 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
         commit({ ...session(), game: runCultivationAction(s.game, command, preferred) });
       },
       deliverDeliveryOffer: (offerId) => { if (canAct()) commit({ ...session(), game: deliverMapDeliveryOffer(get().game, offerId) }); },
-      exchangeSystemItem: (id) => { if (canAct()) commit({ ...session(), game: runSystemExchange(get().game, id) }); },
+      exchangeSystemItem: (id) => { if (playing()) commit({ ...session(), game: redeemSystemExchange(get().game, id) }); },
+      claimSystemMission: (id) => { if (playing()) commit({ ...session(), game: claimSystemMission(get().game, id) }); },
+      claimSystemAchievement: (id) => { if (playing()) commit({ ...session(), game: claimSystemAchievement(get().game, id) }); },
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },
       chooseEvent: (choiceId) => {

@@ -6,8 +6,7 @@ import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstima
 import { EVENT_MAP, EVENTS } from './content';
 import { ENDING_MAP } from './endings';
 import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
-import { deliveryCoinReward, redeemSystemExchange, systemExchangePlan } from './system';
-import type { SystemExchangeId } from './system';
+import { deliveryCoinReward } from './system';
 import { actionDestination, deliveryRouteDistanceFromPoints, deliveryRouteDistanceKm, npcDestination, travelPlan } from './travel';
 import type { ActionContext, BikeUpgrade, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
@@ -189,12 +188,6 @@ export function socializePlan(state: GameState, npcId: NpcId) {
   return { ...travel, baseMinutes: 45, totalMinutes: 45 + travel.minutes };
 }
 
-export function systemActionPlan(state: GameState, id: SystemExchangeId) {
-  const base = systemExchangePlan(state, id);
-  const travel = travelPlan(state, 'station');
-  return { ...base, destination: travel.destination, distanceKm: travel.distanceKm, travelMinutes: travel.minutes, totalMinutes: (base.exchange?.minutes ?? 0) + travel.minutes };
-}
-
 function setStat(state: GameState, key: NumericStatKey, delta: number): GameState {
   return { ...state, [key]: state[key] + delta } as GameState;
 }
@@ -315,12 +308,6 @@ export function runCultivationAction(state: GameState, command: CultivationComma
   return next !== arrived && command.type === 'study' ? maybeTriggerEvent(next, 'cultivation', .3) : next;
 }
 
-export function runSystemExchange(state: GameState, id: SystemExchangeId): GameState {
-  if (systemExchangePlan(state, id).reason) return state;
-  const arrived = arriveForAction(state, 'station');
-  if (arrived.gameOver) return arrived;
-  return redeemSystemExchange(arrived, id, advanceTime);
-}
 export function runAction(state: GameState, action: GameAction): GameState {
   if (state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   if (action.startsWith('upgrade-bike-')) return upgradeBike(state, action.slice(13) as BikeUpgrade);
