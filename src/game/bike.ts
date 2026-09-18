@@ -31,25 +31,29 @@ export function repairCost(bike: BikeState): number {
   const missing = bikeStats(bike).maxCondition - bike.condition;
   return missing > 0 ? Math.max(5, Math.ceil(missing * 0.3)) : 0;
 }
-export function deliveryEstimate(order: DeliveryOrder, bike: BikeState): number {
-  return Math.max(8, Math.round(8 + (order.estimatedMinutes - 8) / bikeStats(bike).speedMultiplier));
+export function deliveryEstimate(order: DeliveryOrder, bike: BikeState, distanceKm = order.distanceKm, weather: GameState['weather'] = 'clear', energy = 100): number {
+  const weatherFactor = weather === 'storm' ? 0.68 : weather === 'rain' ? 0.85 : 1;
+  const fatigue = energy < 25 ? 1.18 : 1;
+  const speedKph = 18 * bikeStats(bike).speedMultiplier * weatherFactor;
+  return Math.max(1, Math.ceil(distanceKm / speedKph * 60 * fatigue));
 }
-export function deliveryCosts(order: DeliveryOrder, bike: BikeState) {
-  return { battery: Math.max(3, Math.ceil(order.distanceKm * 2.4 * bikeStats(bike).energyMultiplier)),
-    wear: Math.max(1, Math.ceil(order.distanceKm * 0.65 / (1 + bike.durability * 0.2))) };
+export function deliveryCosts(order: DeliveryOrder, bike: BikeState, distanceKm = order.distanceKm) {
+  return { battery: Math.max(1, Math.ceil(distanceKm * 2.4 * bikeStats(bike).energyMultiplier)),
+    wear: Math.max(1, Math.ceil(distanceKm * 0.65 / (1 + bike.durability * 0.2))) };
 }
-export function ridingBlockReason(game: GameState): string | null {
+export function ridingBlockReason(game: GameState, distanceKm = game.activeOrder?.distanceKm ?? 0): string | null {
   if (game.bikeBattery <= 0) return '电动车已没电，不能骑行。请换电，或明确选择推车送达。';
   if (game.bike.condition <= 0) return '电动车已损坏，不能骑行。请维修，或推车送达。';
   if (game.activeOrder) {
-    const cost = deliveryCosts(game.activeOrder, game.bike);
+    const cost = deliveryCosts(game.activeOrder, game.bike, distanceKm);
     if (game.bikeBattery < cost.battery) return `本单需要 ${cost.battery} 电量，当前不足。请先换电。`;
     if (game.bike.condition < cost.wear) return `本单需要 ${cost.wear} 耐久，当前不足。请先维修。`;
   }
   return null;
 }
-export function pushingCosts(game: GameState) {
-  const distance = game.activeOrder?.distanceKm ?? 0;
-  const minutes = Math.ceil(10 + distance * 20 + (game.weather === 'storm' ? 20 : game.weather === 'rain' ? 10 : 0));
-  return { minutes, energy: Math.max(8, Math.ceil(distance * 3 + minutes / 25)), income: Math.max(2, (game.activeOrder?.reward ?? 0) - 12) };
+export function pushingCosts(game: GameState, distance = game.activeOrder?.distanceKm ?? 0) {
+  const weatherFactor = game.weather === 'storm' ? 0.68 : game.weather === 'rain' ? 0.85 : 1;
+  const fatigue = game.energy < 25 ? 0.82 : 1;
+  const minutes = distance > 0 ? Math.max(1, Math.ceil(distance / (4 * weatherFactor * fatigue) * 60)) : 0;
+  return { minutes, energy: Math.max(1, Math.ceil(distance * 3 + minutes / 25)), income: Math.max(2, (game.activeOrder?.reward ?? 0) - 12) };
 }
