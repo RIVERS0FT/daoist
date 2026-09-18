@@ -52,3 +52,24 @@
   .status-meter{min-height:34px;padding:3px 5px}
   .status-meter:nth-child(4){border-left:0;padding-left:5px}
 }
+
+
+/* Delivery cultivation system */
+.system-panel{display:grid;gap:14px}
+.system-balance{display:flex;align-items:end;justify-content:space-between;gap:14px;padding:14px;border:1px solid #46533f;border-radius:12px;background:linear-gradient(135deg,#172119,#202719)}
+.system-balance h3{margin:4px 0 0;font-family:Georgia,"Songti SC",serif;font-size:1.25rem}
+.system-balance>strong{color:#e2cf8f;font-family:Georgia,"Songti SC",serif;font-size:2rem;white-space:nowrap}
+.system-balance>strong small{font-family:inherit;font-size:.7rem;font-weight:500;color:#a99d75}
+.system-note{margin:0;color:#9fa995;font-size:.75rem;line-height:1.65}
+.system-shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.system-item{display:grid;gap:9px;padding:13px;border:1px solid #3e4939;border-radius:11px;background:#151c16}
+.system-item-head{display:flex;align-items:start;justify-content:space-between;gap:10px}
+.system-item-head span{color:#9d8d5d;font-size:.68rem;letter-spacing:.08em}
+.system-item-head h3{margin:2px 0 0;font-size:.95rem}
+.system-item-head>strong{color:#ddd2aa;font-size:1rem}
+.system-item p{min-height:2.8em;margin:0;color:#98a090;font-size:.72rem;line-height:1.5}
+.system-item-meta{display:flex;flex-wrap:wrap;gap:6px}
+.system-item-meta span{padding:3px 6px;border:1px solid #384435;border-radius:999px;color:#b6bfad;font-size:.65rem}
+.system-lock{color:#b08e83;font-size:.67rem;line-height:1.4}
+.system-exchange-button{width:100%;margin-top:auto}
+@media(max-width:520px){.system-shop-grid{grid-template-columns:1fr}.system-balance>strong{font-size:1.65rem}.system-item p{min-height:0}}

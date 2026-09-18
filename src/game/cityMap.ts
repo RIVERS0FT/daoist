@@ -2,7 +2,7 @@ import type { NpcId } from './types';
 export { MAP_WIDTH, MAP_HEIGHT, orderMapPoints } from './deliveryLocations';
 
 // Presentation coordinates only. Opening a place never moves the game clock.
-export type PanelId = 'delivery' | 'life' | 'cultivation' | 'relationships' | 'exploration' | 'character' | 'journal' | 'endings' | 'settings' | 'help' | 'event' | 'places';
+export type PanelId = 'delivery' | 'life' | 'cultivation' | 'relationships' | 'exploration' | 'character' | 'journal' | 'system' | 'endings' | 'settings' | 'help' | 'event' | 'places';
 export type PlaceId = 'home' | 'station' | 'noodles' | 'hospital' | 'bookshop' | 'riverside' | 'rooftop' | 'oldtown' | 'mountain' | 'charge';
 export interface MapPlace {
   id: PlaceId; name: string; subtitle: string; district: string; description: string;
@@ -23,5 +23,5 @@ export const MAP_PLACES: MapPlace[] = [
 export const PLACE_MAP = new Map(MAP_PLACES.map((place) => [place.id, place]));
 export const PANEL_TITLES: Record<PanelId, string> = {
   delivery: '配送任务', life: '凡俗生活', cultivation: '夜间修行', relationships: '人间关系', exploration: '自由奇遇',
-  character: '角色状态', journal: '今日见闻', endings: '命运分岔', settings: '设置', help: '帮助', event: '当前事件', places: '城市地点',
+  character: '角色状态', journal: '今日见闻', system: '外卖系统', endings: '命运分岔', settings: '设置', help: '帮助', event: '当前事件', places: '城市地点',
 };

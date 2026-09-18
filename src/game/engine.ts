@@ -6,6 +6,7 @@ import { BIKE_UPGRADES, MAX_BIKE_LEVEL, bikeStats, deliveryCosts, deliveryEstima
 import { EVENT_MAP, EVENTS } from './content';
 import { ENDING_MAP } from './endings';
 import { changeRelationship, clampRelationships, createInitialRelationships, mergeRelationships, setRelationshipRoute } from './npcs';
+import { deliveryCoinReward } from './system';
 import type { ActionContext, BikeUpgrade, DeliveryOrder, EventEffect, GameAction, GameState, LogEntry, NpcId, NumericStatKey, Weather } from './types';
 
 const WEATHERS: Weather[] = ['clear', 'clear', 'cloudy', 'cloudy', 'rain', 'storm'];
@@ -14,7 +15,7 @@ export const RENT = 850;
 
 export function createInitialState(seed = Date.now() >>> 0): GameState {
   return {
-    version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263,
+    version: 2, day: 1, minute: 7 * 60, seed: seed || 0x13572468, weather: 'clear', money: 1263, deliveryCoins: 0,
     energy: 88, health: 100, stress: 12, reputation: 5, bikeBattery: 82, bike: initialBike(), position: initialPosition(), cultivation: initialCultivation(), qi: 0, insight: 1,
     karma: 0, darkQi: 0, realmLevel: 0, completedOrders: 0, totalIncome: 0, rentDueDay: 7,
     activeOrder: null, pendingEventId: null, recentEvents: [], flags: {}, relationships: createInitialRelationships(), endingId: null, gameOver: false,
@@ -27,6 +28,7 @@ export function migrateGameState(raw: unknown): GameState | null {
   const source = raw as Record<string, unknown>;
   if (source.version !== 1 && source.version !== 2) return null;
   const seed = typeof source.seed === 'number' ? source.seed : 0x5a17d311;
+  if (source.deliveryCoins !== undefined && (typeof source.deliveryCoins !== 'number' || !Number.isSafeInteger(source.deliveryCoins) || source.deliveryCoins < 0 || source.deliveryCoins > 999999)) return null;
   const base = createInitialState(seed);
   const bike = normalizeBike(source.bike);
   const position = normalizePosition(source.position);
@@ -97,7 +99,7 @@ function clampState(state: GameState): GameState {
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(v) ? v : min));
   const next: GameState = {
     ...state,
-    money: Math.max(-9999, Math.round(state.money)), energy: clamp(state.energy, 0, 100), health: clamp(state.health, 0, 100),
+    money: Math.max(-9999, Math.round(state.money)), deliveryCoins: Math.round(clamp(state.deliveryCoins, 0, 999999)), energy: clamp(state.energy, 0, 100), health: clamp(state.health, 0, 100),
     stress: clamp(state.stress, 0, 100), reputation: clamp(state.reputation, 0, 100), bikeBattery: clamp(state.bikeBattery, 0, bikeStats(state.bike).capacity),
     qi: clamp(state.qi, 0, 9999), insight: clamp(state.insight, 0, 99), karma: clamp(state.karma, -99, 99), darkQi: clamp(state.darkQi, 0, 99),
     relationships: clampRelationships(state.relationships),
@@ -228,15 +230,16 @@ export function completeDelivery(state: GameState, order: DeliveryOrder, pushing
   const useLightSteps = !pushing && state.cultivation.lightSteps > 0;
   const energyCost = pushing ? foot.energy : Math.max(1, Math.max(4, Math.round(order.distanceKm * 1.5 + actualMinutes / 18)) - (useLightSteps ? 3 : 0));
   const income = pushing ? foot.income : order.reward;
+  const deliveryCoins = deliveryCoinReward(order);
   // All requirements are checked before RNG, time, payment or order state can change.
   next = advanceTime({ ...next, energy: Math.max(0, next.energy - energyCost),
     bikeBattery: next.bikeBattery - (pushing ? 0 : costs.battery),
     bike: { ...next.bike, condition: next.bike.condition - (pushing ? 0 : costs.wear) },
     activeOrder: state.activeOrder?.id === order.id ? null : state.activeOrder }, actualMinutes);
   if (next.gameOver) return next;
-  next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
+  next = { ...next, cultivation: useLightSteps ? { ...next.cultivation, lightSteps: next.cultivation.lightSteps - 1 } : next.cultivation, position: { version: 1, locationId: orderMapPoints(order).dropoff.id }, money: next.money + income, deliveryCoins: next.deliveryCoins + deliveryCoins, totalIncome: next.totalIncome + income, completedOrders: next.completedOrders + 1,
     reputation: next.reputation + (!pushing && variance <= 6 ? 1 : 0), stress: next.stress + (pushing || variance > 10 ? 3 : -1) };
-  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}。`, pushing ? 'normal' : 'good');
+  next = appendLog(next, `${pushing ? '推车送达（没有骑行）' : '骑行送达'}至 ${order.customer}：耗时 ${actualMinutes} 分钟，精力 -${energyCost}，收入 ¥${income}，外卖币 +${deliveryCoins}。`, pushing ? 'normal' : 'good');
   return maybeTriggerEvent(clampState(next), 'delivery', order.strange ? 0.82 : 0.58);
 }
 

@@ -3,7 +3,9 @@ import { create } from 'zustand';
 import { normalizeRelayEndpoint, persistAiSettings, readAiSettings, requestScene, RequestGate, testAiConnection } from './ai';
 import type { AiSettings } from './ai';
 import { deliverDeliveryOffer as deliverMapDeliveryOffer } from './deliveryBoard';
-import { runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
+import { advanceTime, runCultivationAction, resolveEventChoice, runAction, selectEnding, socializeNpc } from './engine';
+import { redeemSystemExchange } from './system';
+import type { SystemExchangeId } from './system';
 import { beginExploration, createSession, fallbackExploration, receiveGeneratedScene, resolveScene, sessionBusy } from './play';
 import type { PlaySession } from './play';
 import { loadSlots, saveSlot, SaveConflictError } from './storage';
@@ -27,6 +29,7 @@ interface GameStore {
   fallback: () => void; testAi: () => Promise<void>;
   cultivate: (command: CultivationCommand) => void;
   deliverDeliveryOffer: (offerId: string) => void;
+  exchangeSystemItem: (id: SystemExchangeId) => void;
   act: (action: GameAction) => void; socialize: (npcId: NpcId) => void;
   chooseEvent: (choiceId: string) => void; chooseEnding: (endingId: string) => void;
 }
@@ -176,6 +179,7 @@ export function createGameStore(overrides: Partial<Dependencies> = {}) {
         commit({ ...session(), game: runCultivationAction(s.game, command) });
       },
       deliverDeliveryOffer: (offerId) => { if (canAct()) commit({ ...session(), game: deliverMapDeliveryOffer(get().game, offerId) }); },
+      exchangeSystemItem: (id) => { if (canAct()) commit({ ...session(), game: redeemSystemExchange(get().game, id, advanceTime) }); },
       act: (action) => { if (canAct()) commit({ ...session(), game: runAction(get().game, action) }); },
       socialize: (npcId) => { if (canAct()) commit({ ...session(), game: socializeNpc(get().game, npcId) }); },
       chooseEvent: (choiceId) => {
