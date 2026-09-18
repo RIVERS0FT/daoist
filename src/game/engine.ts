@@ -321,11 +321,6 @@ export function runSystemExchange(state: GameState, id: SystemExchangeId): GameS
   if (arrived.gameOver) return arrived;
   return redeemSystemExchange(arrived, id, advanceTime);
 }
-state: GameState, command: CultivationCommand): GameState {
-  const next = runCultivation(state, command, advanceTime, value => maybeTriggerEvent(value, 'cultivation', .28));
-  return next !== state && command.type === 'study' ? maybeTriggerEvent(next, 'cultivation', .3) : next;
-}
-
 export function runAction(state: GameState, action: GameAction): GameState {
   if (state.pendingEventId || state.gameOver || state.cultivation.trial) return state;
   if (action.startsWith('upgrade-bike-')) return upgradeBike(state, action.slice(13) as BikeUpgrade);
