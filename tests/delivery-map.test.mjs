@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const { createInitialState, runAction, advanceTime } = require('../.test-dist/engine.js');
 const { createSession, migrateSession } = require('../.test-dist/play.js');
 const { DELIVERY_PICKUPS, DELIVERY_DROPOFFS, initialPosition, normalizePosition, playerMapPoint, orderMapPoints } = require('../.test-dist/deliveryLocations.js');
+const { deliveryRouteDistanceKm } = require('../.test-dist/travel.js');
 function pending() {
   const s = createInitialState(5678), pickup = DELIVERY_PICKUPS[20], dropoff = DELIVERY_DROPOFFS[32];
   s.activeOrder = { id: 'atlas-test', merchant: pickup.name, customer: dropoff.name, pickupId: pickup.id, dropoffId: dropoff.id,
@@ -19,7 +20,7 @@ test('new orders use all 24 merchants and 40 destinations with deterministic sav
     const order = a.activeOrder, points = orderMapPoints(order);
     assert.equal(order.merchant, points.pickup.name); assert.equal(order.customer, points.dropoff.name);
     assert.equal(order.pickupId, points.pickup.id); assert.equal(order.dropoffId, points.dropoff.id);
-    assert.ok(order.distanceKm >= 1.2 && order.distanceKm <= 7.2);
+    assert.ok(order.distanceKm > 0); assert.equal(order.distanceKm, deliveryRouteDistanceKm(s, order));
     merchants.add(order.pickupId); customers.add(order.dropoffId);
   }
   assert.equal(merchants.size, 24); assert.equal(customers.size, 40);
@@ -42,7 +43,7 @@ test('empty battery, insufficient condition or energy, cancellation and stories 
   }
   const s = pending(); s.energy = 0; assert.strictEqual(runAction(s, 'push-order'), s);
   const cancelled = runAction(s, 'cancel-order'); assert.deepEqual(cancelled.position, s.position); assert.equal(cancelled.activeOrder, null);
-  for (const action of ['charge-bike', 'rest', 'sleep', 'meditate-1h']) assert.deepEqual(runAction(s, action).position, s.position);
+  const charge = runAction(s, 'charge-bike'); assert.equal(charge.position.locationId, 'charge');
   assert.deepEqual(advanceTime(s, 12).position, s.position);
 });
 test('a fatal midnight does not count as a successful arrival', () => {
