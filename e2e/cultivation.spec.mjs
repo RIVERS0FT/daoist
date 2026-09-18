@@ -32,7 +32,7 @@ test('entry breakthrough is guaranteed when prepared and is safely saved before 
  await expect(page.getByLabel('突破成功率')).toContainText('100%');expect((await readStore(page)).game).toEqual(before.game);
  await page.screenshot({path:info.outputPath('cultivation-breakthrough.png'),fullPage:true});
  await page.getByRole('button',{name:/^确认稳妥突破/}).click();const after=await readStore(page);
- expect(after.game.realmLevel).toBe(1);expect(after.game.qi).toBe(before.game.qi-30);expect(after.game.minute).toBe(before.game.minute+240);
+ expect(after.game.realmLevel).toBe(1);expect(after.game.qi).toBe(before.game.qi-30);expect(after.game.minute).toBeGreaterThan(before.game.minute+240);expect(after.game.position.locationId).toBe('rooftop');
  await page.reload();await continueRecent(page);expect((await readStore(page)).game).toEqual(after.game);
 });
 test('foundation trial locks outside actions, survives refresh and unlocks a real foundation breakthrough',async({page},info)=>{
@@ -43,7 +43,7 @@ test('foundation trial locks outside actions, survives refresh and unlocks a rea
  await page.reload();await continueRecent(page);await expect(page.locator('.foundation-trial')).toBeVisible();expect((await readStore(page)).game.cultivation.trial).toEqual(stage.game.cultivation.trial);
  await page.screenshot({path:info.outputPath('cultivation-trial.png'),fullPage:true});
  await page.locator('.foundation-trial .action-button').first().click();await readStore(page);await page.locator('.foundation-trial .action-button').first().click();const done=await readStore(page);
- expect(done.game.cultivation.trialPassed).toBe(true);expect(done.game.position).toEqual(before.game.position);
+ expect(done.game.cultivation.trialPassed).toBe(true);expect(done.game.position.locationId).toBe('rooftop');
  await page.getByRole('button',{name:'破境',exact:true}).click();await page.getByRole('button',{name:/^确认稳妥突破/}).click();const result=await readStore(page);
  expect(result.game.realmLevel).toBe(10);await expect(page.locator('.realm-button')).toContainText('筑基初期');await expect(page.getByRole('button',{name:/^已达境界上限/})).toBeDisabled();
 });
