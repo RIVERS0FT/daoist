@@ -257,6 +257,12 @@ def progressive_browser_checks(browser):
 
         nearest_ui_delivery(page)
         assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['pending']['title'] == '第一章 · 系统觉醒'
+        assert '等待你的回应' in page.locator('.event-text').inner_text()
+        assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第一章'
+        assert page.evaluate('NightCourier.storyStage(window.__live).title') == '系统觉醒'
+        page.screenshot(path=str(OUT/f'chapter-one-awakening-{width}.png'))
+        record(f'{width}px 第一章为系统觉醒；首单待选仍未绑定，剧情标题与章节一致')
         assert 'system' not in nav()
         assert current(page)['stats']['delivered'] == 0
         choose_ui(page)
@@ -267,6 +273,8 @@ def progressive_browser_checks(browser):
         record(f'{width}px 首单真实到达不提前解锁，选择结算后系统导航与顶部入口一起出现')
 
         page.locator('#game-nav [data-panel="system"]').click()
+        assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第二章'
+        assert '第二章 · 初入仙途' in page.locator('#panel').inner_text()
         assert page.locator('[data-ui="system-tab"][data-id="endings"]').count() == 0
         assert page.locator('[data-act="buy"][data-id="foundation"]').count() == 0
         page.click('[data-ui="system-tab"][data-id="quests"]')

@@ -75,7 +75,7 @@ test('现金不足交租时不生成成功结果、不交付、不解锁',()=>{
 });
 test('第三单结果不会被主线覆盖；确认只显露已排队主线，不重复注入或发奖励',()=>{
   let s=fixture();s.stats.delivered=2;s.claimed=['q1'];s=choose(s);
-  assert.equal(s.eventResult.title,'第一声「叮」');assert.equal(s.pending.templateId,'story-street-vein');
+  assert.equal(s.eventResult.title,'第一章 · 系统觉醒');assert.equal(s.pending.templateId,'story-street-vein');
   const copy=read(s);assert.equal(copy.eventResult.text,s.eventResult.text);assert.equal(copy.pending.templateId,'story-street-vein');
   const seed=copy.seed,turn=copy.turn,done=ack(copy);assert.equal(done.seed,seed);assert.equal(done.turn,turn);assert.equal(done.pending.id,copy.pending.id);
   const next=choose(ackUnlocks(act(done,'ackPlaceUnlock',{id:done.placeUnlock.place})));assert.equal(next.eventResult.title,'地图上多出来的一条线');assert.equal(next.pending,null);
