@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
-  G.VERSION = 15;
-  G.APP_VERSION = '1.9.1';
+  G.VERSION = 16;
+  G.APP_VERSION = '1.9.2';
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   // 只向东、向南追加网格；原 7×6 城区的坐标、地点 ID 与桥梁不变。

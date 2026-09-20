@@ -1,3 +1,4 @@
+import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
@@ -44,13 +45,13 @@ test('确认结果后仍暂停；地点确认只清回执，不改变奖励、�
   for(const action of ['rest','buy','travel','choose','stop','resumeDelivery','cancelDelivery','transport'])reject(s,action,{target:'home',id:'heal'});
   reject(s,'ackPlaceUnlock',{id:'market'});
   const done=ackPlace(s);assert.deepEqual(gameplay(done),snapshot);assert.equal(done.placeUnlock,null);assert.ok(done.unlockedPlaces.includes('clinic'));
-  reject(done,'ackPlaceUnlock',{id:'clinic'});assert.ok(G.advance(done,1).minutes>done.minutes);
+  reject(done,'ackPlaceUnlock',{id:'clinic'});assert.equal(G.advance(done,1),done);const ready=ackUnlocks(done);assert.ok(G.advance(ready,1).minutes>ready.minutes);
 });
 test('排队主线在结果、地点两次确认后仍保留；确认不注入新故事',()=>{
   let s=fixture();s.stats.delivered=2;s.claimed=['q1'];s=choose(s);const id=s.pending.id;
   s=read(s);s=ackResult(s);assert.equal(s.pending.id,id);reject(s,'choose',{eventId:id,index:0});
   const before=gameplay(s);s=ackPlace(s);assert.deepEqual(gameplay(s),before);assert.equal(s.pending.id,id);
-  s=choose(s);assert.equal(s.eventResult.title,'地图上多出来的一条线');assert.equal(s.placeUnlock,null);
+  s=choose(ackUnlocks(s));assert.equal(s.eventResult.title,'地图上多出来的一条线');assert.equal(s.placeUnlock,null);
 });
 test('无事件送达也创建提示，在真实完成时冻结，没有伪造事件结果',()=>{
   let found;
@@ -68,7 +69,7 @@ test('确认前后读档不会丢通知、重复给地点或重复发奖',()=>{
   s=ackResult(s);s=read(s);assert.equal(s.placeUnlock.place,'clinic');s=ackPlace(s);s=read(s);
   assert.equal(s.placeUnlock,null);assert.deepEqual(s.player,original.player);assert.equal(s.stats.delivered,1);
   assert.equal(s.logs.filter(l=>l.tag==='地点').length,1);
-  s.pending=fixture().pending;s=choose(s);assert.equal(s.placeUnlock,null);assert.equal(s.stats.delivered,2);assert.equal(s.logs.filter(l=>l.tag==='地点').length,1);
+  s=ackUnlocks(s);s.pending=fixture().pending;s=choose(s);assert.equal(s.placeUnlock,null);assert.equal(s.stats.delivered,2);assert.equal(s.logs.filter(l=>l.tag==='地点').length,1);
 });
 test('普通地址也有通知，不被错误加入常驻地图',()=>{
   const p=G.PLACES.find(p=>!p.permanent),s=choose(fixture('first-order',p.id));assert.equal(s.placeUnlock.place,p.id);
@@ -86,7 +87,7 @@ for(const [name,mutate] of [
 ])test(`拒绝损坏或冲突的解锁提示：${name}`,()=>{const s=choose(fixture());mutate(s);assert.throws(()=>G.sanitizeSave(s));});
 test('v14迁移保留既有结果、地点与资产，不为历史地点补播通知',()=>{
   const s=choose(fixture());s.schemaVersion=14;delete s.placeUnlock;const clean=read(s);
-  assert.equal(clean.schemaVersion,15);assert.equal(clean.placeUnlock,null);assert.deepEqual(clean.eventResult,s.eventResult);assert.deepEqual(clean.player,s.player);
+  assert.equal(clean.schemaVersion,G.VERSION);assert.equal(clean.placeUnlock,null);assert.deepEqual(clean.eventResult,s.eventResult);assert.deepEqual(clean.player,s.player);
   assert.equal(read(clean).placeUnlock,null);
 });
 test('旧键迁移保留原文，v15空索引不复活旧档；各存档提示独立',()=>{

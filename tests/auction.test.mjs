@@ -1,3 +1,4 @@
+import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
@@ -29,11 +30,11 @@ test('拍卖场需要已开放炼药与十单，未开启指令原子失败',()=
   const s=G.newGame('新客','classic',1);s.position='market';s.minutes=1080;s.player.money=99999;
   assert.equal(G.panelUnlocked(s,'auction'),false);assert.match(atomic(s,'auctionCatalog'),/尚未开启/);atomic(s,'auctionBid',{id:'auction-1-0'});
   s.stats.delivered=10;assert.equal(G.featureUnlocked(s,'auction'),false);
-  s.unlockedFeatures=['alchemy'];s.stats.delivered=9;assert.equal(G.featureUnlocked(s,'auction'),false);
+  s.unlockedFeatures=['alchemy'];s.stats.delivered=9;G.syncFeatureUnlocks(s,true);assert.equal(G.featureUnlocked(s,'auction'),false);
   s.stats.delivered=10;assert.ok(G.featureUnlocked(s,'auction'));
 });
 test('第十单须到达和选择结算才解锁拍卖，不能从已接单提前开启',()=>{
-  let s=G.newGame('十单客','classic',17);s.unlockedFeatures=['alchemy'];s.stats.delivered=9;
+  let s=G.newGame('十单客','classic',17);s.unlockedFeatures=['alchemy'];s.stats.delivered=9;G.syncFeatureUnlocks(s,true);
   s=act(s,'deliver',{id:s.orders[0].id});assert.equal(G.featureUnlocked(s,'auction'),false);
   s=finish(s);assert.equal(s.pending.templateId,'first-order');assert.equal(G.featureUnlocked(read(s),'auction'),false);
   s=choose(s,0);assert.equal(s.stats.delivered,10);assert.ok(s.unlockedFeatures.includes('auction'));

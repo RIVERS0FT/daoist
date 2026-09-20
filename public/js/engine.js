@@ -61,6 +61,21 @@
     s.placeUnlock={place:id,at:s.minutes};
     G.log(s,`外卖送达，解锁地点「${p.name}」。${p.permanent?'已加入地图，可在满足玩法条件后使用当地服务。':'已记入行旅；普通配送点仍仅随订单出现。'}`,'地点');
   };
+  // Display-only FIFO; permanent ownership is still held by bonds / unlockedFeatures.
+  G.nextUnlockNotice = s => s?.unlockNotices?.[0] || null;
+  G.unlockNoticeKey = notice => `${notice.kind}:${notice.id}`;
+  function queueUnlock(s,kind,id){
+    if(s.gameOver)return;
+    s.unlockNotices ||= [];
+    if(!s.unlockNotices.some(n=>n.kind===kind&&n.id===id))s.unlockNotices.push({kind,id,at:s.minutes});
+  }
+  function meetNPC(s,id,source){
+    const npc=G.NPCS.find(n=>n.id===id),bond=s.bonds[id];
+    if(!npc||!bond||bond.met||s.gameOver)return;
+    bond.met=true;
+    queueUnlock(s,'bond',id);
+    G.log(s,source==='delivery'?`这一单让你第一次正式结识${npc.name}。对方已出现在「羁绊」中。`:`你在一段意外的相逢中结识了${npc.name}。从现在起，可以在「羁绊」中找到对方。`,'相逢');
+  }
   G.newGame = (name, mode = 'classic', seed = Date.now()) => {
     name = String(name).trim();
     if (!name || [...name].length > 16) throw new RuleError('名字需要 1–16 个字符。');
@@ -77,7 +92,7 @@
       stats: {delivered:0,earned:0,distance:0,trained:0,explored:0},
       bonds: Object.fromEntries(G.NPCS.map(n => [n.id, {met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0}])),
       daily: { day:1, delivered:0, claimed:false, signedDay:0, streak:0 }, claimed: [], unlockedEndings: [], unlockedFeatures: [], unlockedPlaces: [...G.STARTING_PLACES], ending: null,
-      flags: {firstOrder:false}, recentEvents: [], pending: null, eventResult: null, placeUnlock: null, orders: [], logs: [], lastRoute: null,
+      flags: {firstOrder:false}, recentEvents: [], pending: null, eventResult: null, placeUnlock: null, unlockNotices: [], orders: [], logs: [], lastRoute: null,
       location: null, activity: null, activeOrder: null, orderRefreshAt: 495, revision: 0
     };
     G.log(s, `你在青藤小屋醒来。白天送达一份热饭，入夜寻一条自己的仙途。${mode === 'ai' ? '本存档使用 AI 剧情；接口不可用时采用经典事件。' : '本存档使用经典剧情。'}`, '启程');
@@ -213,7 +228,10 @@
     for(const f of G.FEATURE_UNLOCKS)if(G.featureUnlocked(s,f.id)){
       add(f.id);s.unlockedFeatures=[...known];
     }
-    if(!silent)for(const f of G.FEATURE_UNLOCKS)if(known.has(f.id)&&!before.has(f.id))G.log(s,`玩法开启：${f.name}。${f.notice}`,'解锁');
+    if(!silent)for(const f of G.FEATURE_UNLOCKS)if(known.has(f.id)&&!before.has(f.id)){
+      queueUnlock(s,'feature',f.id);
+      G.log(s,`玩法开启：${f.name}。${f.notice}`,'解锁');
+    }
   };
   G.restoreFeatureUnlocks = (s,raw,version) => {
     s.unlockedFeatures=version>=10&&Array.isArray(raw.unlockedFeatures)
@@ -484,7 +502,7 @@
       if (!pool.length) pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && !e.encounterNpc);
       base=pool[int(s,0,pool.length-1)];
     }
-    if(base.encounterNpc&&s.bonds[base.encounterNpc]&&!s.bonds[base.encounterNpc].met){s.bonds[base.encounterNpc].met=true;const npc=G.NPCS.find(n=>n.id===base.encounterNpc);if(npc)G.log(s,`你在一段意外的相逢中结识了${npc.name}。从现在起，可以在「羁绊」中找到对方。`,'相逢');}
+    if(base.encounterNpc)meetNPC(s,base.encounterNpc,'encounter');
     s.recentEvents=[...s.recentEvents,base.id].slice(-4);
     s.pending={...clone(base),id:`event-${s.turn}-${s.seed}`,templateId:base.id,source:'classic',aiStatus:s.mode==='ai' && base.id!=='first-order'?'unrequested':'skip',...overrides};
   }
@@ -492,7 +510,7 @@
     const reward=ticket.reward,coins=ticket.coins;
     s.player.money+=reward;s.player.coins+=coins;s.stats.earned+=reward;s.stats.delivered++;s.daily.delivered++;
     s.player.rep=clamp(s.player.rep+1,-50,100);
-    if(ticket.npc){const bond=s.bonds[ticket.npc];const npc=G.NPCS.find(n=>n.id===ticket.npc);if(!bond.met){bond.met=true;if(npc)G.log(s,`这一单让你第一次正式结识${npc.name}。对方已出现在「羁绊」中。`,'相逢');}bond.affinity=clamp(bond.affinity+3,0,100);}
+    if(ticket.npc){meetNPC(s,ticket.npc,'delivery');const bond=s.bonds[ticket.npc];bond.affinity=clamp(bond.affinity+3,0,100);}
     G.log(s, `送达「${ticket.title}」至${G.place(ticket.target).name}。现金 +¥${reward}，外卖币 +${coins}。`, '配送');
     G.unlockDeliveryPlace(s,ticket.target);
   }
@@ -555,7 +573,7 @@
   }
   function markComplete(s,kind){
     s.activity=null;s.turn++;s.revision++;normalize(s);
-    if(s.player.health<=EPS){beginRescue(s);return;}
+    if(s.player.health<=EPS){beginRescue(s);G.syncFeatureUnlocks(s);return;}
     G.syncFormulaRewards(s);
     G.refreshOrders(s);
     G.afterWorldAction?.(s,kind);
@@ -725,10 +743,10 @@
   // interval, so time spent reading (or waiting for AI) can never be caught up.
   G.advance = (original,minutes) => {
     must(Number.isFinite(minutes)&&minutes>=0&&minutes<=1440,'时间增量无效。');
-    if(!minutes||original.gameOver||original.pending||original.eventResult||original.placeUnlock||original.ending)return original;
+    if(!minutes||original.gameOver||original.pending||original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||original.ending)return original;
     const s=clone(original);let remaining=minutes;
     if(!Number.isFinite(s.orderRefreshAt)||s.orderRefreshAt<=s.minutes+EPS)s.orderRefreshAt=(Math.floor(s.minutes/15)+1)*15;
-    while(remaining>EPS&&!s.gameOver&&!s.pending&&!s.eventResult&&!s.placeUnlock&&!s.ending){
+    while(remaining>EPS&&!s.gameOver&&!s.pending&&!s.eventResult&&!s.placeUnlock&&!G.nextUnlockNotice(s)&&!s.ending){
       const a=s.activity,oldDay=G.day(s),now=s.minutes;
       if(a?.phase==='travel'&&a.route.meters-a.travelled<=EPS){arrive(s,a);continue;}
       if(a?.phase==='work'&&a.duration-a.elapsed<=EPS){finish(s,a);continue;}
@@ -790,6 +808,13 @@
         return {ok:true,state:s}; // Acknowledge only; never settle, refresh orders or invoke completion hooks.
       }
       must(!s.placeUnlock,'请先确认新解锁的地点。');
+      if(action==='ackUnlock'){
+        const notice=G.nextUnlockNotice(s);
+        must(notice&&payload.id===G.unlockNoticeKey(notice),'这个解锁提示已经确认，或尚未轮到它。');
+        s.unlockNotices.shift();s.revision++;s.updatedAt=Date.now();
+        return {ok:true,state:s}; // No gameplay effects, completion hooks or re-synchronisation.
+      }
+      must(!G.nextUnlockNotice(s),'请先确认新解锁的人物或功能。');
       must(!s.pending||action==='choose','请先完成当前事件的选择。');
       must(!s.ending||action==='continue','请先选择继续游历，或返回开始页。');
       must(!s.activity||instantWhileBusy.has(action),'当前行动仍在进行，请先停止。');
@@ -943,13 +968,13 @@
     return {title:text(raw.title,40),text:text(raw.text,500),choices};
   };
   G.applyAIEvent = (original, eventId, raw) => {
-    if(original.eventResult||original.placeUnlock||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
+    if(original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
     const s=clone(original),clean=G.validateAIEvent(raw);
     if(!s.pending.npcId)for(const c of clean.choices){delete c.effects.affinity;delete c.effects.trust;}
     Object.assign(s.pending,clean,{source:'ai',aiStatus:'success'});s.updatedAt=Date.now();return s;
   };
   G.fallbackAI = (original,eventId,message) => {
-    if(original.eventResult||original.placeUnlock||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
+    if(original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
     const s=clone(original);s.pending.aiStatus='fallback';G.log(s,`AI 剧情未采用：${String(message).slice(0,120)}。本次使用经典事件，存档模式不变。`,'系统');return s;
   };
 })(globalThis);

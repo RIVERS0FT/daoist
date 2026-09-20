@@ -1,3 +1,4 @@
+import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
@@ -7,11 +8,11 @@ import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 // 不使用全开启夹具：以下每条新档流程都从实际出厂状态开始。
 const fresh=(mode='classic')=>G.newGame('渐行',mode,67891);
-const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}if(s.placeUnlock&&!['ackResult','ackPlaceUnlock'].includes(name)){const ack=G.perform(s,'ackPlaceUnlock',{id:s.placeUnlock.place});assert.ok(ack.ok,ack.error);s=ack.state;}const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
+const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}if(s.placeUnlock&&!['ackResult','ackPlaceUnlock'].includes(name)){const ack=G.perform(s,'ackPlaceUnlock',{id:s.placeUnlock.place});assert.ok(ack.ok,ack.error);s=ack.state;}if(!['ackResult','ackPlaceUnlock','ackUnlock'].includes(name))s=ackUnlocks(s);const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
 const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<2000;i++)s=G.advance(s,1);assert.ok(!s.activity||s.gameOver);return s;};
 const choose=s=>act(s,'choose',{eventId:s.pending.id,index:s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))});
 // Existing gameplay flows include the new zero-cost read/confirm step.
-const settle=s=>{for(let i=0;(s.pending||s.eventResult||s.placeUnlock)&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}if(s.placeUnlock){s=act(s,'ackPlaceUnlock',{id:s.placeUnlock.place});continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
+const settle=s=>{for(let i=0;(s.pending||s.eventResult||s.placeUnlock||G.nextUnlockNotice(s))&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}if(s.placeUnlock){s=act(s,'ackPlaceUnlock',{id:s.placeUnlock.place});continue;}if(G.nextUnlockNotice(s)){s=ackUnlocks(s);continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
 const deliver=s=>{
   const orders=[...s.orders].sort((a,b)=>G.travelPlan(s,a.target).meters-G.travelPlan(s,b.target).meters);
   const order=orders.find(o=>!G.travelBlock(s,G.travelPlan(s,o.target)));
@@ -24,6 +25,7 @@ function street(s,duration=0){
   const e=G.EVENTS.find(e=>e.id==='story-street-vein');
   s.flags.firstOrder=true;s.flags.storyStreetVein=true;s.stats.delivered=3;s.claimed=['q1'];
   s.pending={...G.clone(e),id:'progressive-story',templateId:e.id,source:'classic',aiStatus:'skip'};
+  G.syncFeatureUnlocks(s,true);
   if(duration)s.pending.choices[0].duration=duration;
   return s;
 }
@@ -83,7 +85,7 @@ test('三单主线待选时不开放炼药，真实新档可连续解锁到炼�
   assert.equal(s.alchemy.cauldron,0);assert.equal(s.alchemy.formulas.length,12);
 });
 test('尚未领取首单奖励时，即使完成三单主线也不能跳过修行前置',()=>{
-  let s=street(fresh());s.claimed=[];s=settle(s);
+  let s=street(fresh());s.claimed=[];s.unlockedFeatures=['system'];s=settle(s);
   assert.equal(G.featureUnlocked(s,'alchemy'),false);s=act(s,'claim',{id:'q1'});
   assert.ok(G.featureUnlocked(s,'alchemy'));
 });
@@ -191,7 +193,7 @@ test('v9存储键显式迁移；新键空列表不会复活旧档；多存档所
   mem.setItem(G.STORAGE_KEY,JSON.stringify({schemaVersion:10,saves:[]}));assert.deepEqual(G.createStore(mem).load(),[]);
 });
 test('三种丹方渠道和获得条件不受入口解锁影响，隐藏方仍不能直接开炉',()=>{
-  const s=afterClaim();s.unlockedFeatures.push('alchemy');s.unlockedPlaces.push('market');s.position='market';
+  const s=ackUnlocks(afterClaim());s.unlockedFeatures.push('alchemy');s.unlockedPlaces.push('market');s.position='market';
   const candidates=G.formulaMarketCandidates(s);assert.ok(candidates.every(r=>r.acquisition.type==='shop'));
   const recipe=G.ALCHEMY_RECIPES.find(r=>!s.alchemy.formulas.includes(r.id));const r=G.perform(s,'alchemy',{recipe:recipe.id});
   assert.equal(r.ok,false);assert.match(r.error,/尚未获得丹方/);assert.ok(!r.error.includes(recipe.name));

@@ -125,6 +125,8 @@ def ack_result_ui(page):
         page.click('[data-act="ackResult"]')
     if current(page) and current(page).get('placeUnlock'):
         page.click('[data-act="ackPlaceUnlock"]')
+    while current(page) and current(page).get('unlockNotices'):
+        page.click('[data-act="ackUnlock"]')
 
 def choose_ui(page):
     ack_result_ui(page)
@@ -271,6 +273,10 @@ def progressive_browser_checks(browser):
         assert page.locator('[data-act="claim"][data-id="q2"]').count() == 0
         page.click('[data-act="claim"][data-id="q1"]')
         assert 'cultivation' in nav() and 'alchemy' not in nav()
+        assert page.locator('#unlocked-item-name').inner_text() == '修行'
+        ack_result_ui(page)
+        page.locator('#game-nav [data-panel="system"]').click()
+        page.click('[data-ui="system-tab"][data-id="quests"]')
         assert page.locator('[data-act="claim"][data-id="q2"]').count() == 1
         page.click('[data-ui="close"]')
         page.locator('#game-nav [data-panel="cultivation"]').click()
@@ -706,7 +712,7 @@ def realm_browser_checks(browser):
         old = current(page)['player']
         old.update(realm=0, realmLevel=9, mortalProgress=0, qi=12, stamina=100)
         fixture(page, {'schemaVersion': 12, 'player': old})
-        assert current(page)['schemaVersion'] == 15
+        assert current(page)['schemaVersion'] == 16
         assert current(page)['player']['mortalProgress'] == 68
         assert current(page)['player']['qi'] == 12
         page.click('.game-nav [data-panel="cultivation"]')
@@ -753,6 +759,8 @@ def place_unlock_browser_checks(browser):
         assert page.locator('.place-unlock-card').count()==1
         assert page.locator('#panel').get_attribute('class').find('centered')>=0
         assert page.locator('#unlocked-place-name').inner_text()=='回春医馆'
+        assert page.locator('.unlock-status').count()==0
+        assert '永久解锁' not in page.locator('.place-unlock-card').inner_text()
         confirm=page.locator('[data-act="ackPlaceUnlock"]')
         assert confirm.is_enabled() and confirm.evaluate('(e)=>e===document.activeElement')
         assert confirm.bounding_box()['height']>=44
@@ -778,6 +786,8 @@ def place_unlock_browser_checks(browser):
         assert page.locator('.place-unlock-card').count()==1
         page.keyboard.press('Enter')
         assert current(page)['placeUnlock'] is None
+        assert page.locator('.feature-unlock-card').count()==1
+        ack_result_ui(page)
         assert page.locator('#panel[open]').count()==0
         assert page.locator('.place-discovery').count()==1
         coords=page.evaluate("(()=>{const p=NightCourier.place('clinic');return `translate(${p.x} ${p.y})`;})()")
@@ -807,12 +817,110 @@ def place_unlock_browser_checks(browser):
         ctx.close()
 
 
+def unlock_notice_browser_checks(browser):
+    for width,height,motion in [(1440,1000,'no-preference'),(390,844,'no-preference'),(320,740,'reduce')]:
+        ctx,page,errors=setup(browser,width,height)
+        page.emulate_media(reduced_motion=motion)
+        new_game(page,'相逢与新途')
+        edits=page.evaluate('''()=>{const G=NightCourier,s=window.__live,e=G.EVENTS.find(e=>e.id==='first-order');
+          return {position:'clinic',location:null,orders:[],activity:null,eventResult:null,placeUnlock:null,unlockNotices:[],
+            unlockedPlaces:['home','garage'],unlockedFeatures:[],stats:{...s.stats,delivered:0},flags:{...s.flags,firstOrder:true},
+            pending:{...G.clone(e),id:'browser-new-bond',templateId:e.id,source:'classic',aiStatus:'skip',
+              delivery:{id:'browser-bond-ticket',target:'clinic',title:'一碗热粥',desc:'送达医馆',condition:'ordinary',expiresAt:s.minutes+30,reward:30,coins:2,npc:'lin'}}};}''')
+        fixture(page,edits,unlock_gameplay=False)
+        page.click('[data-act="choose"][data-index="0"]')
+        assert page.locator('.event-result').count()==1
+        page.click('[data-act="ackResult"]')
+        assert page.locator('.place-unlock-card').count()==1
+        assert page.locator('.unlock-status').count()==0
+        page.click('[data-act="ackPlaceUnlock"]')
+        assert page.locator('.bond-unlock-card').count()==1
+        assert page.locator('#unlocked-item-name').inner_text()=='林晚'
+        assert page.locator('#panel').evaluate('(e)=>e.classList.contains("centered") && e.classList.contains("unlock-panel")')
+        assert page.locator('[data-act="ackUnlock"]').evaluate('(e)=>e===document.activeElement')
+        assert page.locator('[data-act="ackUnlock"]').bounding_box()['height']>=44
+        assert [n['kind']+':'+n['id'] for n in current(page)['unlockNotices']]==['bond:lin','feature:system','feature:bonds']
+        snapshot=current(page)
+        page.keyboard.press('Escape');pump(page,2000)
+        assert current(page)==snapshot
+        assert page.locator('#panel[open]').count()==1
+        assert '永久解锁' not in page.locator('.unlock-card').inner_text()
+        assert page.locator('.unlock-card').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.locator('.unlock-card').evaluate('(e)=>window.__unlockNode=e')
+        pump(page,1000)
+        assert page.locator('.unlock-card').evaluate('(e)=>e===window.__unlockNode')
+        animation=page.locator('.bond-thread').evaluate('(e)=>getComputedStyle(e).animationName')
+        assert animation==('none' if motion=='reduce' else 'bond-thread-in')
+        page.screenshot(path=str(OUT/f'bond-unlock-{width}.png'))
+        page.locator('[data-ui="home"]').evaluate('(e)=>e.click()')
+        page.locator('[data-ui="load"]').first.click()
+        assert current(page)['unlockNotices']==snapshot['unlockNotices']
+        assert current(page)['player']==snapshot['player']
+        assert page.locator('.bond-unlock-card').count()==1
+        page.keyboard.press('Enter')
+        assert page.locator('.feature-unlock-card').count()==1
+        assert page.locator('#unlocked-item-name').inner_text()=='系统'
+        animation=page.locator('.feature-spark').evaluate('(e)=>getComputedStyle(e).animationName')
+        assert animation==('none' if motion=='reduce' else 'feature-light-in')
+        page.wait_for_timeout(500)
+        page.screenshot(path=str(OUT/f'feature-unlock-{width}.png'))
+        assert page.locator('#game-nav [data-panel="system"]').count()==1
+        assert page.locator('#game-nav [data-panel="bonds"]').count()==1
+        assert page.locator('#game-nav [data-panel="cultivation"]').count()==0
+        page.keyboard.press('Enter')
+        assert page.locator('#unlocked-item-name').inner_text()=='羁绊'
+        page.keyboard.press('Enter')
+        assert page.locator('#panel[open]').count()==0
+        done=current(page)
+        assert done['unlockNotices']==[]
+        for field in ['player','seed','minutes','orders','turn','bonds']:
+            assert done[field]==snapshot[field],field
+        # Restore deliberately assigns stable log IDs; content and count must not change.
+        log_content=lambda logs:[{k:v for k,v in row.items() if k!='id'} for row in logs]
+        assert log_content(done['logs'])==log_content(snapshot['logs'])
+        assert page.evaluate("window.__clock.reasons.has('manual')")
+        page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+        assert page.locator('#panel[open]').count()==0
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert page.locator('.npc-card').count()==1
+        assert page.locator('.npc-card h3').inner_text()=='林晚'
+        page.click('[data-ui="close"]')
+        record(f'{width}px 人物及功能弹窗按序展示，含动画、无胶囊、读档、单次确认及减少动态效果检查')
+        # q1 can be claimed while already travelling: a notification must pause,
+        # not stop, charge, restart or move the current action.
+        busy=page.evaluate('''()=>{const G=NightCourier;let s=G.newGame('在途提示','classic',4567);
+          s.stats.delivered=1;G.syncFeatureUnlocks(s,true);s=G.perform(s,'travel',{target:'garage'}).state;
+          s=G.advance(s,1);s=G.perform(s,'claim',{id:'q1'}).state;
+          return {minutes:s.minutes,position:s.position,location:s.location,activity:s.activity,player:s.player,
+            stats:s.stats,claimed:s.claimed,unlockedFeatures:s.unlockedFeatures,unlockedPlaces:s.unlockedPlaces,
+            unlockNotices:s.unlockNotices,pending:null,eventResult:null,placeUnlock:null,bonds:s.bonds};}''')
+        fixture(page,busy,unlock_gameplay=False)
+        assert page.locator('#unlocked-item-name').inner_text()=='修行'
+        assert page.locator('#panel [data-act="stop"]').count()==0
+        assert page.locator('[data-act="ackUnlock"]').is_enabled()
+        before=current(page);pump(page,10000)
+        assert current(page)==before
+        page.keyboard.press('Enter')
+        after=current(page)
+        assert after['activity']==before['activity'] and after['location']==before['location']
+        assert after['player']==before['player'] and after['minutes']==before['minutes']
+        assert page.evaluate("window.__clock.reasons.has('manual')")
+        toggle(page);pump(page,1000)
+        assert current(page)['minutes']>after['minutes']
+        assert current(page)['activity']['travelled']>after['activity']['travelled']
+        record(f'{width}px 行动途中功能解锁暂停阅读，确认保留手动暂停及原路线进度，继续后真实移动')
+        assert not errors,errors
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    unlock_notice_browser_checks(browser)
     place_unlock_browser_checks(browser)
     result_browser_checks(browser)
 
@@ -1247,6 +1355,7 @@ with sync_playwright() as p:
     ai.locator('[data-place="park"]').focus();ai.keyboard.press('Enter')
     ai.click('[data-act="explore"]')
     pump(ai, 3200)
+    ack_result_ui(ai)
     ai.wait_for_function("document.querySelector('#panel-title').textContent==='雨后的小灯'")
     assert stored(ai)['pending']['source'] == 'ai'
     at = stored(ai)['minutes'];pump(ai, 2000)
@@ -1258,6 +1367,7 @@ with sync_playwright() as p:
     ai.evaluate('window.__aiDelay=1200')
     ai.locator('[data-place="park"]').focus();ai.keyboard.press('Enter')
     ai.click('[data-act="explore"]');pump(ai, 3200)
+    ack_result_ui(ai)
     ai.click('[data-act="choose"][data-index="0"]')
     pump(ai, 5000)
     settled = current(ai)
@@ -1269,6 +1379,7 @@ with sync_playwright() as p:
     ai.evaluate('window.__aiDelay=0;window.__aiFail=true')
     ai.locator('[data-place="park"]').focus();ai.keyboard.press('Enter')
     ai.click('[data-act="explore"]');pump(ai, 3200)
+    ack_result_ui(ai)
     ai.wait_for_function("JSON.parse(localStorage.getItem(NightCourier.STORAGE_KEY)).saves[0].pending?.aiStatus==='fallback'")
     assert stored(ai)['pending']['source'] == 'classic'
     assert stored(ai)['mode'] == 'ai'

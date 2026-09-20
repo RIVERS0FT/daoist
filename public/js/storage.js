@@ -2,9 +2,9 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v15';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v14';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
+  G.STORAGE_KEY = 'night-courier:saves:v16';
+  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v15';
+  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
   G.BACKUP_KEY = 'night-courier:saves:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -49,6 +49,22 @@
        (s.eventResult&&s.eventResult.delivery?.target!==raw.place))throw new Error('地点解锁提示与已结算配送不一致。');
     // Text and graphics come from trusted place data, never from a saved reward/effect payload.
     return {place:raw.place,at:raw.at};
+  }
+
+  function cleanUnlockNotices(raw,s){
+    if(!Array.isArray(raw)||raw.length>G.NPCS.length+G.FEATURE_UNLOCKS.length)throw new Error('人物或功能解锁提示队列损坏。');
+    const seen=new Set();
+    return raw.map(n=>{
+      if(!obj(n)||!['bond','feature'].includes(n.kind)||typeof n.id!=='string'||
+         !Number.isFinite(n.at)||n.at<0||Math.abs(n.at-s.minutes)>1e-6||s.gameOver)throw new Error('人物或功能解锁提示无效。');
+      const owned=n.kind==='bond'?G.NPCS.some(p=>p.id===n.id)&&s.bonds[n.id]?.met===true:
+        G.FEATURE_UNLOCKS.some(f=>f.id===n.id)&&s.unlockedFeatures.includes(n.id);
+      const key=G.unlockNoticeKey(n);
+      if(!owned||seen.has(key))throw new Error('解锁提示与人物或功能所有权不一致。');
+      seen.add(key);
+      // Never restore labels, HTML, rewards, effects or permission grants from a notice.
+      return {kind:n.kind,id:n.id,at:n.at};
+    });
   }
 
   function cleanEventResult(raw,s){
@@ -173,7 +189,7 @@
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
     const name=str(raw.name??raw.player.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
@@ -277,8 +293,9 @@
     s.placeUnlock=version>=15?cleanPlaceUnlock(raw.placeUnlock,s):null;
     G.validateAuctionLinks(s);
     G.restoreFeatureUnlocks(s,raw,version);
+    s.unlockNotices=version>=16?cleanUnlockNotices(raw.unlockNotices,s):[];
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播地点解锁弹窗，新发现会保存待确认提示。`,'存档');
+    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列。`,'存档');
     return s;
   };
   G.parseImport = text => {
