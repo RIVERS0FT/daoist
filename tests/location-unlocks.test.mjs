@@ -7,11 +7,11 @@ import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 // Genuine factory state: no blanket unlocks in these tests. Targeted tickets isolate settlement from RNG.
 const fresh=(mode='classic',seed=12345)=>G.newGame('识路',mode,seed);
-const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
+const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}if(s.placeUnlock&&!['ackResult','ackPlaceUnlock'].includes(name)){const ack=G.perform(s,'ackPlaceUnlock',{id:s.placeUnlock.place});assert.ok(ack.ok,ack.error);s=ack.state;}const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
 const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<2000;i++)s=G.advance(s,Math.min(1,Math.max(1e-7,G.activityRemaining(s))));assert.ok(!s.activity||s.gameOver);return s;};
 const choose=(s,index=0)=>act(s,'choose',{eventId:s.pending.id,index});
 // Existing gameplay flows include the new zero-cost read/confirm step.
-const settle=s=>{for(let i=0;(s.pending||s.eventResult)&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
+const settle=s=>{for(let i=0;(s.pending||s.eventResult||s.placeUnlock)&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}if(s.placeUnlock){s=act(s,'ackPlaceUnlock',{id:s.placeUnlock.place});continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
 const read=s=>G.sanitizeSave(G.clone(s));
 const ticket=(s,target='market')=>{
   const o={id:`location-${s.turn}-${target}`,target,title:'认识一条新街',desc:'送到这里。',condition:'ordinary',expiresAt:s.minutes+36,reward:30,coins:2,npc:G.NPCS.find(n=>n.place===target)?.id||null};

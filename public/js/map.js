@@ -6,7 +6,7 @@
   G.CityMap=class{
     constructor(el,onSelect){
       this.el=el;this.onSelect=onSelect;this.s=null;this.scale=.7;this.tx=0;this.ty=0;this.selected=null;this.pointers=new Map();this.multi=false;this.dragged=false;
-      el.innerHTML=`<svg class="city-svg" xmlns="http://www.w3.org/2000/svg" aria-label="青岚城交互地图，使用方向键平移，加减号缩放" role="group"><defs><pattern id="water-lines" width="50" height="36" patternUnits="userSpaceOnUse"><path d="M0 18Q12 10 25 18T50 18" fill="none" stroke="#40716b" stroke-width="1" opacity=".24"/></pattern><pattern id="park-lines" width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="1" fill="#698070" opacity=".22"/></pattern><filter id="point-shadow" x="-70%" y="-70%" width="240%" height="240%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#041516" flood-opacity=".5"/></filter></defs><g class="world-layer"><g class="base-layer"></g><g class="trail-layer"></g><g class="points-layer"></g><g class="player-layer"></g></g></svg>`;
+      el.innerHTML=`<svg class="city-svg" xmlns="http://www.w3.org/2000/svg" aria-label="青岚城交互地图，使用方向键平移，加减号缩放" role="group"><defs><pattern id="water-lines" width="50" height="36" patternUnits="userSpaceOnUse"><path d="M0 18Q12 10 25 18T50 18" fill="none" stroke="#40716b" stroke-width="1" opacity=".24"/></pattern><pattern id="park-lines" width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="1" fill="#698070" opacity=".22"/></pattern><filter id="point-shadow" x="-70%" y="-70%" width="240%" height="240%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#041516" flood-opacity=".5"/></filter></defs><g class="world-layer"><g class="base-layer"></g><g class="trail-layer"></g><g class="points-layer"></g><g class="discovery-layer" aria-hidden="true"></g><g class="player-layer"></g></g></svg>`;
       this.svg=el.querySelector('svg');this.layer=el.querySelector('.world-layer');this.buildBase();this.bind();
       this.observer=new ResizeObserver(()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;if(!this.width){this.width=w;this.height=h;if(this.s)this.center();else this.fit();}else{this.tx+=(w-this.width)/2;this.ty+=(h-this.height)/2;this.width=w;this.height=h;this.transform();}});this.observer.observe(el);
     }
@@ -79,6 +79,7 @@
       }
     }
     render(s){
+      if(this.s?.id!==s?.id)this.el.querySelector('.discovery-layer').replaceChildren();
       this.s=s;if(!s)return;this.el.dataset.night=String(G.isNight(s));
       const desired=new Map(G.visibleServicePlaces(s).map(p=>[p.id,{p,order:null,status:'service'}]));
       for(const order of s.orders)desired.set(order.target,{p:G.place(order.target),order,status:'offer'});
@@ -99,6 +100,15 @@
       const player=G.playerPoint(s);
       this.el.querySelector('.player-layer').innerHTML=`<g class="player-marker" transform="translate(${player.x} ${player.y-39})" role="img" aria-label="玩家${escape(s.name)}位于${escape(G.locationName(s))}"><circle class="player-pulse" r="20" fill="#8cd6c4" opacity=".16"/><path d="M-8 9 0 18 8 9" fill="#8ad1bd"/><circle r="12" fill="#a6e5cd" stroke="#133c34" stroke-width="3"/><circle cy="-3" r="3" fill="#244a3f"/><path d="M-5 6Q0-2 5 6" fill="#244a3f"/></g>`;
       this.renderTrail();
+    }
+    celebrateUnlock(id){
+      if(!this.s||!G.placeUnlocked(this.s,id))return;
+      const p=G.place(id),layer=this.el.querySelector('.discovery-layer');
+      layer.innerHTML=`<g class="place-discovery" transform="translate(${p.x} ${p.y})"><g class="place-discovery-visual"><circle class="discovery-ring" r="27"/><circle class="discovery-ring outer" r="39"/><path class="discovery-check" d="m-8 0 5 5 12-13"/></g></g>`;
+      const node=layer.firstElementChild,remove=()=>node?.remove();
+      node.addEventListener('animationend',e=>{if(e.target.classList.contains('place-discovery-visual'))remove();});
+      // Cleanup also works when reduced motion disables CSS animation.
+      root.setTimeout(remove,1400);
     }
     renderTrail(){
       if(!this.s)return;let trail='';

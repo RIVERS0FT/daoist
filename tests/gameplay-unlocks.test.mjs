@@ -7,11 +7,11 @@ import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 // 不使用全开启夹具：以下每条新档流程都从实际出厂状态开始。
 const fresh=(mode='classic')=>G.newGame('渐行',mode,67891);
-const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
+const act=(s,name,p={})=>{if(s.eventResult&&name!=='ackResult'){const ack=G.perform(s,'ackResult',{id:s.eventResult.id});assert.ok(ack.ok,ack.error);s=ack.state;}if(s.placeUnlock&&!['ackResult','ackPlaceUnlock'].includes(name)){const ack=G.perform(s,'ackPlaceUnlock',{id:s.placeUnlock.place});assert.ok(ack.ok,ack.error);s=ack.state;}const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
 const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<2000;i++)s=G.advance(s,1);assert.ok(!s.activity||s.gameOver);return s;};
 const choose=s=>act(s,'choose',{eventId:s.pending.id,index:s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))});
 // Existing gameplay flows include the new zero-cost read/confirm step.
-const settle=s=>{for(let i=0;(s.pending||s.eventResult)&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
+const settle=s=>{for(let i=0;(s.pending||s.eventResult||s.placeUnlock)&&i<40;i++){if(s.eventResult){s=act(s,'ackResult',{id:s.eventResult.id});continue;}if(s.placeUnlock){s=act(s,'ackPlaceUnlock',{id:s.placeUnlock.place});continue;}s=finish(choose(s,s.pending.choices.findIndex(c=>!G.choiceBlock(s,c))));}assert.equal(s.pending,null);assert.equal(s.eventResult,null);return s;};
 const deliver=s=>{
   const orders=[...s.orders].sort((a,b)=>G.travelPlan(s,a.target).meters-G.travelPlan(s,b.target).meters);
   const order=orders.find(o=>!G.travelBlock(s,G.travelPlan(s,o.target)));

@@ -57,6 +57,8 @@
     const p=G.place(id);
     if(!p||s.gameOver||G.placeUnlocked(s,id))return;
     s.unlockedPlaces.push(id);
+    // Presentation receipt only: ownership and rewards have already been committed.
+    s.placeUnlock={place:id,at:s.minutes};
     G.log(s,`外卖送达，解锁地点「${p.name}」。${p.permanent?'已加入地图，可在满足玩法条件后使用当地服务。':'已记入行旅；普通配送点仍仅随订单出现。'}`,'地点');
   };
   G.newGame = (name, mode = 'classic', seed = Date.now()) => {
@@ -75,7 +77,7 @@
       stats: {delivered:0,earned:0,distance:0,trained:0,explored:0},
       bonds: Object.fromEntries(G.NPCS.map(n => [n.id, {met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0}])),
       daily: { day:1, delivered:0, claimed:false, signedDay:0, streak:0 }, claimed: [], unlockedEndings: [], unlockedFeatures: [], unlockedPlaces: [...G.STARTING_PLACES], ending: null,
-      flags: {firstOrder:false}, recentEvents: [], pending: null, eventResult: null, orders: [], logs: [], lastRoute: null,
+      flags: {firstOrder:false}, recentEvents: [], pending: null, eventResult: null, placeUnlock: null, orders: [], logs: [], lastRoute: null,
       location: null, activity: null, activeOrder: null, orderRefreshAt: 495, revision: 0
     };
     G.log(s, `你在青藤小屋醒来。白天送达一份热饭，入夜寻一条自己的仙途。${mode === 'ai' ? '本存档使用 AI 剧情；接口不可用时采用经典事件。' : '本存档使用经典剧情。'}`, '启程');
@@ -723,10 +725,10 @@
   // interval, so time spent reading (or waiting for AI) can never be caught up.
   G.advance = (original,minutes) => {
     must(Number.isFinite(minutes)&&minutes>=0&&minutes<=1440,'时间增量无效。');
-    if(!minutes||original.gameOver||original.pending||original.eventResult||original.ending)return original;
+    if(!minutes||original.gameOver||original.pending||original.eventResult||original.placeUnlock||original.ending)return original;
     const s=clone(original);let remaining=minutes;
     if(!Number.isFinite(s.orderRefreshAt)||s.orderRefreshAt<=s.minutes+EPS)s.orderRefreshAt=(Math.floor(s.minutes/15)+1)*15;
-    while(remaining>EPS&&!s.gameOver&&!s.pending&&!s.eventResult&&!s.ending){
+    while(remaining>EPS&&!s.gameOver&&!s.pending&&!s.eventResult&&!s.placeUnlock&&!s.ending){
       const a=s.activity,oldDay=G.day(s),now=s.minutes;
       if(a?.phase==='travel'&&a.route.meters-a.travelled<=EPS){arrive(s,a);continue;}
       if(a?.phase==='work'&&a.duration-a.elapsed<=EPS){finish(s,a);continue;}
@@ -782,6 +784,12 @@
         return {ok:true,state:s}; // No turn, RNG, logs, rewards, time or world completion hook.
       }
       must(!s.eventResult,'请先阅读并确认本次事件结果。');
+      if(action==='ackPlaceUnlock'){
+        must(s.placeUnlock&&payload.id===s.placeUnlock.place,'这个地点解锁提示已经确认，请勿重复操作。');
+        s.placeUnlock=null;s.revision++;s.updatedAt=Date.now();
+        return {ok:true,state:s}; // Acknowledge only; never settle, refresh orders or invoke completion hooks.
+      }
+      must(!s.placeUnlock,'请先确认新解锁的地点。');
       must(!s.pending||action==='choose','请先完成当前事件的选择。');
       must(!s.ending||action==='continue','请先选择继续游历，或返回开始页。');
       must(!s.activity||instantWhileBusy.has(action),'当前行动仍在进行，请先停止。');
@@ -935,13 +943,13 @@
     return {title:text(raw.title,40),text:text(raw.text,500),choices};
   };
   G.applyAIEvent = (original, eventId, raw) => {
-    if(original.eventResult||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
+    if(original.eventResult||original.placeUnlock||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
     const s=clone(original),clean=G.validateAIEvent(raw);
     if(!s.pending.npcId)for(const c of clean.choices){delete c.effects.affinity;delete c.effects.trust;}
     Object.assign(s.pending,clean,{source:'ai',aiStatus:'success'});s.updatedAt=Date.now();return s;
   };
   G.fallbackAI = (original,eventId,message) => {
-    if(original.eventResult||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
+    if(original.eventResult||original.placeUnlock||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
     const s=clone(original);s.pending.aiStatus='fallback';G.log(s,`AI 剧情未采用：${String(message).slice(0,120)}。本次使用经典事件，存档模式不变。`,'系统');return s;
   };
 })(globalThis);

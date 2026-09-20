@@ -76,7 +76,7 @@ test('第三单结果不会被主线覆盖；确认只显露已排队主线，�
   assert.equal(s.eventResult.title,'第一声「叮」');assert.equal(s.pending.templateId,'story-street-vein');
   const copy=read(s);assert.equal(copy.eventResult.text,s.eventResult.text);assert.equal(copy.pending.templateId,'story-street-vein');
   const seed=copy.seed,turn=copy.turn,done=ack(copy);assert.equal(done.seed,seed);assert.equal(done.turn,turn);assert.equal(done.pending.id,copy.pending.id);
-  const next=choose(done);assert.equal(next.eventResult.title,'地图上多出来的一条线');assert.equal(next.pending,null);
+  const next=choose(act(done,'ackPlaceUnlock',{id:done.placeUnlock.place}));assert.equal(next.eventResult.title,'地图上多出来的一条线');assert.equal(next.pending,null);
   assert.ok(G.featureUnlocked(next,'alchemy'));
 });
 test('物品付出和人物好感/信任按实际变化显示，章节不在确认时再次推进',()=>{
@@ -109,11 +109,11 @@ test('损坏回执拒绝整档，显示字段白名单丢弃注入效果；多�
   const clean=read(injected);assert.equal(clean.eventResult.effects,undefined);assert.equal(clean.eventResult.delivery.reward,undefined);assert.equal(clean.player.money,s.player.money);
   const other=G.newGame('另一份旅程');assert.equal(other.eventResult,null);ack(s);assert.notEqual(s.eventResult,null);
 });
-test('v12 存储键迁入 v14，保留原文；损坏结果不静默覆盖',()=>{
+test('v12 存储键迁入当前版，保留原文；损坏结果不静默覆盖',()=>{
   class Memory{data=new Map();getItem(k){return this.data.get(k)??null;}setItem(k,v){this.data.set(k,String(v));}removeItem(k){this.data.delete(k);}}
   const memory=new Memory(),legacy=fixture();legacy.pending=null;legacy.schemaVersion=12;delete legacy.eventResult;
   const raw=JSON.stringify({version:12,saves:[legacy]});memory.setItem('night-courier:saves:v12',raw);
-  const store=G.createStore(memory);store.load();assert.equal(store.saves.length,1);assert.equal(store.saves[0].schemaVersion,14);assert.equal(store.saves[0].eventResult,null);assert.equal(memory.getItem('night-courier:saves:v12'),raw);
+  const store=G.createStore(memory);store.load();assert.equal(store.saves.length,1);assert.equal(store.saves[0].schemaVersion,G.VERSION);assert.equal(store.saves[0].eventResult,null);assert.equal(memory.getItem('night-courier:saves:v12'),raw);
   const broken=choose(fixture());broken.eventResult.changes=[{key:'illegal',delta:1}];const bad=JSON.stringify({version:13,saves:[broken]});memory.setItem(G.STORAGE_KEY,bad);
   const fail=G.createStore(memory);fail.load();assert.ok(fail.warning);assert.equal(memory.getItem(G.STORAGE_KEY),bad);
 });
@@ -123,11 +123,11 @@ test('选择造成气血耗尽仍先阅读结果，之后才沿路救助',()=>{
   s=choose(s);assert.equal(s.activity.kind,'rescue');assert.ok(s.eventResult);assert.equal(G.advance(s,100),s);s=read(s);s=ack(s);const moved=G.advance(s,1);assert.ok(moved.minutes>s.minutes);
 });
 
-test('v13 境界存档迁至 v14：新增四境与旧凡人抵扣不丢失，也不补造结果',()=>{
+test('v13 境界存档迁至当前版：新增四境与旧凡人抵扣不丢失，也不补造结果',()=>{
   for(const [realm,realmLevel,mortalProgress] of [[0,1,68],[6,9,0],[7,3,0],[8,5,0],[9,9,0]]){
     const s=G.newGame('兼容旧境界','classic',7321);s.schemaVersion=13;delete s.eventResult;
     Object.assign(s.player,{realm,realmLevel,mortalProgress,qi:88.5,money:450});
-    const clean=read(s);assert.equal(clean.schemaVersion,14);assert.equal(clean.eventResult,null);
+    const clean=read(s);assert.equal(clean.schemaVersion,G.VERSION);assert.equal(clean.eventResult,null);
     assert.deepEqual(clean.player,s.player);assert.deepEqual(clean.inventory,s.inventory);assert.equal(clean.minutes,s.minutes);
     assert.deepEqual(read(clean).player,clean.player);
   }
@@ -138,7 +138,7 @@ test('v13 境界存档迁至 v14：新增四境与旧凡人抵扣不丢失，也
   const clean=read(s);assert.deepEqual(clean.activity,s.activity);assert.deepEqual(clean.player,s.player);assert.equal(clean.eventResult,null);
   assert.deepEqual(read(clean).activity,clean.activity);
 });
-test('优先迁移已发布 v13 存储键；v14 空列表不复活更旧档案',()=>{
+test('优先迁移已发布 v13 存储键；当前键空列表不复活更旧档案',()=>{
   const s=G.newGame('v13旅程','classic',899);s.schemaVersion=13;delete s.eventResult;
   Object.assign(s.player,{realm:6,realmLevel:7,mortalProgress:0});
   const raw=JSON.stringify({schemaVersion:13,saves:[s]}),values=new Map([['night-courier:saves:v13',raw]]);

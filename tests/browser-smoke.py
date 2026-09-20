@@ -123,8 +123,11 @@ def finish_ui_activity(page):
 def ack_result_ui(page):
     if current(page) and current(page).get('eventResult'):
         page.click('[data-act="ackResult"]')
+    if current(page) and current(page).get('placeUnlock'):
+        page.click('[data-act="ackPlaceUnlock"]')
 
 def choose_ui(page):
+    ack_result_ui(page)
     index = page.evaluate('window.__live.pending.choices.findIndex(c=>!NightCourier.choiceBlock(window.__live,c))')
     assert index >= 0
     page.click(f'[data-act="choose"][data-index="{index}"]')
@@ -140,6 +143,7 @@ def settle_ui(page):
     raise AssertionError('Event chain did not finish')
 
 def nearest_ui_delivery(page):
+    ack_result_ui(page)
     target = page.evaluate('''()=>{const G=NightCourier,s=window.__live;return [...s.orders].filter(o=>!G.travelBlock(s,G.travelPlan(s,o.target))).sort((a,b)=>G.travelPlan(s,a.target).meters-G.travelPlan(s,b.target).meters)[0].target;}''')
     page.locator(f'.order-point[data-place="{target}"]').focus()
     page.keyboard.press('Enter')
@@ -160,7 +164,9 @@ def location_browser_checks(browser):
         marker = page.locator(f'.order-point[data-place="{target}"]')
         assert '首次送达后解锁地点' in marker.get_attribute('aria-label')
         marker.focus();page.keyboard.press('Enter')
-        assert '首次送达' in page.locator('#panel').inner_text()
+        assert '送达后解锁' in page.locator('#panel').inner_text()
+        assert '消失时间只限制接单' not in page.locator('#panel').inner_text()
+        assert '首次送达并完成事件选择后' not in page.locator('#panel').inner_text()
         assert page.locator('[data-act="travel"]').count() == 0
         assert page.locator('[data-act="meal"], [data-act="heal"], [data-act="visit"], [data-act="panel-vehicle"]').count() == 0
         before = current(page)
@@ -570,6 +576,7 @@ def result_browser_checks(browser):
         assert page.evaluate("window.__clock.reasons.has('manual')")
         pump(page, 10000)
         page.keyboard.press('Enter')
+        ack_result_ui(page)
         assert current(page)['eventResult'] is None
         assert current(page)['player']==settled['player']
         assert current(page)['stats']==settled['stats']
@@ -617,6 +624,7 @@ def result_browser_checks(browser):
         assert current(page)['eventResult']==receipt
         assert current(page)['pending']['templateId']=='story-street-vein'
         page.click('[data-act="ackResult"]')
+        ack_result_ui(page)
         assert page.locator('.choice').count()==3
         assert current(page)['pending']['templateId']=='story-street-vein'
         assert current(page)['stats']['delivered']==3
@@ -698,7 +706,7 @@ def realm_browser_checks(browser):
         old = current(page)['player']
         old.update(realm=0, realmLevel=9, mortalProgress=0, qi=12, stamina=100)
         fixture(page, {'schemaVersion': 12, 'player': old})
-        assert current(page)['schemaVersion'] == 14
+        assert current(page)['schemaVersion'] == 15
         assert current(page)['player']['mortalProgress'] == 68
         assert current(page)['player']['qi'] == 12
         page.click('.game-nav [data-panel="cultivation"]')
@@ -725,12 +733,87 @@ def realm_browser_checks(browser):
         assert not errors, errors
         ctx.close()
 
+def place_unlock_browser_checks(browser):
+    for width,height,motion in [(1440,1000,'no-preference'),(390,844,'no-preference'),(320,740,'reduce')]:
+        ctx,page,errors=setup(browser,width,height)
+        page.emulate_media(reduced_motion=motion)
+        new_game(page,'街巷初识')
+        edits=page.evaluate('''()=>{const G=NightCourier,s=window.__live,e=G.EVENTS.find(e=>e.id==='first-order');
+          return {position:'clinic',location:null,orders:[],activity:null,eventResult:null,placeUnlock:null,
+            unlockedPlaces:['home','garage'],stats:{...s.stats,delivered:0},flags:{...s.flags,firstOrder:true},
+            pending:{...G.clone(e),id:'browser-place-unlock',templateId:e.id,source:'classic',aiStatus:'skip',
+              delivery:{id:'browser-place-ticket',target:'clinic',title:'一碗热粥',desc:'送达医馆',condition:'ordinary',expiresAt:s.minutes+30,reward:30,coins:2,npc:null}}};}''')
+        fixture(page,edits,unlock_gameplay=False)
+        assert page.locator('#panel[open] .place-unlock-card').count()==0
+        page.click('[data-act="choose"][data-index="0"]')
+        assert current(page)['placeUnlock']['place']=='clinic'
+        assert page.locator('.event-result').count()==1
+        assert page.locator('#panel[open] .place-unlock-card').count()==0
+        page.click('[data-act="ackResult"]')
+        assert page.locator('.place-unlock-card').count()==1
+        assert page.locator('#panel').get_attribute('class').find('centered')>=0
+        assert page.locator('#unlocked-place-name').inner_text()=='回春医馆'
+        confirm=page.locator('[data-act="ackPlaceUnlock"]')
+        assert confirm.is_enabled() and confirm.evaluate('(e)=>e===document.activeElement')
+        assert confirm.bounding_box()['height']>=44
+        snapshot=current(page)
+        page.keyboard.press('Escape');pump(page,20000)
+        assert current(page)==snapshot
+        assert page.locator('#panel[open]').count()==1
+        assert page.locator('.place-unlock-card').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        # A HUD refresh must not recreate the card or restart its animations.
+        page.locator('.place-unlock-card').evaluate('(e)=>window.__unlockNode=e')
+        pump(page,1000)
+        assert page.locator('.place-unlock-card').evaluate('(e)=>e===window.__unlockNode')
+        if motion=='reduce':
+            assert page.locator('.unlock-shackle').evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+        page.screenshot(path=str(OUT/f'place-unlock-{width}.png'))
+        record(f'{width}px 地点弹窗在结果之后展示；聚焦、暂停、Esc、布局与减少动态效果通过')
+        # Switch through the saved menu: the unread notice survives; no new rewards.
+        page.locator('[data-ui="home"]').evaluate('(e)=>e.click()')
+        page.locator('[data-ui="load"]').first.click()
+        assert current(page)['placeUnlock']==snapshot['placeUnlock']
+        assert current(page)['player']==snapshot['player']
+        assert page.locator('.place-unlock-card').count()==1
+        page.keyboard.press('Enter')
+        assert current(page)['placeUnlock'] is None
+        assert page.locator('#panel[open]').count()==0
+        assert page.locator('.place-discovery').count()==1
+        coords=page.evaluate("(()=>{const p=NightCourier.place('clinic');return `translate(${p.x} ${p.y})`;})()")
+        assert page.locator('.place-discovery').get_attribute('transform')==coords
+        page.evaluate('window.__map.zoom(1.2);window.__map.tx-=25;window.__map.transform()')
+        assert page.locator('.place-discovery').get_attribute('transform')==coords
+        assert current(page)['player']==snapshot['player'] and current(page)['minutes']==snapshot['minutes']
+        assert page.evaluate("window.__clock.reasons.has('manual')")
+        after=current(page)
+        forged_button(page,{'act':'ackPlaceUnlock','id':'clinic'})
+        assert current(page)==after
+        page.wait_for_timeout(1500)
+        assert page.locator('.place-discovery').count()==0
+        page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+        assert page.locator('#panel[open] .place-unlock-card').count()==0
+        assert current(page)['placeUnlock'] is None
+        record(f'{width}px 未确认提示可读档；确认不重奖、手动暂停保留、光环缩放不偏移且自动清理')
+        # Same address again: receipt but no unlock replay.
+        edits['unlockedPlaces']=['home','garage','clinic']
+        edits['stats']['delivered']=1
+        fixture(page,edits,unlock_gameplay=False)
+        page.click('[data-act="choose"][data-index="0"]')
+        assert current(page)['placeUnlock'] is None
+        ack_result_ui(page)
+        assert page.locator('#panel[open] .place-unlock-card').count()==0
+        assert not errors,errors
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    place_unlock_browser_checks(browser)
     result_browser_checks(browser)
 
     realm_browser_checks(browser)
