@@ -92,10 +92,10 @@ test('随机相逢按原触发时机结识：先确认人物和羁绊入口，�
   result=read(result);reject(result,'choose',{eventId:pending.id,index:0});result=rest(result);
   assert.deepEqual(result.pending,{...pending,npcId:null,npcAdvance:false});assert.ok(choose(result).eventResult);
 });
-test('所有八项功能使用配置生成一次提示，不包含奖励或任意文本',()=>{
+test('原有八项功能使用配置生成一次提示，不包含奖励或任意文本',()=>{
   const s=G.newGame('功能');s.stats.delivered=20;s.claimed=['q1'];s.stats.trained=1;s.flags.storyStreetVein=true;s.bonds.lin.met=true;
   const before=G.clone(s);G.syncFeatureUnlocks(s);
-  assert.deepEqual(s.unlockNotices.map(n=>n.id),G.FEATURE_UNLOCKS.map(f=>f.id));assert.ok(s.unlockNotices.every(n=>n.kind==='feature'));
+  assert.deepEqual(s.unlockNotices.map(n=>n.id),G.FEATURE_UNLOCKS.filter(f=>f.id!=='sect').map(f=>f.id));assert.ok(s.unlockNotices.every(n=>n.kind==='feature'));
   assert.deepEqual(s.player,before.player);assert.equal(s.minutes,before.minutes);assert.equal(s.seed,before.seed);
   const notices=G.clone(s.unlockNotices);G.syncFeatureUnlocks(s);assert.deepEqual(s.unlockNotices,notices);
   const done=rest(s);G.syncFeatureUnlocks(done);assert.deepEqual(done.unlockNotices,[]);
@@ -128,7 +128,7 @@ test('v16 读档保留队列顺序；确认的项不会重新出现',()=>{
 });
 test('v15 迁移保留未读结果和地点，不给历史人物或功能补弹',()=>{
   const s=choose(delivery());s.schemaVersion=15;delete s.unlockNotices;const a=read(s);
-  assert.equal(a.schemaVersion,16);assert.deepEqual(a.unlockNotices,[]);assert.deepEqual(a.eventResult,s.eventResult);
+  assert.equal(a.schemaVersion,G.VERSION);assert.deepEqual(a.unlockNotices,[]);assert.deepEqual(a.eventResult,s.eventResult);
   assert.deepEqual(a.placeUnlock,s.placeUnlock);assert.deepEqual(a.bonds,s.bonds);assert.deepEqual(a.player,s.player);
   assert.deepEqual(read(a).unlockNotices,[]);
 });

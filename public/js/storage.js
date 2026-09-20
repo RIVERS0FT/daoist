@@ -2,9 +2,9 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v16';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v15';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
+  G.STORAGE_KEY = 'night-courier:saves:v17';
+  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v16';
+  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
   G.BACKUP_KEY = 'night-courier:saves:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -27,6 +27,12 @@
       const clean=G.auctionDecision(s,lot);
       if(p.id!==clean.id)throw new Error('拍卖事件标识与轮次不一致。');
       return clean; // 丢弃任何外来 effects / AI 文本；从当前拍品重建三个固定操作。
+    }
+    if(p.templateId==='story-sect-invitation'){
+      if(p.delivery||p.npcId||p.kind!=='story')throw new Error('宗门引荐不接受配送票据或人物进度。');
+      const base=G.EVENTS.find(e=>e.id===p.templateId);
+      if(!base)throw new Error('宗门引荐剧情尚未加载。');
+      return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip'};
     }
       let base;
       const npc=G.NPCS.find(n=>n.id===p.npcId);
@@ -93,7 +99,7 @@
   }
 
   function cleanActivity(raw,s,version=G.VERSION){
-    const kinds=['travel','deliver','moveHome','sleep','visit','rest','cultivate','breakthrough','alchemy','explore','charge','repair','upgrade','heal','meal','choice','rescue','auction'];
+    const kinds=['travel','deliver','moveHome','sleep','visit','rest','cultivate','breakthrough','alchemy','explore','charge','repair','upgrade','heal','meal','choice','rescue','auction','sectJoin','sectTask','sectPromote'];
     if(!obj(raw)||!kinds.includes(raw.kind)||!['travel','work'].includes(raw.phase))throw new Error('进行中的行动格式无效。');
     const kind=raw.kind,p=obj(raw.params)?raw.params:{},params={};
     let duration=({rest:60,sleep:480,visit:20,breakthrough:60,explore:30,charge:G.CHARGE.minutes,repair:30,upgrade:45,heal:30,meal:20,rescue:180})[kind]||0;
@@ -145,6 +151,18 @@
       if(Object.keys(raw.recovery||{}).length||raw.gainedQi)throw new Error('竞拍行动不能携带额外恢复或修为。');
       params.day=p.day;params.lotId=p.lotId;params.round=p.round;duration=G.AUCTION.roundMinutes;
     }
+    if(['sectJoin','sectTask','sectPromote'].includes(kind)){
+      if(raw.phase!=='work'||raw.target||raw.route||raw.travelled||Object.keys(raw.recovery||{}).length||raw.gainedQi)throw new Error('宗门行动不能携带路线或额外收益。');
+      if(kind==='sectTask'){
+        if(!G.sectDuty(p.id)||!Number.isInteger(p.day)||p.day<1||p.day!==Math.floor(raw.startedAt/1440)+1)throw new Error('执事行动的日期或类型无效。');
+        params.id=p.id;params.day=p.day;
+      }
+      if(kind==='sectPromote'){
+        if(!Number.isInteger(p.rank)||p.rank<1||p.rank>=G.SECT.ranks.length)throw new Error('晋升身份无效。');params.rank=p.rank;
+      }
+      duration=G.sectWork(kind,params).minutes;
+      if(raw.duration!==duration||!Number.isFinite(raw.elapsed)||raw.elapsed<0||raw.elapsed>duration||!Number.isFinite(raw.startedAt)||raw.startedAt<0||Math.abs(raw.startedAt+raw.elapsed-s.minutes)>1e-6)throw new Error('宗门行动进度与时间不一致。');
+    }
     if(kind==='choice'){
       if(p.event?.kind==='auction')throw new Error('拍卖必须使用独立竞价行动。');
       params.event=cleanPending(p.event,s);
@@ -189,7 +207,7 @@
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
     const name=str(raw.name??raw.player.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
@@ -278,6 +296,7 @@
       // 1.7.1 将修车点改为初始地点；旧 v12 补齐例外，不发发现奖励或开放其他地点。
       for(const id of G.STARTING_PLACES)if(!s.unlockedPlaces.includes(id))s.unlockedPlaces.push(id);
     }
+    s.sect=version>=17?G.cleanSect(raw.sect,s):G.emptySect();
     s.activity=version>=5&&raw.activity?cleanActivity(raw.activity,s,version):null;
     if(s.activity){
       const a=s.activity,params=a.kind==='travel'?{target:a.target}:a.params;
@@ -293,9 +312,10 @@
     s.placeUnlock=version>=15?cleanPlaceUnlock(raw.placeUnlock,s):null;
     G.validateAuctionLinks(s);
     G.restoreFeatureUnlocks(s,raw,version);
+    G.validateSectLinks(s);
     s.unlockNotices=version>=16?cleanUnlockNotices(raw.unlockNotices,s):[];
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列。`,'存档');
+    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门从未入宗开始，不补贡献或典籍。`,'存档');
     return s;
   };
   G.parseImport = text => {

@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
-  G.VERSION = 16;
-  G.APP_VERSION = '1.9.4';
+  G.VERSION = 17;
+  G.APP_VERSION = '1.10.0';
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   // 只向东、向南追加网格；原 7×6 城区的坐标、地点 ID 与桥梁不变。
@@ -17,6 +17,30 @@
     realmByTier:G.ALCHEMY_REALM_BY_TIER});
   // 匿名席位，不作为自动结识的羁绊人物。
   G.AUCTION_BIDDERS = [{id:'herbalist',name:'青衣药商'},{id:'wanderer',name:'赤袖散修'},{id:'collector',name:'青灯藏家'}];
+  // 首个可加入宗门，沿用已发布的听雨观坐标，不新增地图捷径或丹方渠道。
+  G.SECT = {id:'tingyu',name:'听雨观',place:'temple',joinMinutes:20,rejoinDays:1,
+    motto:'不问来处，先护人间。',
+    ranks:[
+      {name:'外门弟子',realm:1,level:1,earned:0,completed:0,cost:0,minutes:0,stamina:0,training:0},
+      {name:'内门弟子',realm:1,level:5,earned:40,completed:3,cost:20,minutes:30,stamina:10,training:.05},
+      {name:'亲传弟子',realm:2,level:1,earned:140,completed:10,cost:60,minutes:45,stamina:16,training:.08},
+      {name:'护法长老',realm:3,level:1,earned:360,completed:24,cost:120,minutes:60,stamina:24,training:.12}
+    ],
+    duties:[
+      {id:'sweep',name:'洒扫山门',desc:'清理山门石阶，为晚归的同门留一条干净的路。',rank:0,minutes:30,stamina:8,mana:0,contribution:8,qi:4},
+      {id:'copy',name:'誊录经卷',desc:'在藏经阁校对旧卷，把修行心得留给后来的人。',rank:0,minutes:45,stamina:10,mana:4,contribution:12,qi:8},
+      {id:'ward',name:'温养阵眼',desc:'在观内静室调息，修补守城阵的细小裂隙。',rank:1,minutes:60,stamina:16,mana:8,contribution:20,qi:15}
+    ],
+    commission:{name:'人间行走',count:3,contribution:20,qi:10},
+    library:[
+      {id:'rain-breath',name:'听雨吐纳诀',desc:'修炼修为收益 +10%，与现有心法叠加。',rank:0,cost:30,manual:true},
+      {id:'steady-heart',name:'守心篇',desc:'突破成功率 +3 个百分点，仍受 95% 上限限制。',rank:1,cost:60,manual:true},
+      {id:'gentle-fire',name:'调火札记',desc:'炼药成丹率 +3 个百分点，仍受 98% 上限限制；不是丹方。',rank:2,cost:90,manual:true},
+      {id:'herbs',name:'青灵草 ×3',desc:'基础炼药材料，收入行囊。',rank:0,cost:8,item:'herb',count:3},
+      {id:'qi-pill',name:'一阶凝气丹 ×1',desc:'收入行囊，使用后才获得修为。',rank:0,cost:12,item:'qi',count:1},
+      {id:'foundation-pill',name:'一阶破境丹 ×1',desc:'收入行囊，突破时可选择服用。',rank:1,cost:50,item:'foundation',count:1}
+    ]
+  };
   // 功能开放只看已结算的经历；门槛、说明和入口共享同一份配置。
   G.FEATURE_UNLOCKS = [
     {id:'system',name:'系统',hint:'完成并结算第 1 单配送',ready:s=>s.stats.delivered>=1,
@@ -34,10 +58,12 @@
       notice:'长乐集的万宝拍卖场递来请柬。导航已开放拍卖，每晚 18:00–24:00 可到场竞价。'},
     {id:'endings',name:'归途',hint:'累计完成并结算 20 单配送',requires:['system'],ready:s=>s.stats.delivered>=20,
       notice:'系统已开放归途页，满足各结局条件后可自行选择。'},
+    {id:'sect',name:'宗门',hint:'炼气后，通过配送解锁听雨观并结识陆听雨，完成引荐剧情',requires:['practice'],optional:true,ready:s=>s.sect?.invited===true,
+      notice:'导航栏已开放宗门。可沿道路到听雨观入宗，做执事、积累贡献、晋升并兑换典籍；也可继续散修。'},
     {id:'bonds',name:'羁绊',hint:'通过配送或奇遇结识第一位人物',optional:true,ready:s=>Object.values(s.bonds).some(b=>b.met===true),
       notice:'导航栏已开放羁绊，只显示真正结识过的人物。'}
   ];
-  G.FEATURE_PANELS = {system:'system',cultivation:'cultivation',alchemy:'alchemy',bonds:'bonds',auction:'auction'};
+  G.FEATURE_PANELS = {system:'system',cultivation:'cultivation',alchemy:'alchemy',bonds:'bonds',auction:'auction',sect:'sect'};
   G.ROAD_LAYOUT = { riverColumn: 3, bridgeRows: [1, 3, 5, 7] };
   G.ROAD_NODES = G.GRID_Y.flatMap((y,r) => G.GRID_X.map((x,c) => ({x,y,c,r})));
   // 绘制、寻路和途中存档校验共用同一组真实道路，不另画可穿江的假路。

@@ -7,6 +7,7 @@
   const c = (label, result, effects = {}, extra = {}) => ({ label, result, effects, ...extra });
 
   G.STORY_FLAG_KEYS = [
+    'storySectInvitation',
     'storyStreetVein',
     'storySecondCity',
     'storyLanternNetwork',
@@ -78,6 +79,17 @@
 
   const storyEvents = [
     {
+      id:'story-sect-invitation',kind:'story',flag:'storySectInvitation',
+      ready:s=>!s.sect.invited&&G.sectInvitationReady(s),
+      title:'山门为谁而开',
+      text:'陆听雨发来一段语音：听雨观准备重新收徒，不再只靠一个人守着旧阵。「你已能引气入体，也真的把饭送进过这道山门。愿意的话，来做一名走在人间的弟子。宗门不替你决定去路，更不会收走你的外卖箱。」',
+      choices:[
+        c('听他说完门规','不欺凡人，不弃同门，不以修为夺人饭碗。你收下引荐信；是否入宗，仍由你亲自到听雨观决定。',{qi:4}),
+        c('问入宗后能否继续送外卖','陆听雨回答：「这正是我们的修行。」你收下引荐信，记住了宗门外送委托的约定。',{rep:1}),
+        c('收下引荐信，暂时保持散修身份','山门会为你留着。宗门入口已经开放，但不会替你入宗，也不会改变已有的生活。')
+      ]
+    },
+    {
       id:'story-street-vein', kind:'story', flag:'storyStreetVein',
       ready:s=>s.flags.firstOrder && s.stats.delivered>=3,
       title:'地图上多出来的一条线',
@@ -146,7 +158,9 @@
   if (originalSanitize) {
     G.sanitizeSave = raw => {
       const s = originalSanitize(raw);
-      for (const key of G.STORY_FLAG_KEYS) s.flags[key] = raw?.flags?.[key] === true;
+      for (const key of G.STORY_FLAG_KEYS) s.flags[key] = key==='storySectInvitation'&&(raw.schemaVersion??raw.version)<17?false:raw?.flags?.[key] === true;
+      // 已读引荐由宗门状态佐证；丢失触发标记的旧待选剧情仍可继续，不重发奖励。
+      s.flags.storySectInvitation=s.sect.invited||s.pending?.templateId==='story-sect-invitation';
       // 已完成的旧剧情和羁绊补领一次；仍在待选/执行中的主线不算完成。
       G.syncFormulaRewards(s);
       G.syncFeatureUnlocks(s,true);
@@ -154,7 +168,7 @@
     };
   }
 
-  const storyActions = new Set(['deliver','choose','travel','moveHome','rest','sleep','cultivate','breakthrough','explore','visit','heal','meal','alchemy']);
+  const storyActions = new Set(['deliver','choose','travel','moveHome','rest','sleep','cultivate','breakthrough','explore','visit','heal','meal','alchemy','sectJoin','sectTask','sectPromote']);
   function injectStoryEvent(s) {
     if (s.gameOver || s.pending || s.ending || s.activity) return;
     const next = storyEvents.find(e => !s.flags[e.flag] && e.ready(s));

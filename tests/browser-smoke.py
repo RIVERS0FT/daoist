@@ -717,7 +717,7 @@ def realm_browser_checks(browser):
         old = current(page)['player']
         old.update(realm=0, realmLevel=9, mortalProgress=0, qi=12, stamina=100)
         fixture(page, {'schemaVersion': 12, 'player': old})
-        assert current(page)['schemaVersion'] == 16
+        assert current(page)['schemaVersion'] == page.evaluate('NightCourier.VERSION')
         assert current(page)['player']['mortalProgress'] == 68
         assert current(page)['player']['qi'] == 12
         page.click('.game-nav [data-panel="cultivation"]')
@@ -967,12 +967,101 @@ def delivery_coins_browser_checks(browser):
         ctx.close()
 
 
+def sect_browser_checks(browser):
+    for width,height in [(1200,900),(320,740)]:
+        ctx,page,errors=setup(browser,width,height,ai=True)
+        new_game(page,'山门行者','ai')
+        assert page.locator('#game-nav [data-panel="sect"]').count()==0
+        before=current(page)
+        forged_button(page,{'panel':'sect'})
+        assert current(page)==before and not page.locator('.sect-view').count()
+        edits=page.evaluate('''()=>{const G=NightCourier,s=window.__live;return {
+          player:{...s.player,realm:1,realmLevel:1},stats:{...s.stats,delivered:1},claimed:['q1'],
+          flags:{...s.flags,firstOrder:true},bonds:{...s.bonds,lu:{...s.bonds.lu,met:true}},
+          unlockedFeatures:['system','cultivation','practice','bonds'],unlockedPlaces:['home','garage','temple']
+        };}''')
+        fixture(page,edits,unlock_gameplay=False)
+        page.click('#game-nav [data-panel="rest"]');page.click('[data-act="rest"]');finish_ui_activity(page)
+        assert current(page)['pending']['templateId']=='story-sect-invitation'
+        assert current(page)['pending']['aiStatus']=='skip'
+        assert page.locator('#game-nav [data-panel="sect"]').count()==0
+        page.click('[data-act="choose"][data-index="2"]')
+        assert current(page)['sect']['invited'] and not current(page)['sect']['member']
+        ack_result_ui(page)
+        assert page.locator('#game-nav [data-panel="sect"]').is_visible()
+        record(f'{width}px 宗门在固定引荐剧情结算后才显示，AI不改引荐，可保持散修')
+        page.click('#game-nav [data-panel="sect"]')
+        assert page.locator('[data-act="sectJoin"]').is_disabled()
+        source=current(page)['position']
+        page.click('.sect-view [data-act="travel"]');assert current(page)['position']==source
+        finish_ui_activity(page);settle_ui(page)
+        page.click('#game-nav [data-panel="sect"]');page.click('[data-act="sectJoin"]')
+        assert not current(page)['sect']['member']
+        # 真实 UI 存储往返：回菜单再载入，不伪装为原生浏览器 reload。
+        page.select_option('#time-speed','10');pump(page,1000)
+        page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+        assert not current(page)['sect']['member'] and current(page)['activity']['kind']=='sectJoin'
+        assert page.evaluate("window.__clock.reasons.has('manual')")
+        finish_ui_activity(page)
+        assert current(page)['sect']['member'] and page.locator('.sect-view').is_visible()
+        record(f'{width}px 宗门需真实到场，入宗耗时、途中存读和默认暂停正确')
+        page.click('[data-ui="sect-tab"][data-id="duties"]')
+        page.click('[data-sect-duty="sweep"] [data-act="sectTask"]')
+        assert current(page)['sect']['contribution']==0
+        finish_ui_activity(page)
+        assert current(page)['sect']['contribution']==8
+        assert page.locator('[data-sect-duty="sweep"] [data-act="sectTask"]').is_disabled()
+        page.click('[data-sect-duty="copy"] [data-act="sectTask"]');finish_ui_activity(page)
+        assert current(page)['sect']['contribution']==20
+        completed=page.locator('.sect-duties .complete').evaluate_all('(els)=>els.map(e=>e.getBoundingClientRect().top)')
+        available=page.locator('.sect-duties .card:not(.complete)').evaluate_all('(els)=>els.map(e=>e.getBoundingClientRect().top)')
+        assert max(available)<min(completed)
+        page.click('[data-act="sectAccept"]')
+        assert current(page)['sect']['commission'] is not None and current(page)['sect']['contribution']==20
+        assert page.locator('[data-act="sectClaim"]').is_disabled()
+        page.screenshot(path=str(OUT/f'sect-duties-{width}.png'))
+        record(f'{width}px 执事真实计时发奖且每日仅一次，已领置底，外送委托不提前领奖')
+        # 已晋升长老的白名单测试档，检查所有兑换的 UI 与后端一致性。
+        edits=page.evaluate('''()=>{const s=window.__live;return {player:{...s.player,realm:3,realmLevel:1},
+          sect:{...s.sect,rank:3,earned:600,contribution:400,completed:30}};}''')
+        fixture(page,edits,unlock_gameplay=False)
+        page.click('#game-nav [data-panel="sect"]');page.click('[data-ui="sect-tab"][data-id="library"]')
+        before=current(page)
+        page.click('[data-act="sectBuy"][data-id="rain-breath"]')
+        after=current(page)
+        assert after['sect']['contribution']==before['sect']['contribution']-30
+        assert after['player']['coins']==before['player']['coins'] and after['player']['money']==before['player']['money']
+        assert after['minutes']==before['minutes']
+        assert page.locator('[data-sect-item="rain-breath"] [data-act="sectBuy"]').count()==0
+        page.click('[data-act="sectBuy"][data-id="gentle-fire"]')
+        assert len(current(page)['sect']['manuals'])==2
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        assert page.locator('.sect-view').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+        page.screenshot(path=str(OUT/f'sect-library-{width}.png'))
+        record(f'{width}px 藏经阁只扣宗门贡献，典籍去重、效果与窄屏排版正确')
+        page.click('[data-ui="sect-tab"][data-id="hall"]')
+        page.on('dialog',lambda d:d.accept())
+        page.click('[data-ui="sect-leave"]')
+        assert not current(page)['sect']['member'] and current(page)['sect']['commission'] is None
+        assert page.locator('[data-act="sectJoin"]').is_disabled()
+        retained=current(page)['sect']
+        page.click('[data-ui="close"]');page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+        assert current(page)['sect']==retained
+        page.click('[data-ui="home"]');new_game(page,'另一路人')
+        assert page.locator('#game-nav [data-panel="sect"]').count()==0
+        assert current(page)['sect']['manuals']==[] and current(page)['sect']['contribution']==0
+        assert not errors,errors
+        record(f'{width}px 离宗确认、冷却、保留典籍、未交委托失效与多存档隔离正确')
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    sect_browser_checks(browser)
     delivery_coins_browser_checks(browser)
     unlock_notice_browser_checks(browser)
     place_unlock_browser_checks(browser)
