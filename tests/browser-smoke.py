@@ -226,6 +226,82 @@ def location_browser_checks(browser):
         record(f'{width}px 新旧存档地点隔离，真实取消配送不开放目的地，页面无运行异常')
         ctx.close()
 
+def system_name_browser_checks(browser):
+    for width, height, mode in [(1200, 900, 'classic'), (320, 740, 'ai')]:
+        ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
+        new_game(page, '首章旅人', mode)
+        assert page.locator('.chapter-chip strong').inner_text() == '系统觉醒'
+        assert page.locator('.chapter-chip span').first.inner_text() == '第一章'
+        assert page.locator('#game-nav [data-panel="system"]').count() == 0
+        assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
+        page.screenshot(path=str(OUT/f'opening-chapter-{width}.png'))
+        nearest_ui_delivery(page)
+        assert current(page)['pending']['templateId'] == 'first-order'
+        assert page.locator('#panel-title').inner_text() == '第一章 · 系统觉醒'
+        assert '等待你的回应' in page.locator('#panel').inner_text()
+        assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
+        assert current(page)['stats']['delivered'] == 0 and current(page)['player']['coins'] == 0
+        assert current(page)['pending']['source'] == 'classic'
+        assert current(page)['pending']['aiStatus'] == 'skip'
+        record(f'{width}px {mode} 新档显示第一章系统觉醒，真实到达仍待绑定且不提前跳章')
+
+        # Reload an old pending first-order snapshot, without granting permissions.
+        before = current(page)
+        page.evaluate("""()=>{const key=NightCourier.STORAGE_KEY,x=JSON.parse(localStorage.getItem(key));
+          x.saves[0].pending.title='第一声「叮」';x.saves[0].pending.text='万家灯火系统，已绑定。';
+          localStorage.setItem(key,JSON.stringify(x));}""")
+        memory = page.evaluate('Array.from(window.__memory.entries())')
+        assert not errors, errors
+        ctx.close()
+        ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
+        page.evaluate("""entries=>{window.__memory=new Map(entries);window.dispatchEvent(new StorageEvent('storage',{key:NightCourier.STORAGE_KEY}));}""", memory)
+        page.locator('.save-card').filter(has_text='首章旅人').locator('[data-ui="load"]').click()
+        assert page.locator('#panel-title').inner_text() == '第一章 · 系统觉醒'
+        assert '等待你的回应' in page.locator('#panel').inner_text()
+        assert current(page)['pending']['id'] == before['pending']['id']
+        assert current(page)['pending']['delivery'] == before['pending']['delivery']
+        assert current(page)['player'] == before['player']
+        assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
+        assert page.evaluate("window.__clock.reasons.has('manual')")
+        record(f'{width}px 旧待选首单在新文档中恢复为外卖系统剧情，资产与票据保留且仍停留第一章')
+
+        page.evaluate('window.__openingSpeed=document.querySelector("#time-speed")')
+        page.click('[data-act="choose"][data-index="0"]')
+        assert current(page)['eventResult']['title'] == '第一章 · 系统觉醒'
+        assert '外卖系统' in current(page)['eventResult']['text']
+        assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'bound'
+        assert current(page)['stats']['delivered'] == 1 and current(page)['player']['coins'] == 0
+        at = current(page)['minutes']
+        page.click('[data-act="ackResult"]')
+        if current(page).get('placeUnlock'):
+            page.click('[data-act="ackPlaceUnlock"]')
+        seen = 0
+        while current(page).get('unlockNotices'):
+            notice = current(page)['unlockNotices'][0]
+            if notice['kind'] == 'feature' and notice['id'] == 'system':
+                seen += 1
+                assert page.locator('#unlocked-item-name').inner_text() == '外卖系统'
+                page.screenshot(path=str(OUT/f'opening-system-unlock-{width}.png'))
+            page.click('[data-act="ackUnlock"]')
+        assert seen == 1
+        assert current(page)['minutes'] == at and current(page)['player']['coins'] == 0
+        assert page.evaluate('window.__openingSpeed===document.querySelector("#time-speed")')
+        system = page.locator('#game-nav [data-panel="system"]')
+        assert system.inner_text().strip() == '外卖系统'
+        assert page.locator('.currency[data-panel="system"]').get_attribute('title') == '打开外卖系统'
+        system.click()
+        assert page.locator('#panel-title').inner_text() == '外卖系统'
+        assert '初入仙途' in page.locator('#panel').inner_text()
+        assert page.locator('[role="tablist"]').get_attribute('aria-label') == '外卖系统分类'
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.screenshot(path=str(OUT/f'opening-system-panel-{width}.png'))
+        page.click('[data-ui="close"]')
+        page.locator('#game-nav [data-panel="help"]').click()
+        assert '第一章「系统觉醒」' in page.locator('#panel').inner_text()
+        assert not errors, errors
+        record(f'{width}px 完成第一章后一次性解锁外卖系统；弹窗、导航、标题与帮助同名，首单仍无币')
+        ctx.close()
+
 def progressive_browser_checks(browser):
     for width, height in [(1200, 900), (320, 740)]:
         ctx, page, errors = setup(browser, width, height)
@@ -873,7 +949,7 @@ def unlock_notice_browser_checks(browser):
         assert page.locator('.bond-unlock-card').count()==1
         page.keyboard.press('Enter')
         assert page.locator('.feature-unlock-card').count()==1
-        assert page.locator('#unlocked-item-name').inner_text()=='系统'
+        assert page.locator('#unlocked-item-name').inner_text()=='外卖系统'
         animation=page.locator('.feature-spark').evaluate('(e)=>getComputedStyle(e).animationName')
         assert animation==('none' if motion=='reduce' else 'feature-light-in')
         page.wait_for_timeout(500)
@@ -1078,6 +1154,7 @@ with sync_playwright() as p:
     realm_browser_checks(browser)
     location_browser_checks(browser)
     auction_browser_checks(browser)
+    system_name_browser_checks(browser)
     progressive_browser_checks(browser)
     ctx, page, errors = setup(browser)
     page.screenshot(path=str(OUT/'start-desktop.png'))

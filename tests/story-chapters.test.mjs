@@ -91,7 +91,7 @@ test('首单叙述与章名一致，绑定不添加新奖励或系统提前开�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'delivery');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.10.1');assert.equal(G.VERSION,17);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.10.2');assert.equal(G.VERSION,17);
 });
 
 

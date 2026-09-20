@@ -3,7 +3,8 @@
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
   G.VERSION = 17;
-  G.APP_VERSION = '1.10.1';
+  G.APP_VERSION = '1.10.2';
+  G.SYSTEM_NAME = '外卖系统';
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   // 只向东、向南追加网格；原 7×6 城区的坐标、地点 ID 与桥梁不变。
@@ -43,9 +44,9 @@
   };
   // 功能开放只看已结算的经历；门槛、说明和入口共享同一份配置。
   G.FEATURE_UNLOCKS = [
-    {id:'system',name:'系统',hint:'完成第一章「系统觉醒」的首单剧情并结算配送',ready:s=>s.stats.delivered>=1,
-      notice:'第一章「系统觉醒」已完成。导航栏已开放系统，之后送达外卖可获得外卖币，也可签到、兑换补给和领取委托奖励。'},
-    {id:'cultivation',name:'修行',hint:'在系统委托中领取「第一份人间烟火」奖励',requires:['system'],ready:s=>s.claimed.includes('q1'),
+    {id:'system',name:G.SYSTEM_NAME,hint:'完成第一章「系统觉醒」的首单剧情并结算配送',ready:s=>s.stats.delivered>=1,
+      notice:'第一章「系统觉醒」已完成。导航栏已开放外卖系统，之后送达外卖可获得外卖币，也可签到、兑换补给和领取委托奖励。'},
+    {id:'cultivation',name:'修行',hint:'在外卖系统委托中领取「第一份人间烟火」奖励',requires:['system'],ready:s=>s.claimed.includes('q1'),
       notice:'导航栏已开放修行，先从一次完整的吐纳开始。'},
     {id:'practice',name:'进阶修行与探索',hint:'完成一次吐纳修炼',requires:['cultivation'],ready:s=>s.stats.trained>=1,
       notice:'修行中开放入定、淬体和突破；月渡公园、听雨观开放探索。'},
@@ -57,7 +58,7 @@
     {id:'auction',name:'拍卖场',hint:'开放炼药后，累计完成并结算 10 单配送',requires:['alchemy'],ready:s=>s.stats.delivered>=10,
       notice:'长乐集的万宝拍卖场递来请柬。导航已开放拍卖，每晚 18:00–24:00 可到场竞价。'},
     {id:'endings',name:'归途',hint:'累计完成并结算 20 单配送',requires:['system'],ready:s=>s.stats.delivered>=20,
-      notice:'系统已开放归途页，满足各结局条件后可自行选择。'},
+      notice:'外卖系统已开放归途页，满足各结局条件后可自行选择。'},
     {id:'sect',name:'宗门',hint:'炼气后，通过配送解锁听雨观并结识陆听雨，完成引荐剧情',requires:['practice'],optional:true,ready:s=>s.sect?.invited===true,
       notice:'导航栏已开放宗门。可沿道路到听雨观入宗，做执事、积累贡献、晋升并兑换典籍；也可继续散修。'},
     {id:'bonds',name:'羁绊',hint:'通过配送或奇遇结识第一位人物',optional:true,ready:s=>Object.values(s.bonds).some(b=>b.met===true),
@@ -157,7 +158,7 @@
   // 效果全部由规则引擎结算，剧情文本不执行代码。
   const c = (label, result, effects = {}, extra = {}) => ({ label, result, effects, ...extra });
   G.EVENTS = [
-    { id: 'first-order', kind: 'delivery', title: '第一章 · 系统觉醒', text: '你把热汤递过去，陌生老人却看着你身后发笑。「原来这一回，是送饭的人。」手机上浮起一行不属于任何软件的小字：万家灯火系统，等待你的回应。', choices: [c('先问一句：您吃得惯吗？','老人接过汤，你第一次看见一缕金光落入掌心。手机轻响：万家灯火系统，绑定完成。',{karma:2,qi:8}),c('追问系统的来历','老人只说：人间每一份郑重，都能成为你的修行。你收下这份指引，万家灯火系统随之完成绑定。',{insight:1,qi:4}),c('收好手机，继续做完这一单','你决定先把眼前的事做好。确认送达时，手机轻响：万家灯火系统，绑定完成。',{rep:2,money:8})] },
+    { id: 'first-order', kind: 'delivery', title: '第一章 · 系统觉醒', text: '你把热汤递过去，陌生老人却看着你身后发笑。「原来这一回，是送饭的人。」手机上浮起一行不属于任何软件的小字：外卖系统，等待你的回应。', choices: [c('先问一句：您吃得惯吗？','老人接过汤，你第一次看见一缕金光落入掌心。手机轻响：外卖系统，绑定完成。',{karma:2,qi:8}),c('追问系统的来历','老人只说：人间每一份郑重，都能成为你的修行。你收下这份指引，外卖系统随之完成绑定。',{insight:1,qi:4}),c('收好手机，继续做完这一单','你决定先把眼前的事做好。确认送达时，手机轻响：外卖系统，绑定完成。',{rep:2,money:8})] },
     { id: 'rain', kind: 'delivery', title: '雨落在餐盒之前', text: '拐过路口，雨点忽然变密。一个没带伞的孩子站在屋檐外，而你只有一件备用雨披。', choices: [c('把雨披留给孩子','餐盒护在怀里，你的肩背湿了一片。',{karma:3,stamina:-6,rep:1}),c('请便利店帮忙照看孩子','店员答应了。你道谢后重新上路。',{karma:1,rep:1}),c('买把伞交给孩子','孩子认真记下了你的名字。',{money:-12,karma:4,qi:5})] },
     { id: 'cat', kind: 'delivery', title: '不肯让路的橘猫', text: '一只橘猫坐在楼道口，爪下压着半枚温热的青色玉片。它抬头看你，像是在等一个选择。', choices: [c('买一根猫条，和它交换','橘猫叼走猫条，留下玉片和一声很轻的「喵」。',{money:-6,qi:12}),c('蹲下陪它一会儿','它主动让开。你忽然觉得，这条楼道并不陌生。',{stamina:4,karma:1}),c('绕开它，不打扰','你准时把餐送到，猫也守住了自己的宝贝。',{rep:1})] },
     { id: 'stairs', kind: 'delivery', title: '停电的旧楼', text: '电梯停了。客人发来消息：腿脚不便，能不能送到门口？楼道尽头还有个邻居愿意帮忙。', choices: [c('自己提着餐上楼','你数着台阶调整呼吸，体内灵气也跟着顺了一些。',{stamina:-9,qi:10,rep:3}),c('请邻居帮忙，电话确认收餐','邻里之间的一声招呼，比电梯更快抵达。',{rep:1,karma:1}),c('多带一袋楼下的药','老人连声道谢，还把自制点心塞给了你。',{money:-8,stamina:5,karma:3})] },
