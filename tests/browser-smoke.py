@@ -278,6 +278,11 @@ def progressive_browser_checks(browser):
         page.locator('#game-nav [data-panel="system"]').click()
         page.click('[data-ui="system-tab"][data-id="quests"]')
         assert page.locator('[data-act="claim"][data-id="q2"]').count() == 1
+        quest_cards = page.locator('.quest-card').evaluate_all("""els=>els.map(e=>({title:e.querySelector('h3').textContent, complete:e.classList.contains('complete'), top:e.getBoundingClientRect().top}))""")
+        unfinished_tops = [card['top'] for card in quest_cards if not card['complete']]
+        completed_tops = [card['top'] for card in quest_cards if card['complete']]
+        assert unfinished_tops and completed_tops and max(unfinished_tops) < min(completed_tops)
+        record(f'{width}px 委托页未完成任务保持在上方，已完成任务统一排到底部')
         page.click('[data-ui="close"]')
         page.locator('#game-nav [data-panel="cultivation"]').click()
         assert page.locator('[data-act="cultivate"]').count() == 1
