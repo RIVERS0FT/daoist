@@ -5,101 +5,106 @@ import '../public/js/engine.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
-const fresh=(mode='classic')=>G.newGame('觉醒行者',mode,67891);
+const fresh=(mode='classic')=>G.newGame('初送人间',mode,67891);
+const act=(s,action,payload={})=>{const r=G.perform(s,action,payload);assert.ok(r.ok,r.error);return r.state;};
 const read=s=>G.sanitizeSave(G.clone(s));
-const act=(s,action,p={})=>{const r=G.perform(s,action,p);assert.ok(r.ok,r.error);return r.state;};
-const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<1000;i++)s=G.advance(s,1);assert.ok(!s.activity);return s;};
+const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<1000;i++)s=G.advance(s,1);assert.ok(!s.activity||s.gameOver);return s;};
 const ack=s=>{
   if(s.eventResult)s=act(s,'ackResult',{id:s.eventResult.id});
   if(s.placeUnlock)s=act(s,'ackPlaceUnlock',{id:s.placeUnlock.place});
   while(G.nextUnlockNotice(s))s=act(s,'ackUnlock',{id:G.unlockNoticeKey(G.nextUnlockNotice(s))});
   return s;
 };
-function assertOpening(s){
-  const before=G.clone(s),chapter=G.storyStage(s);
-  assert.equal(chapter.id,'mortal');assert.equal(chapter.chapter,'第一章');assert.equal(chapter.title,'系统觉醒');
-  assert.equal(G.featureUnlocked(s,'system'),false);assert.deepEqual(s,before);
-}
-function assertBound(s){
-  const chapter=G.storyStage(s);
-  assert.equal(chapter.id,'bound');assert.equal(chapter.chapter,'第二章');assert.equal(chapter.title,'初入仙途');
-  assert.equal(G.featureUnlocked(s,'system'),true);
-}
+const firstPending=(mode='classic')=>{const s=fresh(mode);return ack(finish(act(s,'deliver',{id:s.orders[0].id})));};
+const choose=(s,index=0)=>act(s,'choose',{eventId:s.pending.id,index});
+const label=(s,expected)=>assert.equal(G.storyStageLabel(s),expected);
 
-for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首章选项 ${index+1}：真实抵达、读档仍在觉醒章，完成选择才绑定并进入第二章`,()=>{
-  let s=fresh(mode);assertOpening(s);const ticket=G.clone(s.orders[0]),before=G.clone(s.player);
-  s=act(s,'deliver',{id:ticket.id});s=G.advance(s,.2);assertOpening(s);s=read(s);assertOpening(s);
-  s=ack(finish(s));assert.equal(s.pending.templateId,'first-order');assert.equal(s.flags.firstOrder,true);
-  assert.equal(s.pending.title,'第一章 · 系统觉醒');assert.match(s.pending.text,/等待你的回应/);
-  assert.doesNotMatch(s.pending.text,/已绑定|绑定完成/);assert.equal(s.pending.source,'classic');assert.equal(s.pending.aiStatus,'skip');
-  assertOpening(s);s=read(s);assertOpening(s);
-  const eventId=s.pending.id,choice=s.pending.choices[index];
-  for(const payload of [{eventId:'stale-event',index},{eventId,index:99}]){
-    const original=G.clone(s),r=G.perform(s,'choose',payload);assert.equal(r.ok,false);assert.deepEqual(r.state,original);assertOpening(r.state);
-  }
-  assert.equal(G.perform(s,'sign').ok,false);assert.equal(G.perform(s,'claim',{id:'q1'}).ok,false);
-  s=act(s,'choose',{eventId,index});assertBound(s);assert.equal(s.stats.delivered,1);
-  assert.equal(s.player.coins,0);assert.equal(s.player.money,before.money+ticket.reward+(choice.effects.money||0));
-  assert.equal(s.player.qi,before.qi+(choice.effects.qi||0));assert.match(s.eventResult.text,/绑定完成|完成绑定/);
-  assert.equal(s.eventResult.title,'第一章 · 系统觉醒');assert.equal(G.featureUnlocked(s,'cultivation'),false);
-  const player=G.clone(s.player),stats=G.clone(s.stats),minutes=s.minutes,seed=s.seed;
-  s=ack(read(s));assertBound(s);assert.deepEqual(s.player,player);assert.deepEqual(s.stats,stats);assert.equal(s.minutes,minutes);assert.equal(s.seed,seed);
-  assert.equal(G.perform(s,'choose',{eventId,index}).ok,false);
-  s=act(s,'claim',{id:'q1'});assert.equal(G.featureUnlocked(s,'cultivation'),true);assertBound(s);
+test('七章配置保留既有 ID 与后五章顺序，系统正式名称统一为外卖系统',()=>{
+  assert.equal(G.SYSTEM_NAME,'外卖系统');
+  assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
+  assert.deepEqual(G.STORY_STAGES.map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
+  assert.deepEqual(G.STORY_STAGES.map(s=>s.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
+  assert.deepEqual(G.STORY_STAGES.map(s=>s.title),['送外卖','解锁外卖系统','城有第二面','夜路同行','阵眼苏醒','系统为何而来','人间即阵心']);
+  assert.equal(G.EVENTS.filter(e=>e.kind==='delivery').length,60);
 });
 
-test('首单触发标记不会冒充第一章已完成，章节查询不写入状态',()=>{
+test('章节查询不改状态，首单触发标记不能单独跳到第二章或授予系统',()=>{
   const s=fresh();s.flags.firstOrder=true;const before=G.clone(s);
-  for(let i=0;i<5;i++)assertOpening(s);
-  assert.deepEqual(s,before);assert.equal(G.featureUnlocked(s,'cultivation'),false);
+  for(let i=0;i<4;i++){label(s,'第一章 · 送外卖');assert.equal(G.featureUnlocked(s,'system'),false);}
+  assert.deepEqual(s,before);
 });
 
-test('绑定门槛复用实际系统所有权，不改变旧档已经拥有的系统',()=>{
-  const s=fresh();s.unlockedFeatures=['system'];s.player.coins=27;
-  const restored=read(s);assertBound(restored);assert.equal(restored.player.coins,27);assert.equal(restored.stats.delivered,0);
-  const before=G.clone(restored);G.storyStage(restored);assert.deepEqual(restored,before);
+for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首单选项 ${index+1}：途中和待选仍在第一章，实际结算进入第二章且不发首单币`,()=>{
+  let s=fresh(mode);label(s,'第一章 · 送外卖');
+  const ticket=G.clone(s.orders[0]);s=act(s,'deliver',{id:ticket.id});
+  label(s,'第一章 · 送外卖');s=read(G.advance(s,.2));label(s,'第一章 · 送外卖');
+  s=ack(finish(s));assert.equal(s.pending.templateId,'first-order');assert.equal(s.stats.delivered,0);
+  assert.equal(s.pending.source,'classic');assert.equal(s.pending.aiStatus,'skip');
+  assert.match(s.pending.text,/外卖系统/);assert.doesNotMatch(s.pending.text,/已绑定/);
+  label(s,'第一章 · 送外卖');s=read(s);label(s,'第一章 · 送外卖');
+  const pending=G.clone(s),id=s.pending.id;
+  assert.equal(G.applyAIEvent(s,id,{}),s,'固定首单不能被 AI 覆盖');
+  const invalid=G.perform(s,'choose',{eventId:'stale-event',index});assert.equal(invalid.ok,false);assert.deepEqual(invalid.state,pending);
+  s=choose(s,index);label(s,'第二章 · 解锁外卖系统');
+  assert.equal(s.stats.delivered,1);assert.equal(s.player.coins,0);
+  assert.match(s.eventResult.text,/外卖系统，已绑定/);
+  assert.ok(s.unlockNotices.some(n=>n.kind==='feature'&&n.id==='system'));
+  const result=G.clone(s.eventResult),player=G.clone(s.player),minutes=s.minutes,seed=s.seed;
+  s=read(s);label(s,'第二章 · 解锁外卖系统');assert.deepEqual(s.eventResult,result);
+  s=ack(s);assert.deepEqual(s.player,player);assert.equal(s.minutes,minutes);assert.equal(s.seed,seed);
+  assert.equal(G.perform(s,'choose',{eventId:id,index}).ok,false);
+  assert.equal(s.logs.filter(l=>l.tag==='解锁'&&l.text.startsWith('玩法开启：外卖系统。')).length,1);
+  const next=s.orders[0];assert.equal(G.deliveryCoins(s,next),next.coins);
 });
 
-test('v16 已完成首单旧档直接衔接第二章，不重播首单或补币',()=>{
-  const s=fresh();s.schemaVersion=16;delete s.sect;s.flags.firstOrder=true;s.stats.delivered=1;s.player.coins=37;
-  const restored=read(s);assert.equal(restored.schemaVersion,17);assertBound(restored);assert.equal(restored.player.coins,37);
-  assert.equal(restored.pending,null);assert.equal(restored.eventResult,null);assert.deepEqual(restored.unlockNotices,[]);
+test('首单中断和取消不进入第二章，不授予功能或外卖币',()=>{
+  let s=fresh();s=act(s,'deliver',{id:s.orders[0].id});s=G.advance(s,.2);
+  s=act(s,'stop');label(s,'第一章 · 送外卖');
+  s=act(s,'cancelDelivery');label(read(s),'第一章 · 送外卖');
+  assert.equal(s.stats.delivered,0);assert.equal(s.player.coins,0);assert.equal(G.featureUnlocked(s,'system'),false);
 });
 
-test('旧首单待选按固定模板更新文案，保留票据与未结算进度，不提前跨章',()=>{
-  let s=fresh();s=ack(finish(act(s,'deliver',{id:s.orders[0].id})));
-  s.pending.title='第一声「叮」';s.pending.text='旧版首单剧情原文。';const pending=G.clone(s.pending);
-  s=read(s);assertOpening(s);assert.equal(s.pending.id,pending.id);assert.deepEqual(s.pending.delivery,pending.delivery);
-  assert.deepEqual(s.pending.choices,pending.choices);assert.equal(s.pending.title,'第一章 · 系统觉醒');assert.match(s.pending.text,/等待你的回应/);
-  assert.equal(s.player.coins,0);assert.equal(s.stats.delivered,0);
+test('耗时首单选择读档仍为第一章，只有完成才跨章',()=>{
+  const choice=G.EVENTS.find(e=>e.id==='first-order').choices[0],duration=choice.duration;
+  choice.duration=5;
+  try{
+    let s=choose(firstPending());s=G.advance(s,2);s=read(s);
+    label(s,'第一章 · 送外卖');assert.equal(s.activity.kind,'choice');assert.equal(s.stats.delivered,0);
+    s=G.advance(s,3);label(s,'第二章 · 解锁外卖系统');assert.equal(s.player.coins,0);assert.equal(s.stats.delivered,1);
+  }finally{if(duration===undefined)delete choice.duration;else choice.duration=duration;}
 });
 
-test('七个阶段 ID、后五章门槛与宗门可选性质保持不变',()=>{
-  assert.deepEqual(G.STORY_STAGES.map(e=>e.id),['mortal','bound','second-city','circle','guardian','system','truth']);
-  assert.deepEqual(G.STORY_STAGES.map(e=>e.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
-  const s=fresh();s.flags.firstOrder=true;s.stats.delivered=1;assertBound(s);
-  s.stats.delivered=8;s.player.realm=1;assert.equal(G.storyStage(s).id,'second-city');
-  s.bonds.lin.met=true;s.bonds.chen.met=true;assert.equal(G.storyStage(s).id,'circle');
-  for(const [delivered,realm,id] of [[18,2,'guardian'],[30,3,'system'],[42,4,'truth']]){
-    s.stats.delivered=delivered;s.player.realm=realm;assert.equal(G.storyStage(s).id,id);
-  }
-  assert.equal(s.sect.invited,false);assert.equal(s.sect.member,false);
+test('首单选项与房租破产同刻时仍停在第一章，不生成绑定结果',()=>{
+  const choice=G.EVENTS.find(e=>e.id==='first-order').choices[0],duration=choice.duration;
+  choice.duration=5;
+  try{
+    let s=firstPending();s.minutes=6*1440-5;s.player.money=119;s=choose(s);s=G.advance(s,5);
+    assert.equal(s.gameOver.reason,'rent');label(s,'第一章 · 送外卖');assert.equal(s.eventResult,null);
+    assert.equal(s.stats.delivered,0);assert.equal(G.featureUnlocked(s,'system'),false);
+  }finally{if(duration===undefined)delete choice.duration;else choice.duration=duration;}
 });
 
-test('首单叙述与章名一致，绑定不添加新奖励或系统提前开放',()=>{
-  const e=G.EVENTS.find(e=>e.id==='first-order'),stage=G.STORY_STAGES[0];
-  assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'delivery');
-  assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
-  for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.10.2');assert.equal(G.VERSION,17);
+for(const version of [16,17])test(`v${version} 首单待选与已解锁存档按真实资格显示章节，保留余额、旧回执和日志`,()=>{
+  const pending=firstPending();pending.schemaVersion=version;
+  pending.pending.text='万家灯火系统，已绑定。';
+  const waiting=read(pending);label(waiting,'第一章 · 送外卖');assert.doesNotMatch(waiting.pending.text,/万家灯火系统|已绑定/);
+  let completed=choose(firstPending());completed.schemaVersion=version;completed.player.coins=27;
+  completed.eventResult.text='历史结果：万家灯火系统，已绑定。';
+  const restored=read(completed);label(restored,'第二章 · 解锁外卖系统');
+  assert.equal(restored.player.coins,27);assert.deepEqual(restored.eventResult,completed.eventResult);assert.deepEqual(restored.logs.slice(0,completed.logs.length).map(({at,tag,text})=>({at,tag,text})),completed.logs.map(({at,tag,text})=>({at,tag,text})));
+  assert.equal(ack(restored).player.coins,27);
 });
 
+test('兼容旧档已拥有外卖系统但缺少首单标记，不收回能力或重播解锁',()=>{
+  const s=fresh();s.unlockedFeatures=['system'];s.player.coins=19;
+  const restored=read(s);label(restored,'第二章 · 解锁外卖系统');
+  assert.equal(restored.flags.firstOrder,false);assert.equal(restored.player.coins,19);assert.deepEqual(restored.unlockNotices,[]);
+});
 
-test('已结算的旧首单回执保留原文，读档和确认不重复绑定奖励',()=>{
-  let s=fresh();s=ack(finish(act(s,'deliver',{id:s.orders[0].id})));
-  s=act(s,'choose',{eventId:s.pending.id,index:0});
-  s.eventResult.title='第一声「叮」';s.eventResult.text='老人接过汤，你第一次看见一缕金光落入掌心。';
-  const receipt=G.clone(s.eventResult),player=G.clone(s.player),stats=G.clone(s.stats);
-  s=read(s);assertBound(s);assert.deepEqual(s.eventResult,receipt);s=ack(s);
-  assert.deepEqual(s.player,player);assert.deepEqual(s.stats,stats);assertBound(s);
+test('第三至第七章的境界、送达与人物门槛不变',()=>{
+  const s=fresh();s.stats.delivered=8;s.player.realm=1;label(s,'第三章 · 城有第二面');
+  s.bonds.chen.met=true;s.bonds.lin.met=true;label(s,'第四章 · 夜路同行');
+  s.stats.delivered=18;s.player.realm=2;label(s,'第五章 · 阵眼苏醒');
+  s.stats.delivered=30;s.player.realm=3;label(s,'第六章 · 系统为何而来');
+  s.stats.delivered=42;s.player.realm=4;label(s,'第七章 · 人间即阵心');
 });

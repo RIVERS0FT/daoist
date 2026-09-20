@@ -20,14 +20,14 @@ const firstPending=(mode='classic')=>{
   const s=fresh(mode);return ack(finish(act(s,'deliver',{id:s.orders[0].id})));
 };
 
-test('外卖系统正式名称统一，保留首章觉醒与七章稳定ID',()=>{
+test('外卖系统正式名称统一，保留首章配送与七章稳定ID',()=>{
   assert.equal(G.SYSTEM_NAME,'外卖系统');
   assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
   assert.deepEqual(G.STORY_STAGES.map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
-  assert.equal(G.STORY_STAGES[0].title,'系统觉醒');
-  assert.equal(G.STORY_STAGES[1].title,'初入仙途');
-  assert.equal(G.EVENTS.find(e=>e.id==='first-order').title,'第一章 · 系统觉醒');
-  assert.match(G.EVENTS.find(e=>e.id==='first-order').text,/外卖系统，等待你的回应/);
+  assert.equal(G.STORY_STAGES[0].title,'送外卖');
+  assert.equal(G.STORY_STAGES[1].title,'解锁外卖系统');
+  assert.equal(G.EVENTS.find(e=>e.id==='first-order').title,'第一章 · 送外卖');
+  assert.match(G.EVENTS.find(e=>e.id==='first-order').text,/外卖系统正在等待/);
   for(const e of G.EVENTS.find(e=>e.id==='first-order').choices)assert.match(e.result,/外卖系统/);
 });
 
@@ -46,7 +46,7 @@ test('首单已触发标记不再等于第一章完成，章节查询不授予�
 
 for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首章选项${index+1}：接单/途中/待选/读档不跳章，结算后绑定且首单无外卖币`,()=>{
   let s=fresh(mode);const ticket=G.clone(s.orders[0]);
-  assert.equal(G.storyStage(s).title,'系统觉醒');
+  assert.equal(G.storyStage(s).title,'送外卖');
   s=act(s,'deliver',{id:ticket.id});assert.equal(G.storyStage(s).id,'mortal');
   s=read(G.advance(s,.2));assert.ok(s.activity);assert.equal(G.storyStage(s).id,'mortal');
   s=ack(finish(s));assert.equal(s.pending.templateId,'first-order');assert.equal(s.flags.firstOrder,true);
@@ -58,10 +58,10 @@ for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首�
   assert.equal(s.stats.delivered,1);assert.equal(s.player.coins,0);
   assert.equal(s.player.money,before.player.money+ticket.reward+(choice.effects.money||0));
   assert.equal(s.player.qi,before.player.qi+(choice.effects.qi||0));
-  assert.equal(G.storyStage(s).id,'bound');assert.equal(G.storyStage(s).title,'初入仙途');
+  assert.equal(G.storyStage(s).id,'bound');assert.equal(G.storyStage(s).title,'解锁外卖系统');
   assert.equal(s.unlockedFeatures.filter(id=>id==='system').length,1);
   assert.equal(s.unlockNotices.filter(n=>n.kind==='feature'&&n.id==='system').length,1);
-  assert.equal(s.eventResult.title,'第一章 · 系统觉醒');assert.match(s.eventResult.text,/外卖系统/);
+  assert.equal(s.eventResult.title,'第一章 · 送外卖');assert.match(s.eventResult.text,/外卖系统/);
   const receipt=s.eventResult.id,at=s.minutes,balance=s.player.coins;
   s=ack(read(s));assert.equal(G.storyStage(s).id,'bound');assert.equal(s.minutes,at);assert.equal(s.player.coins,balance);
   G.syncFeatureUnlocks(s);assert.equal(s.unlockNotices.length,0);
@@ -75,7 +75,7 @@ test('旧版待选首单重建为新剧情名称，不改变订单、选择效�
   for(const version of [14,15,16,17]){
     const raw=G.clone(old);raw.schemaVersion=version;
     const a=read(raw),b=read(a);
-    assert.equal(a.pending.title,'第一章 · 系统觉醒');assert.match(a.pending.text,/等待你的回应/);
+    assert.equal(a.pending.title,'第一章 · 送外卖');assert.match(a.pending.text,/正在等待/);
     assert.equal(a.pending.id,old.pending.id);assert.deepEqual(a.pending.delivery,ticket);
     assert.deepEqual(a.pending.choices.map(c=>c.effects),effects);assert.deepEqual(a.player,old.player);
     assert.equal(G.storyStage(a).id,'mortal');assert.equal(G.storyStage(b).id,'mortal');

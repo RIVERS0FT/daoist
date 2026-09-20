@@ -20,9 +20,8 @@
   G.visibleNPCs = s => G.NPCS.filter(n => G.isNPCMet(s, n.id));
 
   G.STORY_STAGES = [
-    // 第一章以首单剧情解锁系统收束；触发 firstOrder 不等于已完成绑定。
-    { id:'mortal', chapter:'第一章', title:'系统觉醒', desc:'从普通骑手的第一单开始，经历异常相逢，完成剧情后解锁外卖系统。', ready:()=>true },
-    { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启。继续配送赚取外卖币，领取第一份委托奖励，开始吐纳修行。', ready:s=>G.featureUnlocked(s,'system') },
+    { id:'mortal', chapter:'第一章', title:'送外卖', desc:'先把今天的饭送到。房租、体力和时间，都比仙途更真实。', ready:()=>true },
+    { id:'bound', chapter:'第二章', title:'解锁外卖系统', desc:'首单已经送达，外卖系统正式绑定。此后的成功配送开始积累外卖币，新的仙途由此开启。', ready:s=>G.featureUnlocked(s,'system') },
     { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'异常门牌、旧阵纹与夜行客反复出现。青岚城并不只有地图上这一层。', ready:s=>s.flags?.storySecondCity === true || (s.stats.delivered>=8 && s.player.realm>=1) },
     { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识了越来越多夜里仍醒着的人，也开始进入这座城真正的修行圈。', ready:s=>G.metNPCCount(s)>=2 && s.player.realm>=1 },
     { id:'guardian', chapter:'第五章', title:'阵眼苏醒', desc:'配送路线正在重新连接断裂的城脉。修行不再只是你一个人的事。', ready:s=>s.flags?.storyLanternNetwork === true || (s.stats.delivered>=18 && s.player.realm>=2) },
@@ -33,6 +32,10 @@
     let current = G.STORY_STAGES[0];
     for (const stage of G.STORY_STAGES) if (stage.ready(s)) current = stage;
     return current;
+  };
+  G.storyStageLabel = s => {
+    const stage=G.storyStage(s);
+    return `${stage.chapter} · ${stage.title}`;
   };
 
   // 系统不是开局一次性开放全部能力。基础补给在首单结算后开放，修行资源仍随境界解锁。
