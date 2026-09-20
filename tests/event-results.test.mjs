@@ -13,6 +13,7 @@ const read=s=>G.sanitizeSave(G.clone(s));
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
 function fixture(id='first-order',delivery=true){
   const s=G.newGame('回执','classic',34119),e=G.EVENTS.find(e=>e.id===id);
+  s.unlockedFeatures=['system']; // Receipt amounts below assume the currency is already unlocked.
   s.flags.firstOrder=true;s.player.money=500;s.player.stamina=70;s.player.mana=40;s.player.health=70;
   s.position='clinic';s.orders=[];
   s.pending={...G.clone(e),id:'receipt-fixture',templateId:e.id,source:'classic',aiStatus:'skip'};

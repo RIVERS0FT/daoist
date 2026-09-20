@@ -506,12 +506,24 @@
     s.recentEvents=[...s.recentEvents,base.id].slice(-4);
     s.pending={...clone(base),id:`event-${s.turn}-${s.seed}`,templateId:base.id,source:'classic',aiStatus:s.mode==='ai' && base.id!=='first-order'?'unrequested':'skip',...overrides};
   }
+  // Read before incrementing delivered: the order that opens the system earns no coins.
+  // Keep the ticket's base reward intact so pre-existing offers work after unlocking.
+  G.deliveryCoins = (s,ticket) => G.featureUnlocked(s,'system') ? ticket.coins : 0;
+  // Delivery event bonuses share the gate, including AI and restored pending choices.
+  // Costs and non-delivery rewards keep their existing rules. This query never mutates a choice.
+  G.choiceEffects = (s,choice,event=s.pending) => {
+    const value=choice.effects||{};
+    if((event?.kind==='delivery'||event?.delivery)&&!G.featureUnlocked(s,'system')&&value.coins>0){
+      const {coins,...rest}=value;return rest;
+    }
+    return value;
+  };
   function settleDelivery(s, ticket) {
-    const reward=ticket.reward,coins=ticket.coins;
+    const reward=ticket.reward,coins=G.deliveryCoins(s,ticket);
     s.player.money+=reward;s.player.coins+=coins;s.stats.earned+=reward;s.stats.delivered++;s.daily.delivered++;
     s.player.rep=clamp(s.player.rep+1,-50,100);
     if(ticket.npc){meetNPC(s,ticket.npc,'delivery');const bond=s.bonds[ticket.npc];bond.affinity=clamp(bond.affinity+3,0,100);}
-    G.log(s, `送达「${ticket.title}」至${G.place(ticket.target).name}。现金 +¥${reward}，外卖币 +${coins}。`, '配送');
+    G.log(s, `送达「${ticket.title}」至${G.place(ticket.target).name}。现金 +¥${reward}${coins?`，外卖币 +${coins}`:''}。`, '配送');
     G.unlockDeliveryPlace(s,ticket.target);
   }
   G.breakChance = (s, pillTier=0) => clamp(53+s.player.insight*2+Math.max(0,s.player.karma)*.12+(G.isNight(s)?10:0)+G.breakthroughPillBonus(pillTier===true?1:pillTier)-s.player.realm*3-(G.realmLevel(s)-1)*1.25,35,95);
@@ -598,16 +610,16 @@
     return Object.entries(after).map(([key,value])=>({key,delta:Math.round((value-(before[key]||0)+(paid[key]||0))*1e8)/1e8})).filter(x=>Math.abs(x.delta)>EPS);
   }
   function finishChoice(s,p,index){
-    const c=p.choices[index],before=resultValues(s),paid={};
+    const c=p.choices[index],effective=G.choiceEffects(s,c,p),before=resultValues(s),paid={};
     // These exact, prevalidated costs were paid at commit time, including in old in-flight saves.
     // Do not diff across elapsed time: rent or an unrelated instantaneous purchase is not a choice cost.
     for(const [key,value] of Object.entries(c.effects||{}))if(value<0&&['money','coins','stamina','mana'].includes(key))paid[`player.${key}`]=value;
     for(const [id,count] of Object.entries(c.itemCost||{}))paid[`item.${id}`]=(paid[`item.${id}`]||0)-count;
     // Spendable negative costs were paid once when the choice was committed.
-    const result=Object.fromEntries(Object.entries(c.effects||{}).filter(([k,v])=>!(v<0&&['money','coins','stamina','mana'].includes(k))));
+    const result=Object.fromEntries(Object.entries(effective).filter(([k,v])=>!(v<0&&['money','coins','stamina','mana'].includes(k))));
     effects(s,result,p.npcId);
     if(p.npcId){if(p.npcAdvance)s.bonds[p.npcId].stage++;if(c.path)s.bonds[p.npcId].path=c.path;}
-    G.log(s,`${c.result}（${G.effectText(c.effects)}）`,p.npcId?'羁绊':p.source==='ai'?'AI 奇遇':'奇遇');
+    G.log(s,`${c.result}（${G.effectText(effective)}）`,p.npcId?'羁绊':p.source==='ai'?'AI 奇遇':'奇遇');
     const changes=resultChanges(before,resultValues(s),paid),beforeDelivery=resultValues(s);
     if(p.delivery)settleDelivery(s,p.delivery);
     normalize(s);

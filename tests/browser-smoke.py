@@ -919,12 +919,61 @@ def unlock_notice_browser_checks(browser):
         ctx.close()
 
 
+def delivery_coins_browser_checks(browser):
+    for width, height in [(1200, 900), (320, 740)]:
+        ctx, page, errors = setup(browser, width, height)
+        new_game(page, '解锁之后')
+        select_order(page)
+        assert '现金' in page.locator('.order-reward').inner_text()
+        assert '外卖币' not in page.locator('.order-reward').inner_text()
+        page.click('[data-act="deliver"]');finish_ui_activity(page)
+        assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['player']['coins'] == 0
+        page.click('[data-act="choose"][data-index="0"]')
+        assert current(page)['stats']['delivered'] == 1
+        assert current(page)['player']['coins'] == 0
+        assert '外卖币' not in page.locator('.result-delivery').inner_text()
+        page.screenshot(path=str(OUT/f'first-delivery-no-coins-{width}.png'))
+        ack_result_ui(page)
+        assert page.locator('.currency[data-panel="system"]').is_visible()
+        assert page.locator('.currency[data-panel="system"] .currency-number').inner_text() == '0'
+        record(f'{width}px 未解锁订单只展示现金；首单结果不发币，解锁后余额仍为零')
+
+        select_order(page)
+        assert '外卖币' in page.locator('.order-reward').inner_text()
+        ticket = page.evaluate("()=>{const id=document.querySelector('[data-act=deliver]').dataset.id;return window.__live.orders.find(o=>o.id===id);}")
+        page.click('[data-act="deliver"]');finish_ui_activity(page)
+        settle_ui(page)
+        assert current(page)['stats']['delivered'] == 2
+        assert current(page)['player']['coins'] >= ticket['coins'] > 0
+        assert '外卖币' in [log for log in current(page)['logs'] if log['tag']=='配送'][-1]['text']
+        record(f'{width}px 系统开放后订单展示外卖币，后续送达按原奖励到账')
+
+        # Restore a catalog delivery with an extra coin choice but no unlocked system.
+        edits = page.evaluate("""()=>{const G=NightCourier,s=window.__live,e=G.EVENTS.find(e=>e.id==='coin');return {
+          player:{...s.player,coins:0},stats:{...s.stats,delivered:0},unlockedFeatures:[],
+          flags:{firstOrder:true},position:'clinic',location:null,activity:null,activeOrder:null,orders:[],
+          eventResult:null,placeUnlock:null,unlockNotices:[],
+          pending:{...G.clone(e),id:'browser-coin-gate',templateId:e.id,source:'classic',aiStatus:'skip',
+            delivery:{id:'browser-coin-ticket',target:'clinic',title:'灯火试单',desc:'当面交付',condition:'ordinary',expiresAt:s.minutes+30,reward:30,coins:3,npc:null}}
+        };}""")
+        fixture(page, edits, unlock_gameplay=False)
+        assert '外卖币' not in page.locator('[data-act="choose"][data-index="0"] small').inner_text()
+        page.click('[data-act="choose"][data-index="0"]')
+        assert current(page)['player']['coins'] == 0
+        assert '外卖币' not in page.locator('.event-result').inner_text()
+        assert not errors, errors
+        record(f'{width}px 未解锁配送事件不预告或发放额外外卖币；读档结算与结果一致')
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    delivery_coins_browser_checks(browser)
     unlock_notice_browser_checks(browser)
     place_unlock_browser_checks(browser)
     result_browser_checks(browser)

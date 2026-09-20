@@ -3,7 +3,7 @@
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
   G.VERSION = 16;
-  G.APP_VERSION = '1.9.2';
+  G.APP_VERSION = '1.9.4';
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   // 只向东、向南追加网格；原 7×6 城区的坐标、地点 ID 与桥梁不变。
@@ -20,7 +20,7 @@
   // 功能开放只看已结算的经历；门槛、说明和入口共享同一份配置。
   G.FEATURE_UNLOCKS = [
     {id:'system',name:'系统',hint:'完成并结算第 1 单配送',ready:s=>s.stats.delivered>=1,
-      notice:'导航栏已开放系统，可签到、兑换补给和领取委托奖励。'},
+      notice:'导航栏已开放系统，之后送达外卖可获得外卖币，也可签到、兑换补给和领取委托奖励。'},
     {id:'cultivation',name:'修行',hint:'在系统委托中领取「第一份人间烟火」奖励',requires:['system'],ready:s=>s.claimed.includes('q1'),
       notice:'导航栏已开放修行，先从一次完整的吐纳开始。'},
     {id:'practice',name:'进阶修行与探索',hint:'完成一次吐纳修炼',requires:['cultivation'],ready:s=>s.stats.trained>=1,
