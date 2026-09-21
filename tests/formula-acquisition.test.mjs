@@ -97,7 +97,7 @@ test('房租破产先于同刻剧情完成，不能拿到该段丹方',()=>{
     assert.ok(s.gameOver);assert.deepEqual(s.alchemy.formulas,[]);assert.deepEqual(copy(s).alchemy.formulas,[]);
   }finally{if(old===undefined)delete event.choices[0].duration;else event.choices[0].duration=old;}
 });
-for(const npc of G.NPCS)test(`${npc.name}分三次传方，每次两张；不绑定情感路线`,()=>{
+for(const npc of G.NPCS.filter(n=>Object.hasOwn(G.FORMULA_NPC_PRODUCTS,n.id)))test(`${npc.name}分三次传方，每次两张；不绑定情感路线`,()=>{
   let s=fresh();const bond=s.bonds[npc.id];bond.met=true;
   for(const [i,m] of G.FORMULA_BOND_MILESTONES.entries()){
     bond.stage=m.stage;bond.trust=m.trust-1;

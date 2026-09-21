@@ -4,6 +4,7 @@ import '../public/js/data.js';
 import '../public/js/engine.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
+import {acknowledge} from './helpers/opening.mjs';
 const G=globalThis.NightCourier;
 // 专项回归使用已开启入口的夹具；真实新档功能与地点解锁由 gameplay-unlocks/location-unlocks 专项覆盖。
 const fresh=(mode='classic',seed=987654321)=>Object.assign(G.newGame('云行',mode,seed),{unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.map(p=>p.id)});
@@ -116,6 +117,7 @@ test('新增核心人物也能通过随机奇遇被发现',()=>{const ids=new Se
 test('普通探索不直接掉落丹方，不能绕过剧情羁绊和购买',()=>{for(let seed=1;seed<80;seed++){const s=fresh('classic',seed);s.position='park';s.player.luck=99;const a=run(s,'explore');assert.deepEqual(a.alchemy.formulas,[]);assert.ok(a.pending);}});
 test('高机缘在同一组随机种子中发现更多额外材料',()=>{let low=0,high=0;for(let seed=100;seed<250;seed++){const a=fresh('classic',seed),b=fresh('classic',seed);a.position='park';b.position='park';a.player.luck=1;b.player.luck=40;low+=run(a,'explore').inventory.herb;high+=run(b,'explore').inventory.herb;}assert.ok(high>low,`${high} 应大于 ${low}`);});
 test('连续游玩可送达 40 单并达成守城结局，流程无死局',()=>{let s=fresh();for(let i=0;i<1200;i++){
+  s=acknowledge(s);
   if(s.pending){const choices=s.pending.choices.map((c,index)=>({c,index})).filter(x=>!G.choiceBlock(s,x.c));assert.ok(choices.length,'任何事件都必须至少有一个可用选择');choices.sort((a,b)=>((b.c.effects.karma||0)*2+(b.c.effects.qi||0))-((a.c.effects.karma||0)*2+(a.c.effects.qi||0)));s=run(s,'choose',{eventId:s.pending.id,index:choices[0].index});continue;}
   if(s.stats.delivered>=40&&s.player.realm>=3&&(s.inventory.fragment||0)>=3&&s.player.karma>=5)break;
   const q=G.QUESTS.find(q=>!s.claimed.includes(q.id)&&G.questReady(s,q));if(q){s=run(s,'claim',{id:q.id});continue;}

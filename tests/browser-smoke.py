@@ -1347,12 +1347,107 @@ def higher_story_browser_checks(browser):
             ctx.close()
 
 
+def delivery_npc_browser_checks(browser):
+    for width, height, mode in [(1200, 900, 'classic'), (320, 740, 'ai')]:
+        ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
+        new_game(page, '沿途故人', mode)
+        assert page.evaluate('NightCourier.NPCS.length') == 12
+        assert page.evaluate('NightCourier.NEW_NPC_IDS.every(id=>!window.__live.bonds[id].met)')
+        ids = page.evaluate('NightCourier.NEW_NPC_IDS')
+        for npc_id in ids:
+            # Post-tutorial fixture: choose an actual seeded offer, not a forged NPC ticket.
+            data = page.evaluate('''id=>{const G=NightCourier,old=window.__live;
+              for(let seed=1;seed<4000;seed++){
+                const s=G.newGame('沿途故人',old.mode,seed);s.id=old.id;s.createdAt=old.createdAt;
+                s.flags.firstOrder=true;s.stats.delivered=1;s.orders=[];G.refreshOrders(s);
+                const o=s.orders.find(o=>o.npc===id&&!G.place(o.target).permanent&&
+                  !G.travelBlock(s,G.travelPlan(s,o.target))&&
+                  (o.condition!=='careful'||s.player.stamina-G.travelPlan(s,o.target).stamina>=10));
+                if(o)return {state:s,ticket:o,npc:G.NPCS.find(n=>n.id===id)};
+              }throw Error('No affordable natural NPC offer');}''', npc_id)
+            fixture(page, data['state'], unlock_gameplay=False)
+            assert current(page)['bonds'][npc_id]['met'] is False
+            target = data['ticket']['target']
+            assert target != data['npc']['place']
+            page.locator(f'.order-point[data-place="{target}"]').focus()
+            page.keyboard.press('Enter')
+            page.click('[data-act="deliver"]')
+            assert current(page)['bonds'][npc_id]['met'] is False
+            finish_ui_activity(page)
+            assert current(page)['pending']['templateId'] == f'delivery-npc-{npc_id}'
+            assert current(page)['pending']['source'] == 'classic'
+            assert current(page)['pending']['aiStatus'] == 'skip'
+            assert current(page)['bonds'][npc_id]['met'] is False
+            assert page.locator('[data-act="choose"]').count() == 3
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            if npc_id == 'xu':
+                page.screenshot(path=str(OUT/f'npc-delivery-meeting-{width}.png'))
+            page.click('[data-act="choose"][data-index="0"]')
+            assert current(page)['bonds'][npc_id]['met'] is True
+            assert current(page)['bonds'][npc_id]['stage'] == 0
+            assert current(page)['bonds'][npc_id]['path'] == 'none'
+            assert current(page)['player']['coins'] == 0
+            assert any(n['kind']=='bond' and n['id']==npc_id for n in current(page)['unlockNotices'])
+            ack_result_ui(page)
+            page.locator('#game-nav [data-panel="bonds"]').click()
+            card = page.locator('.npc-card').filter(has_text=data['npc']['name'])
+            assert card.count() == 1
+            assert f"{data['npc']['age']}岁" in card.inner_text()
+            assert '常约在' in card.inner_text()
+            assert '丹方传授 0/0' not in card.inner_text()
+            record(f'{width}px {data["npc"]["name"]}：不同配送地址初遇，结算才弹人物通知，卡片年龄和常约地点正确')
+            # Final-chapter fixture; full daily visit progression is covered in Node tests.
+            for trust, index, relation in [(11, 0, 'friend'), (20, 1, 'romance')]:
+                state = current(page)
+                state.update(position=data['npc']['place'], location=None, pending=None,
+                             activity=None, activeOrder=None, eventResult=None, placeUnlock=None,
+                             unlockNotices=[], lastRoute=None)
+                state['unlockedPlaces'] = list(dict.fromkeys(state['unlockedPlaces']+[data['npc']['place']]))
+                state['bonds'][npc_id].update(met=True, affinity=60, trust=trust, stage=3, path='none', lastTalkDay=0)
+                fixture(page, state, unlock_gameplay=False)
+                page.locator('#game-nav [data-panel="bonds"]').click()
+                page.locator(f'[data-act="visit"][data-id="{npc_id}"]').click()
+                finish_ui_activity(page)
+                assert current(page)['pending']['npcAdvance'] is True
+                romance = page.locator('[data-act="choose"][data-index="1"]')
+                assert romance.is_disabled() is (trust < 12)
+                if trust < 12:
+                    assert '需要信任 12' in page.locator('#panel').inner_text()
+                if trust >= 12 and npc_id == 'xu':
+                    page.screenshot(path=str(OUT/f'npc-romance-choice-{width}.png'))
+                page.locator(f'[data-act="choose"][data-index="{index}"]').click()
+                assert current(page)['bonds'][npc_id]['path'] == relation
+                assert current(page)['bonds'][npc_id]['stage'] == 4
+                ack_result_ui(page)
+                page.locator('#game-nav [data-panel="bonds"]').click()
+                card = page.locator('.npc-card').filter(has_text=data['npc']['name'])
+                assert ('相伴' if relation=='romance' else '知己') in card.inner_text()
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            record(f'{width}px {data["npc"]["name"]}：信任门槛、友情选择和明确表白均由真实UI结算')
+        all_met = page.evaluate('''()=>{const G=NightCourier,s=G.newGame('沿途故人',window.__live.mode,4546);
+          s.id=window.__live.id;s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.map(p=>p.id);
+          for(const b of Object.values(s.bonds))b.met=true;return s;}''')
+        fixture(page, all_met, unlock_gameplay=False)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert page.locator('.npc-card').count() == 12
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.screenshot(path=str(OUT/f'twelve-npcs-{width}.png'))
+        page.click('[data-ui="close"]')
+        page.locator('[data-place="park"]').first.focus()
+        page.keyboard.press('Enter')
+        for npc_id in ['su', 'xu', 'luo']:
+            assert page.locator(f'[data-act="visit"][data-id="{npc_id}"]').count() == 1
+        assert not errors, errors
+        record(f'{width}px 十二位已识人物完整显示，同一常约地点的三人均可拜访')
+        ctx.close()
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    delivery_npc_browser_checks(browser)
     higher_story_browser_checks(browser)
     story_chapter_browser_checks(browser)
     sect_browser_checks(browser)

@@ -29,7 +29,18 @@ export function nextDelivery(s){
   if(s.player.stamina<30||s.player.health<30)s=resolve(act(s,'rest'));
   if(s.vehicle.battery<20)s=resolve(act(s,'charge'));
   if(!s.orders.length)s=resolve(act(s,'rest'));
-  const candidates=s.orders.filter(o=>!G.travelBlock(s,G.travelPlan(s,o.target)));
+  const available=()=>s.orders.filter(o=>{
+    const p=G.travelPlan(s,o.target);
+    return !G.travelBlock(s,p)&&(o.condition!=='careful'||s.player.stamina-p.stamina>=10)&&
+      (o.condition!=='mystic'||s.player.mana>=8);
+  });
+  // Existing offers can require more than the old fixed 20/30 resource thresholds.
+  // Recover using real actions, never inject assets or replace the ticket.
+  for(let i=0;!available().length&&i<4;i++){
+    s=resolve(act(s,'rest'));
+    if(s.transport==='bike')s=resolve(act(s,'charge'));
+  }
+  const candidates=available();
   candidates.sort((a,b)=>G.routeFrom(s,a.target).meters-G.routeFrom(s,b.target).meters);
   assert.ok(candidates.length,'Need a reachable offer');
   return act(s,'deliver',{id:candidates[0].id});

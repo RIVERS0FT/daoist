@@ -6,7 +6,7 @@ import '../public/js/engine.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
-const deliveries=G.EVENTS.filter(e=>e.kind==='delivery');
+const deliveries=G.EVENTS.filter(e=>e.kind==='delivery'&&!e.deliveryNpc);
 const act=(s,name,p={})=>{const r=G.perform(s,name,p);assert.ok(r.ok,r.error);return r.state;};
 const ack=s=>act(s,'ackResult',{id:s.eventResult.id});
 const read=s=>G.sanitizeSave(G.clone(s));

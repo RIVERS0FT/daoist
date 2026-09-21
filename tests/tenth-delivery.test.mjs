@@ -117,7 +117,7 @@ test('新存档缺失/非法剧情标记和矛盾的第十单待选必须报错�
 
 for(const delivered of [0,1,9,42])test(`v17 已结算${delivered}单迁移保留旧解锁规则与余额，不补币、不补弹剧情`,()=>{
   const old=fresh();old.schemaVersion=17;old.stats.delivered=delivered;delete old.flags.systemAwakened;old.player.coins=delivered?37:0;
-  const s=read(old);assert.equal(s.schemaVersion,18);assert.equal(G.featureUnlocked(s,'system'),delivered>=1);
+  const s=read(old);assert.equal(s.schemaVersion,G.VERSION);assert.equal(G.featureUnlocked(s,'system'),delivered>=1);
   assert.equal(s.player.coins,old.player.coins);assert.equal(s.pending,null);assert.deepEqual(s.unlockNotices,[]);
   assert.equal(s.flags.systemAwakened,false);const twice=read(s);assert.deepEqual(twice.player,s.player);assert.equal(twice.seed,s.seed);
 });
