@@ -75,7 +75,7 @@ test('现金不足交租时不生成成功结果、不交付、不解锁',()=>{
 });
 test('第三单结果不会被主线覆盖；确认只显露已排队主线，不重复注入或发奖励',()=>{
   let s=fixture();s.stats.delivered=2;s.claimed=['q1'];s=choose(s);
-  assert.equal(s.eventResult.title,'第一章 · 解锁外卖系统');assert.equal(s.pending.templateId,'story-street-vein');
+  assert.equal(s.eventResult.title,'第一份热饭');assert.equal(s.pending.templateId,'story-street-vein');
   const copy=read(s);assert.equal(copy.eventResult.text,s.eventResult.text);assert.equal(copy.pending.templateId,'story-street-vein');
   const seed=copy.seed,turn=copy.turn,done=ack(copy);assert.equal(done.seed,seed);assert.equal(done.turn,turn);assert.equal(done.pending.id,copy.pending.id);
   const next=choose(ackUnlocks(act(done,'ackPlaceUnlock',{id:done.placeUnlock.place})));assert.equal(next.eventResult.title,'地图上多出来的一条线');assert.equal(next.pending,null);
@@ -120,7 +120,7 @@ test('v12 存储键迁入当前版，保留原文；损坏结果不静默覆盖'
   const fail=G.createStore(memory);fail.load();assert.ok(fail.warning);assert.equal(memory.getItem(G.STORAGE_KEY),bad);
 });
 test('选择造成气血耗尽仍先阅读结果，之后才沿路救助',()=>{
-  let s=fixture('first-order',false);s.mode='ai';s.player.health=1;s.pending.aiStatus='unrequested';
+  let s=fixture('rain',false);s.mode='ai';s.player.health=1;s.pending.aiStatus='unrequested';
   s=G.applyAIEvent(s,s.pending.id,{title:'试探灵息',text:'气息忽然紊乱。',choices:[{label:'试探',result:'你感到一阵眩晕，路人开始呼救。',effects:{health:-10}},{label:'停下',result:'气息平复了。',effects:{}},{label:'退开',result:'你避开了紊流。',effects:{}}]});
   s=choose(s);assert.equal(s.activity.kind,'rescue');assert.ok(s.eventResult);assert.equal(G.advance(s,100),s);s=read(s);s=ack(s);const moved=G.advance(s,1);assert.ok(moved.minutes>s.minutes);
 });

@@ -1,3 +1,4 @@
+import {throughNine, afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
@@ -26,7 +27,7 @@ function pending(id='coin',unlocked=false,mode='classic'){
   return s;
 }
 
-for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首单选项 ${index+1}：开局、途中、待选与结算无外卖币，结算后才开系统`,()=>{
+for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首单选项 ${index+1}：开局、途中、待选与结算无外卖币，首单结算仍不开系统`,()=>{
   let s=fresh(mode);const original=G.clone(s),ticket=s.orders[0],c=G.EVENTS.find(e=>e.id==='first-order').choices[index];
   assert.ok(ticket.coins>0);assert.equal(G.deliveryCoins(s,ticket),0);assert.deepEqual(s,original);
   s=act(s,'deliver',{id:ticket.id});s=G.advance(s,.2);s=read(s);
@@ -34,7 +35,7 @@ for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首�
   s=finish(s);s=ack(s);assert.equal(s.pending.templateId,'first-order');assert.equal(s.stats.delivered,0);
   s=read(s);assert.equal(G.featureUnlocked(s,'system'),false);s=choose(s,index);
   assert.equal(s.player.coins,0);assert.equal(s.player.money,original.player.money+ticket.reward+(c.effects.money||0));
-  assert.equal(s.stats.delivered,1);assert.equal(s.daily.delivered,1);assert.ok(G.featureUnlocked(s,'system'));
+  assert.equal(s.stats.delivered,1);assert.equal(s.daily.delivered,1);assert.equal(G.featureUnlocked(s,'system'),false);
   assert.equal(delta(s.eventResult,'player.coins'),0);assert.equal(delta(s.eventResult,'player.coins',true),0);
   assert.ok(!s.logs.filter(l=>l.tag==='配送').at(-1).text.includes('外卖币'));
   const receipt=s.eventResult.id,seed=s.seed,at=s.minutes;s=ack(read(s));
@@ -42,14 +43,14 @@ for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首�
   G.syncFeatureUnlocks(s);assert.equal(s.player.coins,0);assert.equal(G.perform(s,'ackResult',{id:receipt}).ok,false);
 });
 
-test('解锁前生成的订单保留基础外卖币；首单之后继续接取可正常发奖且不补发首单',()=>{
-  let s=fresh();const initial=G.clone(s.orders),first=s.orders[0];
+test('解锁前生成的订单保留基础外卖币；第十单解锁之后继续接取可正常发奖且不补发首单',()=>{
+  let s=throughNine();const initial=G.clone(s.orders),first=s.orders[0];
   s=ack(choose(finish(act(s,'deliver',{id:first.id}))));assert.equal(s.player.coins,0);
   const next=s.orders.find(o=>initial.some(x=>x.id===o.id)&&!G.travelBlock(s,G.travelPlan(s,o.target)));
   assert.ok(next);assert.equal(next.coins,initial.find(o=>o.id===next.id).coins);assert.equal(G.deliveryCoins(s,next),next.coins);
   s=finish(act(read(s),'deliver',{id:next.id}));let bonus=0;
   if(s.pending){s=ack(s);bonus=s.pending.choices[0].effects.coins||0;s=finish(choose(s));}
-  assert.equal(s.stats.delivered,2);assert.equal(s.player.coins,next.coins+bonus);
+  assert.equal(s.stats.delivered,11);assert.equal(s.player.coins,next.coins+bonus);
   const earned=s.player.coins;s=ack(read(s));assert.equal(s.player.coins,earned);
   assert.equal(G.perform(s,'deliver',{id:next.id}).ok,false);assert.equal(s.player.coins,earned);
 });
@@ -87,7 +88,7 @@ for(const unlocked of [false,true])test(`无随机事件配送也在交付前检
   const ticket=s.orders[0];s.position=ticket.target;
   for(let seed=1;seed<100000;seed++){const probe={seed};if(G.rand(probe)>=.55){s.seed=seed;break;}}
   s=act(s,'deliver',{id:ticket.id});assert.equal(s.pending,null);assert.equal(s.stats.delivered,1);
-  assert.equal(s.player.coins,unlocked?ticket.coins:0);assert.ok(G.featureUnlocked(s,'system'));
+  assert.equal(s.player.coins,unlocked?ticket.coins:0);assert.equal(G.featureUnlocked(s,'system'),unlocked);
 });
 
 test('门槛只过滤未开放的配送正收益，不豁免费用、不影响其他事件、不篡改选项',()=>{
@@ -113,7 +114,7 @@ test('房租破产先于同刻配送与外卖币结算，不触发新系统解�
 
 test('正常签到和委托奖励保持原规则，未解锁时直接调用仍拒绝',()=>{
   const locked=fresh();assert.equal(G.perform(locked,'sign').ok,false);assert.equal(G.perform(locked,'claim',{id:'q1'}).ok,false);
-  let s=ack(choose(finish(act(locked,'deliver',{id:locked.orders[0].id}))));assert.equal(s.player.coins,0);
+  let s=afterAwakening();assert.equal(s.player.coins,0);
   s=act(s,'sign');assert.equal(s.player.coins,5);const reward=G.QUESTS.find(q=>q.id==='q1').reward.coins;
   s=act(s,'claim',{id:'q1'});assert.equal(s.player.coins,5+reward);
 });

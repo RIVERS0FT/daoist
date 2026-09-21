@@ -20,7 +20,7 @@
   G.visibleNPCs = s => G.NPCS.filter(n => G.isNPCMet(s, n.id));
 
   G.STORY_STAGES = [
-    { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'从普通骑手的首单开始，完成固定剧情选择与配送结算，在本章解锁外卖系统。', ready:()=>true },
+    { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'先完成九单，再将第十份热饭送往非常驻随机地点；完成固定剧情，在本章解锁外卖系统。', ready:()=>true },
     { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启。继续配送赚取外卖币，领取第一份委托奖励，开始吐纳修行。', ready:s=>G.featureUnlocked(s,'system') },
     { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'异常门牌、旧阵纹与夜行客反复出现。青岚城并不只有地图上这一层。', ready:s=>s.flags?.storySecondCity === true || (s.stats.delivered>=8 && s.player.realm>=1) },
     { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识了越来越多夜里仍醒着的人，也开始进入这座城真正的修行圈。', ready:s=>G.metNPCCount(s)>=2 && s.player.realm>=1 },
@@ -30,6 +30,7 @@
   ];
   G.storyStage = s => {
     let current = G.STORY_STAGES[0];
+    if(!G.featureUnlocked(s,'system'))return current;
     for (const stage of G.STORY_STAGES) if (stage.ready(s)) current = stage;
     return current;
   };
@@ -38,7 +39,7 @@
     return `${stage.chapter} · ${stage.title}`;
   };
 
-  // 系统不是开局一次性开放全部能力。基础补给在首单结算后开放，修行资源仍随境界解锁。
+  // 系统不是开局一次性开放全部能力。基础补给在第十单解锁剧情结束后开放，修行资源仍随境界解锁。
   const unlocks = {
     qi:0, heal:0, stamina:0, mana:0, herb:0,
     fragment:1, charm:1, foundation:1, breathing:1, lightstep:1,
@@ -52,7 +53,7 @@
     { title:'不存在的十三楼', desc:'电梯只有十二层。备注写着：到十二楼后走楼梯，不要看身后的镜子。', tip:20, condition:'mystic' },
     { title:'阵眼旁的一碗白粥', desc:'送到桥下旧石碑。若看见有人等，就把第二双筷子也留下。', tip:18, condition:'mystic' },
     { title:'给守夜人的药茶', desc:'收件人整夜不能离开阵位。茶不能洒，也不能换杯。', tip:16, condition:'careful' },
-    { title:'凌晨四点的热豆花', desc:'不是给修士，是给刚下夜班的人。系统却把这一单标成了“重要”。', tip:10, condition:'night' },
+    { requiresSystem:true, title:'凌晨四点的热豆花', desc:'不是给修士，是给刚下夜班的人。系统却把这一单标成了“重要”。', tip:10, condition:'night' },
     { title:'旧雨书店的无名订单', desc:'备注只有一句：把书里的那个人也算一份。', tip:12, condition:'ordinary' },
     { title:'给另一个骑手的晚饭', desc:'对方正在替人顶班，地址会随着他的位置变化。请尽快送到。', tip:13, condition:'urgent' }
   );
@@ -97,7 +98,7 @@
       id:'story-street-vein', kind:'story', flag:'storyStreetVein',
       ready:s=>s.flags.firstOrder && s.stats.delivered>=3,
       title:'地图上多出来的一条线',
-      text:'第三次送达后，系统地图没有立刻刷新订单。你刚刚走过的三段路线被细金线连在一起，像血管，也像阵纹。系统只显示一句：连接有效。',
+      text:'外卖系统展开了你先前送达的路线。最初的三段路被细金线连在一起，像血管，也像阵纹。系统只显示一句：连接有效。',
       choices:[
         c('把三段路线重新走一遍','你确认金线不是错觉。它们只在有人真正抵达之后亮起。',{stamina:-4,insight:1,qi:8}),
         c('截图留存，暂不声张','第二天再看，截图里什么都没有，但你记得那些线在哪里。',{insight:1,rep:1}),
@@ -174,7 +175,7 @@
 
   const storyActions = new Set(['deliver','choose','travel','moveHome','rest','sleep','cultivate','breakthrough','explore','visit','heal','meal','alchemy','sectJoin','sectTask','sectPromote']);
   function injectStoryEvent(s) {
-    if (s.gameOver || s.pending || s.ending || s.activity) return;
+    if (s.gameOver || s.pending || s.ending || s.activity || !G.featureUnlocked(s,'system')) return;
     const next = storyEvents.find(e => !s.flags[e.flag] && e.ready(s));
     if (!next) return;
     s.flags[next.flag] = true;

@@ -98,7 +98,7 @@ test('仅功能已开放不能绕过地点检查；所有本地服务都原子�
 });
 
 test('发现长乐集不会跳过炼药或拍卖的独立玩法门槛',()=>{
-  const s=settle(arrive(fresh()));assert.ok(G.placeUnlocked(s,'market'));assert.ok(G.featureUnlocked(s,'system'));
+  const s=settle(arrive(fresh()));assert.ok(G.placeUnlocked(s,'market'));assert.equal(G.featureUnlocked(s,'system'),false);
   assert.equal(G.featureUnlocked(s,'alchemy'),false);assert.equal(G.featureUnlocked(s,'auction'),false);
   assert.match(reject(s,'cauldron',{id:1}),/尚未开启/);assert.match(reject(s,'auctionCatalog'),/尚未开启/);
 });

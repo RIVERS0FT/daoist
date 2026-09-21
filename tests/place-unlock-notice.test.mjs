@@ -45,10 +45,10 @@ test('确认结果后仍暂停；地点确认只清回执，不改变奖励、�
   for(const action of ['rest','buy','travel','choose','stop','resumeDelivery','cancelDelivery','transport'])reject(s,action,{target:'home',id:'heal'});
   reject(s,'ackPlaceUnlock',{id:'market'});
   const done=ackPlace(s);assert.deepEqual(gameplay(done),snapshot);assert.equal(done.placeUnlock,null);assert.ok(done.unlockedPlaces.includes('clinic'));
-  reject(done,'ackPlaceUnlock',{id:'clinic'});assert.equal(G.advance(done,1),done);const ready=ackUnlocks(done);assert.ok(G.advance(ready,1).minutes>ready.minutes);
+  reject(done,'ackPlaceUnlock',{id:'clinic'});assert.ok(G.advance(done,1).minutes>done.minutes);const ready=ackUnlocks(done);assert.ok(G.advance(ready,1).minutes>ready.minutes);
 });
 test('排队主线在结果、地点两次确认后仍保留；确认不注入新故事',()=>{
-  let s=fixture();s.stats.delivered=2;s.claimed=['q1'];s=choose(s);const id=s.pending.id;
+  let s=fixture();s.stats.delivered=2;s.unlockedFeatures=['system'];s.claimed=['q1'];s=choose(s);const id=s.pending.id;
   s=read(s);s=ackResult(s);assert.equal(s.pending.id,id);reject(s,'choose',{eventId:id,index:0});
   const before=gameplay(s);s=ackPlace(s);assert.deepEqual(gameplay(s),before);assert.equal(s.pending.id,id);
   s=choose(ackUnlocks(s));assert.equal(s.eventResult.title,'地图上多出来的一条线');assert.equal(s.placeUnlock,null);

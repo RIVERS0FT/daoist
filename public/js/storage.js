@@ -2,9 +2,9 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v17';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v16';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
+  G.STORAGE_KEY = 'night-courier:saves:v18';
+  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v17';
+  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
   G.BACKUP_KEY = 'night-courier:saves:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -28,6 +28,11 @@
       if(p.id!==clean.id)throw new Error('拍卖事件标识与轮次不一致。');
       return clean; // 丢弃任何外来 effects / AI 文本；从当前拍品重建三个固定操作。
     }
+    if(p.templateId==='system-awakening'){
+      const ticket=cleanTicket(p.delivery,s),base=G.EVENTS.find(e=>e.id===p.templateId);
+      if(!base||p.kind!=='story'||p.npcId||s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES-1||s.flags.systemAwakened||s.position!==ticket.target||G.place(ticket.target).permanent)throw new Error('外卖系统解锁剧情与配送进度不一致。');
+      return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip',delivery:ticket};
+    }
     if(p.templateId==='story-sect-invitation'){
       if(p.delivery||p.npcId||p.kind!=='story')throw new Error('宗门引荐不接受配送票据或人物进度。');
       const base=G.EVENTS.find(e=>e.id===p.templateId);
@@ -41,9 +46,9 @@
       else if(npc){base={title:`与${npc.name}的片刻`,text:'你们继续谈起各自的近况。',choices:[{label:'分享近况',result:'你们的距离又近了一些。',effects:{affinity:5,trust:2}},{label:'认真倾听',result:'你记住了对方在意的小事。',effects:{affinity:4,trust:3}},{label:'请对方吃饭',result:'一顿热饭，让夜晚柔软了许多。',effects:{money:-12,affinity:7,stamina:8}}],kind:'social'};}
       else {base=G.EVENTS.find(e=>e.id===p.templateId);if(!base)throw new Error('无法识别待处理事件，请使用备份恢复。');base=G.clone(base);}
       let clean={...base,id:cleanId(p.id),templateId:base.id||p.templateId,source:'classic',aiStatus:['unrequested','fallback','skip'].includes(p.aiStatus)?p.aiStatus:'skip',npcId:npc?.id||null,npcAdvance:!!npc&&p.npcAdvance===true};
-      if(p.source==='ai'){const ai=G.validateAIEvent(p);Object.assign(clean,ai,{source:'ai',aiStatus:'success'});}
+      if(p.source==='ai'&&p.templateId!=='first-order'){const ai=G.validateAIEvent(p);Object.assign(clean,ai,{source:'ai',aiStatus:'success'});}
       if(p.delivery)clean.delivery=cleanTicket(p.delivery,s);
-      if(s.mode==='classic')clean.aiStatus='skip';
+      if(s.mode==='classic'||p.templateId==='first-order')clean.aiStatus='skip';
     return clean;
   }
 
@@ -207,7 +212,7 @@
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
     const name=str(raw.name??raw.player.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
@@ -267,7 +272,10 @@
     const d=obj(raw.daily)?raw.daily:{},day=G.day(s);
     s.daily={day,delivered:d.day===day?num(d.delivered,0):0,claimed:d.day===day&&d.claimed===true,signedDay:num(d.signedDay,0,0,day),streak:num(d.streak,0,0,day)};
     s.claimed=Array.isArray(raw.claimed)?[...new Set(raw.claimed.filter(id=>G.QUESTS.some(q=>q.id===id)))]:[];
-    s.flags={firstOrder:raw.flags?.firstOrder===true};s.recentEvents=Array.isArray(raw.recentEvents)?raw.recentEvents.filter(id=>G.EVENTS.some(e=>e.id===id)).slice(-4):[];
+    if(version>=18&&typeof raw.flags?.systemAwakened!=='boolean')throw new Error('存档缺少有效的外卖系统剧情状态。');
+    s.flags={firstOrder:raw.flags?.firstOrder===true,systemAwakened:version>=18&&raw.flags.systemAwakened===true};
+    if(s.flags.systemAwakened&&s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES)throw new Error('外卖系统剧情完成记录与送达数量不一致。');
+    s.recentEvents=Array.isArray(raw.recentEvents)?raw.recentEvents.filter(id=>G.EVENTS.some(e=>e.id===id)).slice(-4):[];
     s.unlockedEndings=Array.isArray(raw.unlockedEndings)?[...new Set(raw.unlockedEndings.filter(id=>Object.hasOwn(G.ENDINGS,id)))]:[];
     s.ending=typeof raw.ending==='string'&&Object.hasOwn(G.ENDINGS,raw.ending)?raw.ending:null;
     s.logs=Array.isArray(raw.logs)?raw.logs.filter(obj).slice(-180).map((l,i)=>({id:`restored-${s.turn}-${i}`,at:num(l.at,s.minutes,0,s.minutes,false),tag:str(l.tag,'日常',12),text:str(l.text,'',600)})):s.logs;
@@ -312,10 +320,14 @@
     s.placeUnlock=version>=15?cleanPlaceUnlock(raw.placeUnlock,s):null;
     G.validateAuctionLinks(s);
     G.restoreFeatureUnlocks(s,raw,version);
+    const binding=s.pending?.templateId==='system-awakening'||s.activity?.params?.event?.templateId==='system-awakening';
+    if(binding&&!G.systemAwakeningDue(s))throw new Error('已开放的外卖系统不能重复绑定。');
+    // Do not draw RNG or refill offers while loading. Accepted legacy routes stay untouched.
+    if(G.systemAwakeningDue(s))s.orders=s.orders.filter(o=>!G.place(o.target).permanent);
     G.validateSectLinks(s);
     s.unlockNotices=version>=16?cleanUnlockNotices(raw.unlockNotices,s):[];
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门从未入宗开始，不补贡献或典籍。`,'存档');
+    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回。`,'存档');
     return s;
   };
   G.parseImport = text => {

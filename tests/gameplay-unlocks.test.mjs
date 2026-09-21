@@ -1,3 +1,4 @@
+import {throughNine, afterAwakening} from './helpers/opening.mjs';
 import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,10 +21,10 @@ const deliver=s=>{
 };
 const reread=s=>G.sanitizeSave(G.clone(s));
 const unlockLogs=s=>s.logs.filter(l=>l.tag==='解锁');
-const afterClaim=()=>act(deliver(fresh()),'claim',{id:'q1'});
+const afterClaim=()=>act(afterAwakening(),'claim',{id:'q1'});
 function street(s,duration=0){
   const e=G.EVENTS.find(e=>e.id==='story-street-vein');
-  s.flags.firstOrder=true;s.flags.storyStreetVein=true;s.stats.delivered=3;s.claimed=['q1'];
+  s.unlockedFeatures=['system'];s.flags.firstOrder=true;s.flags.storyStreetVein=true;s.stats.delivered=3;s.claimed=['q1'];
   s.pending={...G.clone(e),id:'progressive-story',templateId:e.id,source:'classic',aiStatus:'skip'};
   G.syncFeatureUnlocks(s,true);
   if(duration)s.pending.choices[0].duration=duration;
@@ -49,16 +50,16 @@ test('未开启时直接调用所有受限指令均失败且原对象、资金�
     const before=JSON.stringify(s),r=G.perform(s,name,p);assert.equal(r.ok,false,name);assert.equal(r.state,s);assert.match(r.error,/尚未开启/);assert.equal(JSON.stringify(s),before);
   }
 });
-test('首单开始、到达待选、待选读档都不开放系统；实际交付结算后才开放',()=>{
-  let s=fresh();const before=JSON.stringify(s);s=act(s,'deliver',{id:s.orders[0].id});
+test('第十单开始、到达待选、待选读档都不开放系统；实际交付结算后才开放',()=>{
+  let s=throughNine();const before=JSON.stringify(s);s=act(s,'deliver',{id:s.orders[0].id});
   assert.equal(G.featureUnlocked(s,'system'),false);assert.ok(!JSON.parse(before).activity);
-  s=finish(s);assert.equal(s.pending.templateId,'first-order');assert.equal(s.flags.firstOrder,true);
-  assert.equal(G.featureUnlocked(reread(s),'system'),false);assert.equal(s.stats.delivered,0);
-  s=settle(s);assert.equal(s.stats.delivered,1);assert.ok(s.unlockedFeatures.includes('system'));
+  s=finish(s);assert.equal(s.pending.templateId,'system-awakening');assert.equal(s.flags.firstOrder,true);
+  assert.equal(G.featureUnlocked(reread(s),'system'),false);assert.equal(s.stats.delivered,9);
+  s=settle(s);assert.equal(s.stats.delivered,10);assert.ok(s.unlockedFeatures.includes('system'));
   assert.equal(G.featureUnlocked(s,'cultivation'),false);assert.ok(G.panelUnlocked(s,'system'));
 });
 test('领取首单奖励才开放吐纳，领取本身不开放进阶修行或炼药',()=>{
-  const first=deliver(fresh());const at=first.minutes;const s=act(first,'claim',{id:'q1'});
+  const first=afterAwakening();const at=first.minutes;const s=act(first,'claim',{id:'q1'});
   assert.equal(s.minutes,at);assert.ok(G.featureUnlocked(s,'cultivation'));
   assert.equal(G.nextFeatureUnlock(s).id,'practice');assert.equal(G.featureUnlocked(s,'practice'),false);
   assert.equal(G.featureUnlocked(s,'alchemy'),false);assert.equal(s.alchemy.formulas.length,6);
@@ -74,12 +75,12 @@ test('首次吐纳途中、中断和途中读档不开放进阶；完成才开�
   s.player.qi=G.realmNeed(s);assert.ok(G.perform(s,'breakthrough').ok);
   s.position='park';assert.equal(G.perform(s,'explore').ok,false);s.unlockedPlaces.push('park');assert.ok(G.perform(s,'explore').ok);
 });
-test('三单主线待选时不开放炼药，真实新档可连续解锁到炼药',()=>{
-  let s=afterClaim();s=deliver(s);
+test('解锁后路线主线待选时不开放炼药，真实新档可连续解锁到炼药',()=>{
+  let s=afterClaim();
   const order=[...s.orders].sort((a,b)=>G.travelPlan(s,a.target).meters-G.travelPlan(s,b.target).meters)[0];
   s=finish(act(s,'deliver',{id:order.id}));
   for(let i=0;s.pending?.templateId!=='story-street-vein'&&i<4;i++)s=finish(choose(s));
-  assert.equal(s.pending.templateId,'story-street-vein');assert.equal(s.stats.delivered,3);
+  assert.equal(s.pending.templateId,'story-street-vein');assert.equal(s.stats.delivered,11);
   assert.equal(G.featureUnlocked(s,'alchemy'),false);assert.equal(G.featureUnlocked(reread(s),'alchemy'),false);
   s=settle(s);assert.ok(s.unlockedFeatures.includes('alchemy'));assert.ok(G.panelUnlocked(s,'alchemy'));
   assert.equal(s.alchemy.cauldron,0);assert.equal(s.alchemy.formulas.length,12);
@@ -107,7 +108,7 @@ test('同刻房租破产先于剧情完成，不发炼药解锁或完成奖励',
   }finally{if(duration===undefined)delete e.choices[0].duration;else e.choices[0].duration=duration;}
 });
 for(const mode of ['classic','ai'])test(`${mode}模式采用同一玩法进度，不需要 AI 回包才能开启`,()=>{
-  const s=act(deliver(fresh(mode)),'claim',{id:'q1'});assert.ok(G.featureUnlocked(s,'cultivation'));assert.equal(s.mode,mode);
+  const s=act(afterAwakening(mode),'claim',{id:'q1'});assert.ok(G.featureUnlocked(s,'cultivation'));assert.equal(s.mode,mode);
 });
 test('首次遇见任何 NPC 才开放羁绊，不提前暴露其余角色',()=>{
   const s=fresh();assert.equal(G.panelUnlocked(s,'bonds'),false);
@@ -116,18 +117,18 @@ test('首次遇见任何 NPC 才开放羁绊，不提前暴露其余角色',()=>
   assert.deepEqual(G.visibleNPCs(a).map(n=>n.id),['chen']);assert.equal(G.perform(a,'visit',{id:'lin'}).ok,false);
 });
 for(const [id,n,action,p] of [['upgrades',5,'upgrade',{kind:'speed'}],['endings',20,'finale',{id:'ordinary'}]])test(`${id}在第 ${n} 单结算边界开放，既有费用/结局条件继续校验`,()=>{
-  let s=fresh();s.stats.delivered=n-1;s.unlockedPlaces.push('garage');s.position='garage';s.player.money=1000;
+  let s=fresh();s.stats.delivered=n-1;if(id==='endings')s.unlockedFeatures=['system'];s.unlockedPlaces.push('garage');s.position='garage';s.player.money=1000;
   assert.equal(G.featureUnlocked(s,id),false);assert.equal(G.perform(s,action,p).ok,false);
   s.stats.delivered=n;assert.ok(G.featureUnlocked(s,id));assert.ok(G.perform(s,action,p).ok);
   if(id==='upgrades'){s.position='home';assert.equal(G.perform(s,action,p).ok,false);}
   else{s.player.money=0;assert.equal(G.perform(s,action,p).ok,false);}
 });
 test('完整配送 5 单可解锁升级，不依赖随机结识修车 NPC',()=>{
-  let s=afterClaim();for(let i=1;i<5;i++)s=deliver(s);
+  let s=fresh();for(let i=0;i<5;i++)s=deliver(s);
   assert.equal(s.stats.delivered,5);assert.ok(s.unlockedFeatures.includes('upgrades'));
 });
 test('主线仅显示已领取与下一篇，直接构造后续领取不能绕过',()=>{
-  let s=fresh();s.stats.delivered=100;s.player.realm=5;
+  let s=fresh();s.stats.delivered=100;s.unlockedFeatures=['system'];s.player.realm=5;
   assert.deepEqual(G.visibleQuests(s).map(q=>q.id),['q1']);const before=JSON.stringify(s);
   assert.equal(G.perform(s,'claim',{id:'q2'}).ok,false);assert.equal(JSON.stringify(s),before);
   s=act(s,'claim',{id:'q1'});assert.deepEqual(G.visibleQuests(s).map(q=>q.id),['q1','q2']);
@@ -152,11 +153,11 @@ test('读取解锁提示/渲染查询不改变原状态、随机数或日志',()
   assert.equal(JSON.stringify(s),before);
 });
 test('解锁只写一次日志，不改变金钱、分钟、随机数或物品，不自动买鼎',()=>{
-  const s=fresh();s.stats.delivered=1;const before=G.clone(s);G.syncFeatureUnlocks(s);
-  assert.equal(unlockLogs(s).length,1);for(const key of ['player','inventory','alchemy'])assert.deepEqual(s[key],before[key]);
+  const s=throughNine();s.stats.delivered=10;s.flags.systemAwakened=true;const before=G.clone(s);const count=unlockLogs(s).length;G.syncFeatureUnlocks(s);
+  assert.equal(unlockLogs(s).length,count+1);for(const key of ['player','inventory','alchemy'])assert.deepEqual(s[key],before[key]);
   assert.equal(s.minutes,before.minutes);assert.equal(s.seed,before.seed);
-  G.syncFeatureUnlocks(s);assert.equal(unlockLogs(s).length,1);
-  const restored=reread(s);assert.equal(unlockLogs(restored).length,1);
+  G.syncFeatureUnlocks(s);assert.equal(unlockLogs(s).length,count+1);
+  const restored=reread(s);assert.equal(unlockLogs(restored).length,count+1);
 });
 test('已开启功能永久保存；花光钱、用完物品和信任下降不重新锁定',()=>{
   let s=afterClaim();s.bonds.lin.met=true;s=act(s,'transport',{mode:'walk'});const known=[...s.unlockedFeatures];

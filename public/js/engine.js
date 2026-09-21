@@ -93,7 +93,7 @@
       stats: {delivered:0,earned:0,distance:0,trained:0,explored:0},
       bonds: Object.fromEntries(G.NPCS.map(n => [n.id, {met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0}])),
       daily: { day:1, delivered:0, claimed:false, signedDay:0, streak:0 }, claimed: [], unlockedEndings: [], unlockedFeatures: [], unlockedPlaces: [...G.STARTING_PLACES], ending: null,
-      flags: {firstOrder:false}, recentEvents: [], pending: null, eventResult: null, placeUnlock: null, unlockNotices: [], orders: [], logs: [], lastRoute: null,
+      flags: {firstOrder:false,systemAwakened:false}, recentEvents: [], pending: null, eventResult: null, placeUnlock: null, unlockNotices: [], orders: [], logs: [], lastRoute: null,
       location: null, activity: null, activeOrder: null, orderRefreshAt: 495, revision: 0
     };
     G.log(s, `你在青藤小屋醒来。白天送达一份热饭，入夜寻一条自己的仙途。${mode === 'ai' ? '本存档使用 AI 剧情；接口不可用时采用经典事件。' : '本存档使用经典剧情。'}`, '启程');
@@ -206,6 +206,8 @@
     if(s.unlockedFeatures?.includes(id))return true;
     return (feature.requires||[]).every(parent=>G.featureUnlocked(s,parent))&&feature.ready(s);
   };
+  // The tenth-delivery offer window stays active until the fixed story is completed.
+  G.systemAwakeningDue = s => s.stats.delivered>=G.SYSTEM_UNLOCK_DELIVERIES-1&&!G.featureUnlocked(s,'system');
   G.panelUnlocked = (s,type) => !Object.hasOwn(G.FEATURE_PANELS,type)||G.featureUnlocked(s,G.FEATURE_PANELS[type]);
   G.nextFeatureUnlock = s => G.FEATURE_UNLOCKS.find(f=>!f.optional&&!G.featureUnlocked(s,f.id))||null;
   G.featureForAction = (action,payload={}) => {
@@ -238,6 +240,8 @@
     s.unlockedFeatures=version>=10&&Array.isArray(raw.unlockedFeatures)
       ? [...new Set(raw.unlockedFeatures.filter(id=>G.FEATURE_UNLOCKS.some(f=>f.id===id)))]:[];
     const grant=id=>{if(!s.unlockedFeatures.includes(id))s.unlockedFeatures.push(id);};
+    // Old releases granted the system after the first settled delivery. Never revoke that ownership.
+    if(version<18&&s.stats.delivered>=1)grant('system');
     if(version<10){
       if(s.player.coins>0||s.daily.signedDay>0||s.claimed.length||s.learned.length||s.equipment.length)grant('system');
       if(s.player.qi>0||s.player.mortalProgress>0||G.realmRank(s)>0||s.stats.trained>0)grant('cultivation');
@@ -587,9 +591,11 @@
   G.orderOfferRemaining = (s,order) => Math.max(0,(order?.expiresAt ?? s.minutes)-s.minutes);
   G.refreshOrders = s => {
     // expiresAt 为未接订单从地图消失的时间；接单后不再作为送达时限。
-    s.orders=s.orders.filter(o=>o.expiresAt>s.minutes+EPS&&o.id!==s.activeOrder?.id);
+    const awakening=G.systemAwakeningDue(s);
+    // Replace unaccepted permanent-place offers at the boundary, never relocate accepted tickets.
+    s.orders=s.orders.filter(o=>o.expiresAt>s.minutes+EPS&&o.id!==s.activeOrder?.id&&(!awakening||!G.place(o.target)?.permanent));
     const used=new Set([...s.orders.map(o=>o.target),s.activeOrder?.target]);
-    const pool=G.PLACES.filter(p=>p.id!==s.position&&!used.has(p.id));
+    const pool=G.PLACES.filter(p=>p.id!==s.position&&!used.has(p.id)&&(!awakening||!p.permanent));
     const distances=new Map(pool.map(p=>[p.id,G.routeFrom(s,p.id).meters]));
     pool.sort((a,b)=>distances.get(a.id)-distances.get(b.id));
     const count=G.isNight(s)?4:6;
@@ -598,7 +604,7 @@
       const discovering=[...s.orders,s.activeOrder].some(o=>o&&G.place(o.target)?.permanent&&!G.placeUnlocked(s,o.target));
       const discoveryIndex=discovering||s.orders.length<2?-1:pool.findIndex(p=>p.permanent&&!G.placeUnlocked(s,p.id));
       const i=s.orders.length,idx=discoveryIndex>=0?discoveryIndex:int(s,0,i<2?Math.min(7,pool.length-1):pool.length-1),place=pool.splice(idx,1)[0];
-      const available=G.ORDER_TYPES.filter(t=>(t.condition!=='night'||G.isNight(s))&&(t.condition!=='mystic'||s.player.realm>=1));
+      const available=G.ORDER_TYPES.filter(t=>(!t.requiresSystem||G.featureUnlocked(s,'system'))&&(t.condition!=='night'||G.isNight(s))&&(t.condition!=='mystic'||s.player.realm>=1));
       const type=available[int(s,0,available.length-1)],plan=G.travelPlan(s,place.id);
       s.orders.push({id:`o-${s.turn}-${i}-${s.seed}`,target:place.id,title:type.title,desc:type.desc,condition:type.condition,
         expiresAt:s.minutes+G.orderOfferLifetime(type),
@@ -610,9 +616,9 @@
     let base;
     if (kind === 'delivery' && !s.flags.firstOrder) { base=G.EVENTS.find(e=>e.id==='first-order'); s.flags.firstOrder=true; }
     else {
-      let pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && !s.recentEvents.includes(e.id) && (!e.encounterNpc || !s.bonds[e.encounterNpc]?.met));
-      if (!pool.length) pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && (!e.encounterNpc || !s.bonds[e.encounterNpc]?.met));
-      if (!pool.length) pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && !e.encounterNpc);
+      let pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && e.id!=='system-awakening' && (!e.requiresSystem||G.featureUnlocked(s,'system')) && !s.recentEvents.includes(e.id) && (!e.encounterNpc || !s.bonds[e.encounterNpc]?.met));
+      if (!pool.length) pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && e.id!=='system-awakening' && (!e.requiresSystem||G.featureUnlocked(s,'system')) && (!e.encounterNpc || !s.bonds[e.encounterNpc]?.met));
+      if (!pool.length) pool=G.EVENTS.filter(e=>e.kind===kind && e.id!=='first-order' && e.id!=='system-awakening' && (!e.requiresSystem||G.featureUnlocked(s,'system')) && !e.encounterNpc);
       base=pool[int(s,0,pool.length-1)];
     }
     if(base.encounterNpc)meetNPC(s,base.encounterNpc,'encounter');
@@ -723,6 +729,7 @@
     return Object.entries(after).map(([key,value])=>({key,delta:Math.round((value-(before[key]||0)+(paid[key]||0))*1e8)/1e8})).filter(x=>Math.abs(x.delta)>EPS);
   }
   function finishChoice(s,p,index){
+    if(p.templateId==='system-awakening')must(p.source==='classic'&&p.kind==='story'&&p.delivery&&G.systemAwakeningDue(s)&&!G.place(p.delivery.target)?.permanent,'外卖系统必须在第十单随机地点的固定剧情结束后解锁。');
     const c=p.choices[index],effective=G.choiceEffects(s,c,p),before=resultValues(s),paid={};
     // These exact, prevalidated costs were paid at commit time, including in old in-flight saves.
     // Do not diff across elapsed time: rent or an unrelated instantaneous purchase is not a choice cost.
@@ -739,6 +746,8 @@
     G.log(s,`${c.result}（${G.effectText(effective)}）`,p.npcId?'羁绊':p.source==='ai'?'AI 奇遇':'奇遇');
     const changes=resultChanges(before,resultValues(s),paid),beforeDelivery=resultValues(s);
     if(p.delivery)settleDelivery(s,p.delivery);
+    // Set only after delivery and story choice settlement: the binding order itself earns no coins.
+    if(p.templateId==='system-awakening')s.flags.systemAwakened=true;
     normalize(s);
     s.eventResult={id:`result-${p.id}`,title:p.title,choice:c.label,text:c.result,source:p.source==='ai'?'ai':'classic',
       at:s.minutes,duration:c.duration||0,changes,
@@ -754,7 +763,10 @@
   function deliverAtDestination(s){
     const ticket=s.activeOrder;if(!ticket)return;
     s.activeOrder=null;
-    if(!s.flags.firstOrder||G.rand(s)<Math.min(.8,.5+s.player.luck*.01))event(s,'delivery',{delivery:clone(ticket)});
+    if(G.systemAwakeningDue(s)&&!G.place(ticket.target).permanent){
+      const base=G.EVENTS.find(e=>e.id==='system-awakening');
+      s.pending={...clone(base),id:`event-awakening-${s.turn}-${s.seed}`,templateId:base.id,source:'classic',aiStatus:'skip',delivery:clone(ticket)};
+    }else if(!s.flags.firstOrder||G.rand(s)<Math.min(.8,.5+s.player.luck*.01))event(s,'delivery',{delivery:clone(ticket)});
     else settleDelivery(s,ticket);
   }
   function finish(s,a){
@@ -823,7 +835,7 @@
         G.log(s,`你在医馆醒来，治疗扣除 ¥${fee}。别再把自己逼得太紧。`,'救助');break;
       }
     }
-    markComplete(s,a.kind==='choice'?'choose':a.kind);
+    markComplete(s,a.kind==='choice'?(a.params.event.templateId==='system-awakening'?'bindSystem':'choose'):a.kind);
   }
   function arrive(s,a){
     locate(s,G.place(a.target));s.lastRoute=clone(a.route);s.revision++;
@@ -992,7 +1004,7 @@
           const p=s.pending,cost=Object.fromEntries(Object.entries(c.effects||{}).filter(([k,v])=>v<0&&['money','coins','stamina','mana'].includes(k)));
           effects(s,cost,p.npcId,c.itemCost);s.pending=null;
           if(c.duration){begin(s,'choice',{event:p,index:payload.index,duration:c.duration});G.log(s,`开始处理：${c.label}，需要 ${c.duration} 分钟。`,'奇遇');}
-          else{finishChoice(s,p,payload.index);markComplete(s,'choose');}break;
+          else{finishChoice(s,p,payload.index);markComplete(s,p.templateId==='system-awakening'?'bindSystem':'choose');}break;
         }
         case 'moveHome':{
           const home=G.residence(payload.id);must(home,'住处不存在。');must(home.id!==s.residenceId,'你已经住在这里。');
@@ -1127,6 +1139,7 @@
   };
   G.applyAIEvent = (original, eventId, raw) => {
     if(original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
+    if(['first-order','system-awakening'].includes(original.pending.templateId))return original;
     const s=clone(original),clean=G.validateAIEvent(raw);
     if(!s.pending.npcId)for(const c of clean.choices){delete c.effects.affinity;delete c.effects.trust;}
     Object.assign(s.pending,clean,{source:'ai',aiStatus:'success'});s.updatedAt=Date.now();return s;

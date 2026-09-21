@@ -1,3 +1,4 @@
+import {afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
@@ -34,7 +35,7 @@ test('新旅程没有羁绊或功能提示，不预告未遇见人物',()=>{
 for(const npc of G.NPCS)test(`首次送达结识 ${npc.name} 后保存一条人物回执，未结算前不提示`,()=>{
   const before=delivery(npc.id);assert.equal(before.bonds[npc.id].met,false);assert.deepEqual(read(before).unlockNotices,[]);
   const s=choose(before);assert.equal(before.bonds[npc.id].met,false);assert.ok(s.bonds[npc.id].met);
-  assert.deepEqual(s.unlockNotices,[{kind:'bond',id:npc.id,at:s.minutes},{kind:'feature',id:'system',at:s.minutes},{kind:'feature',id:'bonds',at:s.minutes}]);
+  assert.deepEqual(s.unlockNotices,[{kind:'bond',id:npc.id,at:s.minutes},{kind:'feature',id:'bonds',at:s.minutes}]);
   assert.deepEqual(G.visibleNPCs(s).map(n=>n.id),[npc.id]);assert.deepEqual(read(s).unlockNotices,s.unlockNotices);
 });
 test('耗时配送选择不提前结识或提示，实际完成才生成',()=>{
@@ -46,8 +47,8 @@ test('耗时配送选择不提前结识或提示，实际完成才生成',()=>{
 test('结果、地点和人物功能队列按顺序确认，后面的提示不能越过前面的',()=>{
   let s=choose(delivery());reject(s,'ackUnlock',{id:'bond:lin'});reject(s,'ackPlaceUnlock',{id:'clinic'});
   s=ackResult(s);reject(s,'ackUnlock',{id:'bond:lin'});s=ackPlace(s);
-  reject(s,'ackUnlock',{id:'feature:system'});s=ack(s);assert.equal(key(G.nextUnlockNotice(s)),'feature:system');
-  reject(s,'ackUnlock',{id:'bond:lin'});s=ack(s);assert.equal(key(G.nextUnlockNotice(s)),'feature:bonds');
+  reject(s,'ackUnlock',{id:'feature:system'});reject(s,'ackUnlock',{id:'feature:bonds'});s=ack(s);assert.equal(key(G.nextUnlockNotice(s)),'feature:bonds');
+  reject(s,'ackUnlock',{id:'bond:lin'});
   s=ack(s);assert.equal(G.nextUnlockNotice(s),null);reject(s,'ackUnlock',{id:'feature:bonds'});
 });
 test('确认只移除队首、更新 revision，不改时间、资产、RNG、日志、订单或主线',()=>{
@@ -93,7 +94,7 @@ test('随机相逢按原触发时机结识：先确认人物和羁绊入口，�
   assert.deepEqual(result.pending,{...pending,npcId:null,npcAdvance:false});assert.ok(choose(result).eventResult);
 });
 test('原有八项功能使用配置生成一次提示，不包含奖励或任意文本',()=>{
-  const s=G.newGame('功能');s.stats.delivered=20;s.claimed=['q1'];s.stats.trained=1;s.flags.storyStreetVein=true;s.bonds.lin.met=true;
+  const s=G.newGame('功能');s.stats.delivered=20;s.flags.systemAwakened=true;s.claimed=['q1'];s.stats.trained=1;s.flags.storyStreetVein=true;s.bonds.lin.met=true;
   const before=G.clone(s);G.syncFeatureUnlocks(s);
   assert.deepEqual(s.unlockNotices.map(n=>n.id),G.FEATURE_UNLOCKS.filter(f=>f.id!=='sect').map(f=>f.id));assert.ok(s.unlockNotices.every(n=>n.kind==='feature'));
   assert.deepEqual(s.player,before.player);assert.equal(s.minutes,before.minutes);assert.equal(s.seed,before.seed);
@@ -101,7 +102,7 @@ test('原有八项功能使用配置生成一次提示，不包含奖励或任�
   const done=rest(s);G.syncFeatureUnlocks(done);assert.deepEqual(done.unlockNotices,[]);
 });
 test('领取 q1 解锁修行，确认功能不重复领委托奖励',()=>{
-  let s=rest(ackPlace(ackResult(choose(delivery(null)))));s=act(s,'claim',{id:'q1'});
+  let s=afterAwakening();s=act(s,'claim',{id:'q1'});
   assert.deepEqual(s.unlockNotices.map(key),['feature:cultivation']);const snapshot=gameplay(s);s=ack(s);assert.deepEqual(gameplay(s),snapshot);
   reject(s,'claim',{id:'q1'});
 });
@@ -111,7 +112,7 @@ test('首次完整吐纳才弹进阶修行，中断不提示',()=>{
   s=G.advance(mid,100);assert.ok(s.unlockNotices.some(n=>n.kind==='feature'&&n.id==='practice'));assert.equal(s.stats.trained,1);
 });
 test('进行中领取委托出现功能提示，读档保存原路径及进度，确认不停止或瞬移',()=>{
-  let s=G.newGame('在途');s.stats.delivered=1;G.syncFeatureUnlocks(s,true);s=act(s,'travel',{target:'garage'});
+  let s=G.newGame('在途');s.stats.delivered=1;s.unlockedFeatures=['system'];G.syncFeatureUnlocks(s,true);s=act(s,'travel',{target:'garage'});
   s=G.advance(s,1);s=act(s,'claim',{id:'q1'});const mid=G.clone(s.activity),loc=G.clone(s.location),minutes=s.minutes;
   assert.equal(key(G.nextUnlockNotice(s)),'feature:cultivation');assert.equal(G.advance(s,100),s);s=read(s);
   assert.deepEqual(s.activity,mid);s=ack(s);assert.deepEqual(s.activity,mid);assert.deepEqual(s.location,loc);assert.equal(s.minutes,minutes);
@@ -120,7 +121,7 @@ test('进行中领取委托出现功能提示，读档保存原路径及进度�
 test('重复配送与功能同步不重播人物、功能，不新增解锁奖励',()=>{
   let s=rest(ackPlace(ackResult(choose(delivery()))));s.pending=delivery().pending;s=choose(s);
   assert.deepEqual(s.unlockNotices,[]);assert.equal(s.placeUnlock,null);assert.equal(s.stats.delivered,2);
-  assert.equal(s.logs.filter(l=>l.tag==='相逢').length,1);assert.equal(s.logs.filter(l=>l.tag==='解锁').length,2);
+  assert.equal(s.logs.filter(l=>l.tag==='相逢').length,1);assert.equal(s.logs.filter(l=>l.tag==='解锁').length,1);
 });
 test('v16 读档保留队列顺序；确认的项不会重新出现',()=>{
   let s=notified();const names=s.unlockNotices.map(key);s=read(s);assert.deepEqual(s.unlockNotices.map(key),names);
@@ -173,7 +174,7 @@ test('耗时配送完成后气血耗尽：结果、地点、人物与功能先�
   s.pending.choices[0].effects.health=-10;
   s=choose(s);assert.equal(s.activity.kind,'choice');assert.deepEqual(s.unlockNotices,[]);
   s=G.advance(s,100);assert.equal(s.activity.kind,'rescue');assert.ok(s.eventResult);assert.ok(s.placeUnlock);
-  assert.deepEqual(s.unlockNotices.map(key),['bond:lin','feature:system','feature:bonds']);
+  assert.deepEqual(s.unlockNotices.map(key),['bond:lin','feature:bonds']);
   assert.equal(G.advance(s,100),s);s=read(s);
   const before=s.minutes,assets=G.clone(s.player);s=rest(ackPlace(ackResult(s)));
   assert.equal(s.minutes,before);assert.equal(s.activity.kind,'rescue');assert.deepEqual(s.player,assets);

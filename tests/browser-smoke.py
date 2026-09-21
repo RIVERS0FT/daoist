@@ -144,6 +144,36 @@ def settle_ui(page):
         choose_ui(page)
     raise AssertionError('Event chain did not finish')
 
+def prepare_delivery_ui(page):
+    settle_ui(page)
+    if page.locator('#panel[open] [data-ui="close"]').count():
+        page.click('#panel [data-ui="close"]')
+    for panel, action, needed in [('rest', 'rest', current(page)['player']['stamina'] < 35 or not current(page)['orders']),
+                                  ('vehicle', 'charge', current(page)['vehicle']['battery'] < 35)]:
+        if needed:
+            page.locator(f'#game-nav [data-panel="{panel}"]').click()
+            page.locator(f'[data-act="{action}"]').click()
+            finish_ui_activity(page)
+            settle_ui(page)
+    if page.locator('#panel[open] [data-ui="close"]').count():
+        page.click('#panel [data-ui="close"]')
+
+def complete_nine_ui(page):
+    # Real new-game actions: no fixture writes to delivery count, flags or assets.
+    for count in range(current(page)['stats']['delivered'] + 1, 10):
+        prepare_delivery_ui(page)
+        nearest_ui_delivery(page)
+        settle_ui(page)
+        assert current(page)['stats']['delivered'] == count
+        assert current(page)['player']['coins'] == 0
+        assert current(page)['flags']['systemAwakened'] is False
+        assert page.locator('#game-nav [data-panel="system"]').count() == 0
+        assert not page.evaluate('NightCourier.featureUnlocked(window.__live,"system")')
+    assert page.evaluate('window.__live.orders.every(o=>!NightCourier.place(o.target).permanent)')
+    assert '送达第十单' in page.locator('.chapter-chip strong').inner_text()
+    record(f'{page.viewport_size["width"]}px 连续九次真实配送不解锁、不发币；第十单所有候选避开常驻地点')
+    prepare_delivery_ui(page)
+
 def nearest_ui_delivery(page):
     ack_result_ui(page)
     target = page.evaluate('''()=>{const G=NightCourier,s=window.__live;return [...s.orders].filter(o=>!G.travelBlock(s,G.travelPlan(s,o.target))).sort((a,b)=>G.travelPlan(s,a.target).meters-G.travelPlan(s,b.target).meters)[0].target;}''')
@@ -230,22 +260,23 @@ def system_name_browser_checks(browser):
     for width, height, mode in [(1200, 900, 'classic'), (320, 740, 'ai')]:
         ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
         new_game(page, '首章旅人', mode)
-        assert page.locator('.chapter-chip strong').inner_text() == '先把第一单送到'
+        assert page.locator('.chapter-chip strong').inner_text() == '已送达 0 / 9 单'
         assert page.locator('.chapter-chip span').first.inner_text() == '第一章 · 解锁外卖系统'
         assert page.locator('#game-nav [data-panel="system"]').count() == 0
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
         page.screenshot(path=str(OUT/f'opening-chapter-{width}.png'))
+        complete_nine_ui(page)
         nearest_ui_delivery(page)
-        assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['pending']['templateId'] == 'system-awakening'
         assert page.locator('#panel-title').inner_text() == '第一章 · 解锁外卖系统'
-        assert '正在等待' in page.locator('#panel').inner_text()
+        assert '等待你的回应' in page.locator('#panel').inner_text()
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
-        assert current(page)['stats']['delivered'] == 0 and current(page)['player']['coins'] == 0
+        assert current(page)['stats']['delivered'] == 9 and current(page)['player']['coins'] == 0
         assert current(page)['pending']['source'] == 'classic'
         assert current(page)['pending']['aiStatus'] == 'skip'
         record(f'{width}px {mode} 新档显示第一章解锁外卖系统，真实到达仍待绑定且不提前跳章')
 
-        # Reload an old pending first-order snapshot, without granting permissions.
+        # Restore an uncompleted tenth-order snapshot; canonical story replaces stale text.
         before = current(page)
         page.evaluate("""()=>{const key=NightCourier.STORAGE_KEY,x=JSON.parse(localStorage.getItem(key));
           x.saves[0].pending.title='第一声「叮」';x.saves[0].pending.text='万家灯火系统，已绑定。';
@@ -257,20 +288,20 @@ def system_name_browser_checks(browser):
         page.evaluate("""entries=>{window.__memory=new Map(entries);window.dispatchEvent(new StorageEvent('storage',{key:NightCourier.STORAGE_KEY}));}""", memory)
         page.locator('.save-card').filter(has_text='首章旅人').locator('[data-ui="load"]').click()
         assert page.locator('#panel-title').inner_text() == '第一章 · 解锁外卖系统'
-        assert '正在等待' in page.locator('#panel').inner_text()
+        assert '等待你的回应' in page.locator('#panel').inner_text()
         assert current(page)['pending']['id'] == before['pending']['id']
         assert current(page)['pending']['delivery'] == before['pending']['delivery']
         assert current(page)['player'] == before['player']
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
         assert page.evaluate("window.__clock.reasons.has('manual')")
-        record(f'{width}px 旧待选首单在新文档中恢复为外卖系统剧情，资产与票据保留且仍停留第一章')
+        record(f'{width}px 未结算第十单快照在新文档中恢复为外卖系统剧情，资产与票据保留且仍停留第一章')
 
         page.evaluate('window.__openingSpeed=document.querySelector("#time-speed")')
         page.click('[data-act="choose"][data-index="0"]')
         assert current(page)['eventResult']['title'] == '第一章 · 解锁外卖系统'
         assert '外卖系统' in current(page)['eventResult']['text']
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'bound'
-        assert current(page)['stats']['delivered'] == 1 and current(page)['player']['coins'] == 0
+        assert current(page)['stats']['delivered'] == 10 and current(page)['player']['coins'] == 0
         at = current(page)['minutes']
         page.click('[data-act="ackResult"]')
         if current(page).get('placeUnlock'):
@@ -304,7 +335,7 @@ def system_name_browser_checks(browser):
         assert not page.evaluate("NightCourier.featureUnlocked(window.__live,'cultivation')")
         record(f'{width}px 解锁提示归属第一章，第二章为初入仙途且修行仍需委托领奖')
         assert not errors, errors
-        record(f'{width}px 完成第一章后一次性解锁外卖系统；弹窗、导航、标题与帮助同名，首单仍无币')
+        record(f'{width}px 完成第一章后一次性解锁外卖系统；弹窗、导航、标题与帮助同名，第十单仍无币')
         ctx.close()
 
 def progressive_browser_checks(browser):
@@ -336,22 +367,23 @@ def progressive_browser_checks(browser):
         page.evaluate('window.__stableSpeed=document.querySelector("#time-speed")')
         record(f'{width}px 真实新档仅四个基础按钮；隐藏快捷入口不能绕过，生存操作保留')
 
+        complete_nine_ui(page)
         nearest_ui_delivery(page)
-        assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['pending']['templateId'] == 'system-awakening'
         assert current(page)['pending']['title'] == '第一章 · 解锁外卖系统'
-        assert '正在等待' in page.locator('.event-text').inner_text()
+        assert '等待你的回应' in page.locator('.event-text').inner_text()
         assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第一章'
         assert page.evaluate('NightCourier.storyStage(window.__live).title') == '解锁外卖系统'
         page.screenshot(path=str(OUT/f'chapter-one-awakening-{width}.png'))
-        record(f'{width}px 第一章为解锁外卖系统；首单待选仍未绑定，剧情标题与章节一致')
+        record(f'{width}px 第一章为解锁外卖系统；第十单待选仍未绑定，剧情标题与章节一致')
         assert 'system' not in nav()
-        assert current(page)['stats']['delivered'] == 0
+        assert current(page)['stats']['delivered'] == 9
         choose_ui(page)
-        assert current(page)['stats']['delivered'] == 1
+        assert current(page)['stats']['delivered'] == 10
         assert 'system' in nav() and 'cultivation' not in nav() and 'alchemy' not in nav()
         assert page.locator('.currency[data-panel="system"]').is_visible()
         assert page.evaluate('window.__stableSpeed===document.querySelector("#time-speed")')
-        record(f'{width}px 首单真实到达不提前解锁，选择结算后系统导航与顶部入口一起出现')
+        record(f'{width}px 第十单真实到达不提前解锁，选择结算后系统导航与顶部入口一起出现')
 
         page.locator('#game-nav [data-panel="system"]').click()
         assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第二章'
@@ -387,29 +419,26 @@ def progressive_browser_checks(browser):
         page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
         assert current(page)['activity']['elapsed'] == halfway['activity']['elapsed']
         assert not page.evaluate("NightCourier.featureUnlocked(window.__live,'practice')")
-        finish_ui_activity(page);settle_ui(page)
+        finish_ui_activity(page)
+        for _ in range(12):
+            ack_result_ui(page)
+            if current(page)['pending'] and current(page)['pending']['templateId'] == 'story-street-vein':
+                break
+            assert current(page)['pending'], 'Route story should follow the next completed world action'
+            choose_ui(page)
         assert current(page)['stats']['trained'] == 1
+        assert page.evaluate("NightCourier.featureUnlocked(window.__live,'practice')")
+        assert current(page)['stats']['delivered'] == 10
+        assert current(page)['pending']['templateId'] == 'story-street-vein'
+        assert 'alchemy' not in nav()
+        record(f'{width}px 领奖开放吐纳；途中读档不提前开放，完成后才出现进阶与后续主线')
+        choose_ui(page)
+        assert 'alchemy' in nav()
         page.locator('#game-nav [data-panel="cultivation"]').click()
         assert page.locator('[data-act="cultivate"]').count() == 3
         assert page.locator('[data-act="breakthrough"]').count() == 1
-        assert page.locator('[data-act="panel-alchemy"]').count() == 0
+        assert page.locator('[data-act="panel-alchemy"]').count() == 1
         page.click('[data-ui="close"]')
-        record(f'{width}px 领奖开放吐纳；首次修炼途中读档不提前开放，完成才出现进阶与探索')
-
-        for _ in range(2):
-            nearest_ui_delivery(page)
-            for _ in range(10):
-                pending = current(page)['pending']
-                if not pending or pending['templateId'] == 'story-street-vein':
-                    break
-                choose_ui(page)
-            else:
-                raise AssertionError('配送事件未能在十次选择内结算')
-        assert current(page)['pending']['templateId'] == 'story-street-vein'
-        assert current(page)['stats']['delivered'] == 3
-        assert 'alchemy' not in nav()
-        choose_ui(page)
-        assert 'alchemy' in nav()
         assert current(page)['alchemy']['cauldron'] == 0
         assert len(current(page)['alchemy']['formulas']) == 12
         page.screenshot(path=str(OUT/f'progressive-alchemy-open-{width}.png'))
@@ -420,11 +449,13 @@ def progressive_browser_checks(browser):
         assert '丹火与药香' in text
         assert page.locator('[data-act="cultivate"]').count() == 0
         page.click('[data-ui="close"]')
-        record(f'{width}px 真实连续三单主线完成后出现独立炼药导航，未获得丹方仍隐藏')
+        record(f'{width}px 解锁后完成路线主线才出现独立炼药导航，未获得丹方仍隐藏')
 
         # Higher-stage UI fixtures: thresholds are tested independently in Node.
         edits = current(page)
         edits['stats']['delivered'] = 4
+        edits['flags']['systemAwakened'] = False  # Explicit legacy-owned threshold fixture.
+        edits['unlockedFeatures'] = [f for f in edits['unlockedFeatures'] if f != 'upgrades']
         edits['position'] = 'garage';edits['location'] = None
         edits['bonds']['chen']['met'] = True
         fixture(page, edits, unlock_gameplay=False)
@@ -693,11 +724,11 @@ def result_browser_checks(browser):
         assert current(page)['eventResult'] is None
         record(f'{width}px 重载保留未读结果且不重奖；Enter 确认、重复提交拒绝、已读状态保存、手动暂停保留')
 
-        # Seed a previously arrived order with an actual catalog event. Commit,
+        # Legacy-owned system fixture with an arrived catalog delivery. Commit,
         # elapsed work, reload and completion all go through the real UI/engine.
         edits=page.evaluate('''()=>{const G=NightCourier,s=window.__live,e=G.EVENTS.find(e=>e.id==='delivery-spare-chopsticks');return {
             flags:{...s.flags,firstOrder:true},position:'clinic',location:null,orders:[],activity:null,eventResult:null,
-            player:{...s.player,money:200,stamina:80},stats:{...s.stats,delivered:2},
+            player:{...s.player,money:200,stamina:80},stats:{...s.stats,delivered:2},unlockedFeatures:['system'],
             pending:{...G.clone(e),id:'browser-timed',templateId:e.id,source:'classic',aiStatus:'skip',
             delivery:{id:'browser-order',title:'送给邻居的热饭',target:'clinic',desc:'当面交付',condition:'ordinary',expiresAt:s.minutes+30,reward:30,coins:2,npc:'lin'}}};}''')
         fixture(page,edits,unlock_gameplay=False)
@@ -882,7 +913,8 @@ def place_unlock_browser_checks(browser):
         assert page.locator('.place-unlock-card').count()==1
         page.keyboard.press('Enter')
         assert current(page)['placeUnlock'] is None
-        assert page.locator('.feature-unlock-card').count()==1
+        assert page.locator('.feature-unlock-card').count()==0
+        assert page.locator('#game-nav [data-panel="system"]').count()==0
         ack_result_ui(page)
         assert page.locator('#panel[open]').count()==0
         assert page.locator('.place-discovery').count()==1
@@ -935,7 +967,7 @@ def unlock_notice_browser_checks(browser):
         assert page.locator('#panel').evaluate('(e)=>e.classList.contains("centered") && e.classList.contains("unlock-panel")')
         assert page.locator('[data-act="ackUnlock"]').evaluate('(e)=>e===document.activeElement')
         assert page.locator('[data-act="ackUnlock"]').bounding_box()['height']>=44
-        assert [n['kind']+':'+n['id'] for n in current(page)['unlockNotices']]==['bond:lin','feature:system','feature:bonds']
+        assert [n['kind']+':'+n['id'] for n in current(page)['unlockNotices']]==['bond:lin','feature:bonds']
         snapshot=current(page)
         page.keyboard.press('Escape');pump(page,2000)
         assert current(page)==snapshot
@@ -956,16 +988,14 @@ def unlock_notice_browser_checks(browser):
         assert page.locator('.bond-unlock-card').count()==1
         page.keyboard.press('Enter')
         assert page.locator('.feature-unlock-card').count()==1
-        assert page.locator('#unlocked-item-name').inner_text()=='外卖系统'
+        assert page.locator('#unlocked-item-name').inner_text()=='羁绊'
         animation=page.locator('.feature-spark').evaluate('(e)=>getComputedStyle(e).animationName')
         assert animation==('none' if motion=='reduce' else 'feature-light-in')
         page.wait_for_timeout(500)
         page.screenshot(path=str(OUT/f'feature-unlock-{width}.png'))
-        assert page.locator('#game-nav [data-panel="system"]').count()==1
+        assert page.locator('#game-nav [data-panel="system"]').count()==0
         assert page.locator('#game-nav [data-panel="bonds"]').count()==1
         assert page.locator('#game-nav [data-panel="cultivation"]').count()==0
-        page.keyboard.press('Enter')
-        assert page.locator('#unlocked-item-name').inner_text()=='羁绊'
         page.keyboard.press('Enter')
         assert page.locator('#panel[open]').count()==0
         done=current(page)
@@ -986,7 +1016,7 @@ def unlock_notice_browser_checks(browser):
         # q1 can be claimed while already travelling: a notification must pause,
         # not stop, charge, restart or move the current action.
         busy=page.evaluate('''()=>{const G=NightCourier;let s=G.newGame('在途提示','classic',4567);
-          s.stats.delivered=1;G.syncFeatureUnlocks(s,true);s=G.perform(s,'travel',{target:'garage'}).state;
+          s.stats.delivered=1;s.unlockedFeatures=['system'];G.syncFeatureUnlocks(s,true);s=G.perform(s,'travel',{target:'garage'}).state;
           s=G.advance(s,1);s=G.perform(s,'claim',{id:'q1'}).state;
           return {minutes:s.minutes,position:s.position,location:s.location,activity:s.activity,player:s.player,
             stats:s.stats,claimed:s.claimed,unlockedFeatures:s.unlockedFeatures,unlockedPlaces:s.unlockedPlaces,
@@ -1019,20 +1049,21 @@ def story_chapter_browser_checks(browser):
         assert first in page.locator('.chapter-chip').inner_text()
         assert page.locator('#game-nav [data-panel="system"]').count() == 0
         page.screenshot(path=str(OUT/f'story-chapter-one-{width}.png'))
+        complete_nine_ui(page)
         select_order(page)
         page.click('[data-act="deliver"]')
         assert first in page.locator('.chapter-chip').inner_text()
         finish_ui_activity(page)
-        assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['pending']['templateId'] == 'system-awakening'
         assert first in page.locator('.chapter-chip').inner_text()
         assert '已绑定' not in page.locator('.event-text').inner_text()
-        assert current(page)['stats']['delivered'] == 0
-        record(f'{width}px 第一章解锁外卖系统：新档、出发和首单待选均未提前进入第二章')
+        assert current(page)['stats']['delivered'] == 9
+        record(f'{width}px 第一章解锁外卖系统：新档、出发和第十单待选均未提前进入第二章')
 
         page.click('[data-act="choose"][data-index="0"]')
         assert second in page.locator('.chapter-chip').inner_text()
         assert current(page)['player']['coins'] == 0
-        assert '外卖系统，已绑定' in page.locator('.result-text').inner_text()
+        assert '外卖系统，绑定完成' in page.locator('.result-text').inner_text()
         page.click('[data-act="ackResult"]')
         if current(page).get('placeUnlock'):
             page.click('[data-act="ackPlaceUnlock"]')
@@ -1047,7 +1078,7 @@ def story_chapter_browser_checks(browser):
             page.click('[data-act="ackUnlock"]')
         assert seen_system
         assert current(page)['player']['coins'] == 0
-        record(f'{width}px 首单结算进入第二章，结果与外卖系统解锁回执顺序正确且不补发币')
+        record(f'{width}px 第十单结算进入第二章，结果与外卖系统解锁回执顺序正确且不补发币')
 
         nav = page.locator('#game-nav [data-panel="system"]')
         assert nav.inner_text().strip() == '外卖系统'
@@ -1073,28 +1104,30 @@ def delivery_coins_browser_checks(browser):
     for width, height in [(1200, 900), (320, 740)]:
         ctx, page, errors = setup(browser, width, height)
         new_game(page, '解锁之后')
+        complete_nine_ui(page)
         select_order(page)
         assert '现金' in page.locator('.order-reward').inner_text()
         assert '外卖币' not in page.locator('.order-reward').inner_text()
         page.click('[data-act="deliver"]');finish_ui_activity(page)
-        assert current(page)['pending']['templateId'] == 'first-order'
+        assert current(page)['pending']['templateId'] == 'system-awakening'
         assert current(page)['player']['coins'] == 0
         page.click('[data-act="choose"][data-index="0"]')
-        assert current(page)['stats']['delivered'] == 1
+        assert current(page)['stats']['delivered'] == 10
         assert current(page)['player']['coins'] == 0
         assert '外卖币' not in page.locator('.result-delivery').inner_text()
         page.screenshot(path=str(OUT/f'first-delivery-no-coins-{width}.png'))
         ack_result_ui(page)
         assert page.locator('.currency[data-panel="system"]').is_visible()
         assert page.locator('.currency[data-panel="system"] .currency-number').inner_text() == '0'
-        record(f'{width}px 未解锁订单只展示现金；首单结果不发币，解锁后余额仍为零')
+        record(f'{width}px 未解锁订单只展示现金；第十单结果不发币，解锁后余额仍为零')
 
+        prepare_delivery_ui(page)
         select_order(page)
         assert '外卖币' in page.locator('.order-reward').inner_text()
         ticket = page.evaluate("()=>{const id=document.querySelector('[data-act=deliver]').dataset.id;return window.__live.orders.find(o=>o.id===id);}")
         page.click('[data-act="deliver"]');finish_ui_activity(page)
         settle_ui(page)
-        assert current(page)['stats']['delivered'] == 2
+        assert current(page)['stats']['delivered'] == 11
         assert current(page)['player']['coins'] >= ticket['coins'] > 0
         assert '外卖币' in [log for log in current(page)['logs'] if log['tag']=='配送'][-1]['text']
         record(f'{width}px 系统开放后订单展示外卖币，后续送达按原奖励到账')
@@ -1102,7 +1135,7 @@ def delivery_coins_browser_checks(browser):
         # Restore a catalog delivery with an extra coin choice but no unlocked system.
         edits = page.evaluate("""()=>{const G=NightCourier,s=window.__live,e=G.EVENTS.find(e=>e.id==='coin');return {
           player:{...s.player,coins:0},stats:{...s.stats,delivered:0},unlockedFeatures:[],
-          flags:{firstOrder:true},position:'clinic',location:null,activity:null,activeOrder:null,orders:[],
+          flags:{firstOrder:true,systemAwakened:false},position:'clinic',location:null,activity:null,activeOrder:null,orders:[],
           eventResult:null,placeUnlock:null,unlockNotices:[],
           pending:{...G.clone(e),id:'browser-coin-gate',templateId:e.id,source:'classic',aiStatus:'skip',
             delivery:{id:'browser-coin-ticket',target:'clinic',title:'灯火试单',desc:'当面交付',condition:'ordinary',expiresAt:s.minutes+30,reward:30,coins:3,npc:null}}

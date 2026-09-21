@@ -22,3 +22,12 @@ test('上游响应设有字节上限',async t=>{const {url}=await withApp(t,{...
 test('每分钟超过 12 次请求触发限流',async t=>{const {url}=await withApp(t,configured);for(let i=0;i<12;i++)assert.equal((await post(url)).status,200);assert.equal((await post(url)).status,429);});
 test('不安全的远程 HTTP 端点不可用，本机 HTTP 需显式授权',async t=>{const a=await withApp(t,{...configured,aiUrl:'http://example.invalid/chat'});assert.equal((await(await fetch(a.url+'/api/health')).json()).aiConfigured,false);const b=await withApp(t,{...configured,aiUrl:'http://127.0.0.1:9000/v1/chat/completions',allowLocalHTTP:true});assert.equal((await(await fetch(b.url+'/api/health')).json()).aiConfigured,true);});
 test('非社交 AI 事件不能暗中增加人物好感',async t=>{const event=structuredClone(validEvent);event.choices[0].effects={affinity:6,trust:3};const {url}=await withApp(t,{...configured,fetchImpl:async()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(event)}}]}))});const r=await post(url);assert.equal(r.status,200);const data=await r.json();assert.deepEqual(data.event.choices[0].effects,{});});
+
+test('AI 上下文明确系统未解锁，不能用字符串或随机剧情冒充第十单绑定',async t=>{
+  const sent=[];const {url}=await withApp(t,{...configured,fetchImpl:async(endpoint,options)=>{sent.push(JSON.parse(options.body));return upstream();}});
+  for(const systemUnlocked of [undefined,false,'true',true]){
+    const r=await post(url,{context:{...context,systemUnlocked}});assert.equal(r.status,200);
+    const body=sent.at(-1);assert.equal(JSON.parse(body.messages[1].content).systemUnlocked,systemUnlocked===true);
+    assert.match(body.messages[0].content,/第十单解锁剧情由固定主线负责/);
+  }
+});
