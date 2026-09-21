@@ -90,7 +90,14 @@ def setup(browser, width=1440, height=1000, ai=False, controlled=True):
     return ctx, page, errors
 
 def select_order(page):
-    page.locator('.order-point[data-place]').first.focus()
+    # Candidate order is not guaranteed to be affordable after nine real deliveries.
+    # Pick an existing feasible offer; never mutate resources or replace its ticket.
+    target = page.evaluate("""()=>{const G=NightCourier,s=window.__live;
+      return s.orders.find(o=>{const p=G.travelPlan(s,o.target);return !G.travelBlock(s,p)&&
+        (o.condition!=='mystic'||s.player.mana>=8)&&
+        (o.condition!=='careful'||s.player.stamina-p.stamina>=10);})?.target;}""")
+    assert target, 'No affordable offer in the current test state'
+    page.locator(f'.order-point[data-place="{target}"]').focus()
     page.keyboard.press('Enter')
     assert page.locator('[data-act="deliver"]').is_enabled()
 
@@ -1238,12 +1245,115 @@ def sect_browser_checks(browser):
         ctx.close()
 
 
+def higher_story_browser_checks(browser):
+    # Advanced-save fixtures establish preconditions, not simulated years of cultivation.
+    # Each prompt, both additional deliveries, and timed responses use real UI actions.
+    for width, height, mode in [(1200, 900, 'classic'), (320, 740, 'ai')]:
+        for chapter_index in range(5):
+            ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
+            new_game(page, '故城行者', mode)
+            edits=page.evaluate('''i=>{
+              const G=NightCourier,s=G.clone(window.__live),chapter=G.HIGHER_STORY_CHAPTERS[i];
+              s.player.realm=chapter.realm;s.player.realmLevel=1;s.stats.delivered=chapter.deliveries;
+              s.player.money=5000;s.player.mana=G.limits(s).mana;s.player.stamina=G.limits(s).stamina;
+              s.flags.firstOrder=true;s.flags.systemAwakened=true;
+              s.unlockedFeatures=['system','cultivation','practice'];s.claimed=['q1'];
+              for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'))s.flags[e.flag]=true;
+              for(const c of G.HIGHER_STORY_CHAPTERS.slice(0,i))for(const id of c.events)s.flags[G.EVENTS.find(e=>e.id===id).flag]=true;
+              return s;
+            }''', chapter_index)
+            fixture(page, edits, unlock_gameplay=False)
+            chapter=page.evaluate('i=>NightCourier.HIGHER_STORY_CHAPTERS[i]', chapter_index)
+            label=chapter['chapter']+' · '+chapter['title']
+            assert label in page.locator('.chapter-chip').inner_text()
+            page.click('#game-nav [data-panel="system"]')
+            assert label in page.locator('#panel').inner_text()
+            page.click('[data-ui="close"]')
+            page.click('#game-nav [data-panel="help"]')
+            page.click('#higher-story-help summary')
+            assert '第十二章' in page.locator('#higher-story-help').inner_text()
+            assert '124' in page.locator('#higher-story-help').inner_text()
+            page.click('[data-ui="close"]')
+            page.click('#game-nav [data-panel="rest"]');page.click('[data-act="rest"]')
+            assert current(page)['pending'] is None
+            finish_ui_activity(page)
+            first=current(page)['pending']
+            assert first['templateId']==chapter['events'][0]
+            assert first['source']=='classic' and first['aiStatus']=='skip'
+            assert page.locator('#panel-title').inner_text()==first['title']
+            before=current(page);pump(page, 5000);assert current(page)==before
+            assert not page.evaluate('id=>NightCourier.storyEventComplete(window.__live,id)',first['templateId'])
+            for idx in range(3):
+                choice=page.locator(f'[data-act="choose"][data-index="{idx}"]')
+                choice.scroll_into_view_if_needed()
+                assert choice.is_visible() and choice.is_enabled()
+                assert choice.evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+            if width==320:
+                page.screenshot(path=str(OUT/f'higher-chapter-{chapter_index+8}-320.png'))
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            page.click('[data-act="choose"][data-index="0"]')
+            assert current(page)['eventResult']['text']==first['choices'][0]['result']
+            assert current(page)['pending'] is None
+            ack_result_ui(page)
+            record(f'{width}px {label}：地图与系统章名、帮助条件、固定三选项及阅读暂停一致')
+
+            # Complete two real deliveries without consuming the newly unlocked main prompt.
+            for count in [chapter['deliveries']+1,chapter['deliveries']+2]:
+                prepare_delivery_ui(page)
+                nearest_ui_delivery(page)
+                for _ in range(15):
+                    ack_result_ui(page)
+                    pending=current(page)['pending']
+                    if not pending or pending['templateId']==chapter['events'][1]:
+                        break
+                    choose_ui(page)
+                assert current(page)['stats']['delivered']==count
+                if count==chapter['deliveries']+1:
+                    assert current(page)['pending'] is None
+            if current(page)['pending'] is None:
+                page.click('#game-nav [data-panel="rest"]');page.click('[data-act="rest"]')
+                finish_ui_activity(page)
+            second=current(page)['pending']
+            assert second['templateId']==chapter['events'][1]
+            assert second['source']=='classic' and second['aiStatus']=='skip'
+            before=current(page)
+            page.click('[data-act="choose"][data-index="1"]')
+            assert current(page)['activity']['kind']=='choice'
+            assert current(page)['eventResult'] is None
+            assert current(page)['player']['qi']==before['player']['qi']
+            # In-flight save/load retains the exact timed response and costs, and pauses.
+            active=current(page)
+            page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+            assert current(page)['activity']==active['activity']
+            assert current(page)['player']==active['player']
+            assert page.evaluate("window.__clock.reasons.has('manual')")
+            finish_ui_activity(page)
+            result=current(page)
+            assert result['eventResult']['text']==second['choices'][1]['result']
+            assert result['pending'] is None and result['ending'] is None and result['gameOver'] is None
+            assert abs(result['minutes']-before['minutes']-second['choices'][1]['duration'])<1e-6, (result['minutes'],before['minutes'])
+            assert result['player']['coins']==before['player']['coins']
+            assert result['player']['money']==before['player']['money']
+            ack_result_ui(page)
+            assert page.evaluate('id=>NightCourier.storyEventComplete(window.__live,id)',second['templateId'])
+            assert current(page)['pending'] is None
+            page.click('#game-nav [data-panel="system"]')
+            assert label in page.locator('#panel').inner_text()
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            if chapter_index==4 and width==320:
+                page.screenshot(path=str(OUT/'higher-chapter-twelve-system-320.png'))
+            record(f'{width}px {label}：再送两单后进入收束，耗时选项读档后完成，不强制结局或补币')
+            assert not errors,errors
+            ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    higher_story_browser_checks(browser)
     story_chapter_browser_checks(browser)
     sect_browser_checks(browser)
     delivery_coins_browser_checks(browser)

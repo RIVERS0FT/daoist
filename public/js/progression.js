@@ -19,6 +19,27 @@
   G.isNPCMet = (s, id) => s.bonds?.[id]?.met === true;
   G.visibleNPCs = s => G.NPCS.filter(n => G.isNPCMet(s, n.id));
 
+  // 后五章按已完成的前章剧情逐章衔接；不把“已经触发”当作完成。
+  G.storyEventComplete = (s, id) => {
+    const event=G.EVENTS.find(e=>e.id===id&&e.kind==='story');
+    return !!event?.flag && s.flags?.[event.flag]===true && s.pending?.templateId!==id &&
+      s.activity?.params?.event?.templateId!==id;
+  };
+  G.HIGHER_STORY_CHAPTERS = [
+    {id:'divine',chapter:'第八章',title:'一念照千家',realm:5,deliveries:54,previous:'story-system-truth',
+      desc:'神识越过街巷后，你学会听见回应，也学会不替每扇门后的人作主。',events:['story-divine-echo','story-divine-consent']},
+    {id:'void',chapter:'第九章',title:'虚隙有归途',realm:6,deliveries:68,previous:'story-divine-consent',
+      desc:'追查流向城外的愿力，分辨旧阵留下的回声，为断开的连接留下归路。',events:['story-void-letter','story-void-return']},
+    {id:'unity',chapter:'第十章',title:'同道共此城',realm:7,deliveries:84,previous:'story-void-return',
+      desc:'不再独自承担整座城，与愿意参与的人共同守护灯火，同时保留退出的权利。',events:['story-unity-burden','story-unity-covenant']},
+    {id:'mahayana',chapter:'第十一章',title:'大道在烟火',realm:8,deliveries:102,previous:'story-unity-covenant',
+      desc:'把经验交给后来者，让修行回到具体的人与事，而不是不断增长的数字。',events:['story-mahayana-rookie','story-mahayana-ordinary']},
+    {id:'tribulation',chapter:'第十二章',title:'劫尽见人间',realm:9,deliveries:122,previous:'story-mahayana-ordinary',
+      desc:'面对旧阵记忆中的劫问，决定如何安放力量，并把接下来的路留给自己选择。',events:['story-tribulation-question','story-tribulation-dawn']}
+  ];
+  G.higherChapterReady = (s, chapter) => G.featureUnlocked(s,'system') &&
+    s.player.realm>=chapter.realm && s.stats.delivered>=chapter.deliveries && G.storyEventComplete(s,chapter.previous);
+
   G.STORY_STAGES = [
     { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'先完成九单，再将第十份热饭送往非常驻随机地点；完成固定剧情，在本章解锁外卖系统。', ready:()=>true },
     { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启。继续配送赚取外卖币，领取第一份委托奖励，开始吐纳修行。', ready:s=>G.featureUnlocked(s,'system') },
@@ -28,6 +49,9 @@
     { id:'system', chapter:'第六章', title:'系统为何而来', desc:'外卖系统开始显露自己的目的。它究竟在帮助你，还是借你完成某件事？', ready:s=>s.flags?.storySystemDoubt === true || (s.stats.delivered>=30 && s.player.realm>=3) },
     { id:'truth', chapter:'第七章', title:'人间即阵心', desc:'你终于知道力量来自哪里。接下来要决定的，不是还能变多强，而是这份力量属于谁。', ready:s=>s.flags?.storySystemTruth === true || (s.stats.delivered>=42 && s.player.realm>=4) }
   ];
+  G.STORY_STAGES.push(...G.HIGHER_STORY_CHAPTERS.map(chapter=>({
+    ...chapter,ready:s=>G.higherChapterReady(s,chapter)
+  })));
   G.storyStage = s => {
     let current = G.STORY_STAGES[0];
     if(!G.featureUnlocked(s,'system'))return current;
@@ -150,6 +174,77 @@
       ]
     }
   ];
+
+  // 每章两段固定剧情，第二段的累计配送门槛高两单；数值效果仍由原规则引擎结算。
+  const higherScenes = [
+    [
+      {id:'story-divine-echo',flag:'storyDivineEcho',title:'灯火之外的回声',
+        text:'手头的事告一段落，化神后的神识忽然铺满青岚城。外卖系统曾经显示的光点，如今有了敲门声、锅铲声和未说完的道谢。你也听见一扇门后的沉默：那里的人并不希望被看见。器灵问，既然能够感知，是否就该替所有人安排去路？你把神识停在门外，第一次明白，看得更远不等于有权走进去。',choices:[
+          c('把神识停在门外，只等主动回应','那些愿意回应的灯火慢慢清晰，沉默的门仍安静关着。你不再把无声误认成等待拯救，修行多了一条自己愿意遵守的边界。',{karma:3,qi:36}),
+          c('记下回声的层次，先分辨再判断','你将求助、寒暄和旧阵回响分别记下。器灵承认，它过去常把所有信号算成同一种连接；你开始校对这份过于简单的答案。',{insight:2,qi:40}),
+          c('收回神识，先读眼前的真实备注','手机上仍是一句平常的“轻敲门，家里有人休息”。你认真读完，发现化神之后需要学习的，也包括不忽略这样的小事。',{rep:3,qi:32})]},
+      {id:'story-divine-consent',flag:'storyDivineConsent',title:'每扇门都能说不',
+        text:'你调出最近两份外卖的送达记录，系统把不同的回应并排展开。有的人愿意成为阵点，有的人只需要一顿热饭，还有的人今天不想与任何人说话。器灵曾把不回应视作阵法的缺口，你却想起每张订单都要先有人愿意下单。修补护城阵，不能从替陌生人决定开始。',choices:[
+          c('写下原则：愿意回应，才算连接','你为后续查阵写下第一条约定。器灵删掉了推演里强迫闭合的那条线；这不是失去一个阵点，而是学会尊重一个人。',{karma:4,qi:44}),
+          c('静心校对信号，区分沉默与求助','你耐心分辨旧阵回声，没有敲开任何真实的门。推演中，几处虚假的求救信号被标了出来，其中一条正通向城外的残缺阵纹。',{mana:-12,insight:2,qi:52},{duration:12}),
+          c('请器灵先说明，再让人自己回答','你没有替任何人答应。器灵在推演旁补上来意与风险，第一次把等待回答当作必要的一步。你们继续追查的方向，指向了城外。',{rep:3,qi:44})]}
+    ],
+    [
+      {id:'story-void-letter',flag:'storyVoidLetter',title:'没有地址的回信',
+        text:'炼虚之后，你重新查看那条流向城外的阵纹。它并非通往另一座商城，而像一封不断被退回的信。数十年前旧阵破碎，许多已经断开的回应仍被器灵反复呼叫；每重试一次，就有一点愿力流进虚隙。系统以为连接越多越好，却没有学会确认：对面是否还在等，是否仍愿意接。',choices:[
+          c('先核对回声，别把旧日当成今日','你把仍在发生的求助与旧阵记忆逐一分开。离去的人不该被永远困在一次未完成的送达里，活着的人也不该替旧记录不断付账。',{insight:2,qi:50}),
+          c('让器灵承认，有些信已经无法送达','器灵沉默后，承认了它从未敢写下的失败。你没有将那些名字抹去，只让它们从不断催促的请求，成为可以安放的记忆。',{karma:4,qi:46}),
+          c('先给仍有回应的连接标出方向','你没有贸然踏入虚隙，而是在现有阵图上标记可靠的回声。寻找归路，先要知道哪一端仍有人愿意开门。',{rep:3,qi:48})]},
+      {id:'story-void-return',flag:'storyVoidReturn',title:'给虚隙留下归路',
+        text:'最近两次真实送达，让旧回声与今日的回应终于有了可比照的节奏。器灵提出一条捷径：直接拿全城灯火填满虚隙。但那会让普通人的生活替一个残缺的旧约定付出代价。你看着仍然亮着的街灯，明白修复不是把所有缺口一次塞满，而是让每段连接知道自己从哪里来、能够在哪里停下。',choices:[
+          c('保留记忆，停止向无回应处索取','旧阵推演中的空转回路逐一停下，那些名字却仍留在记录里。器灵接受了这条边界：记得一个人，不等于继续向他索要回答。',{karma:4,qi:56}),
+          c('沿阵图逐段推演，给回流设下边界','你在原地推演了十八分钟，为每段回声标明来处与止步线。神识没有代替身体跨越地图；你得到的是一份可继续核验的修补方案，而不是任意通行的捷径。',{mana:-16,insight:2,qi:64},{duration:18}),
+          c('先保住仍有人生活的街巷','你拒绝用今天的灯火去偿还所有旧债。方案先保留有真实回应的部分，将无法确认的回路暂时隔开；未完成，不等于可以不计代价。',{rep:4,qi:54})]}
+    ],
+    [
+      {id:'story-unity-burden',flag:'storyUnityBurden',title:'不能由一人承受的城',
+        text:'合体之后，你已能在神识里同时维持许多阵线，却发现只要稍稍走神，它们就开始向你一人倾斜。器灵称这为最稳定的中心。与此同时，群里的普通人还在互相提醒断电、暴雨和晚归的路口。你忽然意识到，倘若一座城必须等一个强者醒着才能安稳，那不是共同守护，而是另一种脆弱。',choices:[
+          c('把自己的判断交出来，请人一起核对','你把能说明白的阵图整理成普通人也能看懂的风险提示。愿意参与的人提出了许多你不曾注意的细节，守护不再只有一种声音。',{rep:4,qi:62}),
+          c('让器灵计算：少了我，哪里仍能运转','推演里的中心第一次被暂时移开。仍能互相照应的街巷亮着，你把这些连接记下来，准备让阵法学会依靠不止一个人。',{insight:2,qi:68}),
+          c('先问大家愿意承担什么，而不是分派','你没有把修为、姓名或身份当成义务。每个人可以说出自己的边界，共同守护也必须从自愿开始。',{karma:4,qi:60})]},
+      {id:'story-unity-covenant',flag:'storyUnityCovenant',title:'把阵图摊在桌上',
+        text:'你翻看最近两单平常的配送记录，把一路收到的意见重新展开。有人能守夜，有人只能在清晨留一盏灯，也有人需要随时退出照看家人。旧护城阵只有服从与断开两种记录方式，你们却需要更多可能：轮换、拒绝、解释，以及没人能永久占有的决定权。无论是否加入宗门，这份约定都不该把人分成高低。',choices:[
+          c('约定参与自愿，退出也不受惩罚','你把退出的权利与参与的善意写在同一页。器灵终于承认，真正可靠的连接，不必靠锁住另一端来维持。',{karma:5,qi:70}),
+          c('整理轮换方案，检验没有中心的阵图','你用二十分钟把意见整理成轮换推演，逐一移开中心节点。没有人被擅自编入名册；你学到的是如何分担，而不是替所有人下令。',{stamina:-10,insight:2,qi:80},{duration:20}),
+          c('保留不同意见，让每次决定都有说明','你把尚未达成一致的地方也原样留下。共同守护不是假装所有人想法相同，而是愿意继续把理由说清楚。',{rep:4,qi:72})]}
+    ],
+    [
+      {id:'story-mahayana-rookie',flag:'storyMahayanaRookie',title:'新骑手的第一张单',
+        text:'大乘之后，许多曾经艰难的修行已有答案，一名新骑手却仍会被相似的楼号绕得满头汗。他在公共求助里问：是不是不够厉害的人就不适合做这份工作？器灵列出一长串效率建议。你想起自己的第一份热饭，那时你并没有系统，也没有人要求你第一次就懂得整座城。',choices:[
+          c('先说明楼号规律，再让他自己判断','你把容易认错的地方说清楚，没有接管他的订单。下一次辨认成功，会成为他自己的经验，而不是对你的依赖。',{rep:4,qi:76}),
+          c('告诉他，求助不是失败','你分享了刚入行时的笨拙，也提醒他先顾好安全。能容下不熟练的人，一条路才会不断有人走来。',{karma:5,qi:72}),
+          c('把经验写成谁都能读懂的几句话','你删掉修行术语，只留下检查门牌、核对备注和遇险停下。大道并没有因此变浅，它终于能够被一个普通人用上。',{insight:2,qi:82})]},
+      {id:'story-mahayana-ordinary',flag:'storyMahayanaOrdinary',title:'不必被记住的一次抵达',
+        text:'翻过最近两单的记录，器灵问你要不要把帮助后来者的每句话都计入成就。你看着街边互相让路的人，忽然发现许多让城市继续生活的事情从来没有奖章。系统仍然可以按规则结算外卖币，但不能把没有被计数的善意说成毫无价值。大乘的下一课，或许正是容许世界不围着自己的名字转。',choices:[
+          c('保留正常报酬，不把所有善意变成考核','你没有要求谁无偿劳动，也没有把一次帮助变成新的排名。劳动值得报酬，善意也可以不必接受评比，两件事并不矛盾。',{karma:5,qi:86}),
+          c('整理一份不署名的行路笔记','你花二十五分钟把沿路经验重新整理，删去了夸耀自己的句子。留下的是后来者可以接着补充的空白，而不是必须照抄的答案。',{stamina:-12,insight:3,qi:96},{duration:25}),
+          c('提醒器灵，数字以外也有人间','器灵在记录旁留下一句新的自省：没有计入，不等于没有发生。你仍保留奖励与任务，却不再让它们定义一切。',{rep:5,qi:84})]}
+    ],
+    [
+      {id:'story-tribulation-question',flag:'storyTribulationQuestion',title:'天雷问的不是修为',
+        text:'渡劫境的神识触及旧阵最深处，一段雷夜记忆将你围住。那不是街道上突然发生的战斗，而是阵法破碎时留下的劫问：若交出所有人的选择，就能换来一个永不出错的世界，你会不会答应？记忆中的天门安静等待。你想起沉默的门、无法送达的旧信，以及仍在学习看路的新骑手。',choices:[
+          c('拒绝以替别人决定换取安稳','你没有替全城作出那个看似完美的交易。记忆中的雷声仍在，但你知道一条不愿跨过的线，比一个保证万无一失的承诺更真实。',{karma:5,qi:100}),
+          c('先问代价由谁承担，再回答劫问','你把被漂亮承诺略去的代价逐项说出。天门不再像一道只能服从的命令，而成了你可以质疑、也必须负责的选择。',{insight:3,qi:108}),
+          c('承认会有遗憾，仍选择共同承担','你没有许诺救下每一盏灯，也不把失败推给命数。愿意继续修补、解释和承担，是你此刻能给出的回答。',{rep:5,qi:98})]},
+      {id:'story-tribulation-dawn',flag:'storyTribulationDawn',title:'天门之后仍有门铃',
+        text:'劫问之后，你重新看了最近两份真实配送的记录。清晨的门铃与旧阵记忆中的雷声终于分开，器灵不再替你写下唯一的归途。升得更高并不自动回答该怎样生活。远行、留守，或再观察一段时间，都应由你决定；此刻摆在面前的，仍是一座有人等饭、有人愿意开门的城。',choices:[
+          c('记住归路，仍愿意看看更远的天地','你把远行当成方向，而不是立刻消失的命令。这段主线在此收束，真正要选择哪一种归途，仍可由你在外卖系统中亲自决定。',{insight:3,qi:120}),
+          c('静坐片刻，把愿守的人间重新记清','你在原地静坐三十分钟，让雷夜的记忆与眼前的生活各归其位。没有自动飞升，也没有新的境界被强行赐予；只是你更清楚自己为何留下。',{mana:-20,karma:5,qi:128},{duration:30}),
+          c('暂不决定，继续走好眼前的路','你收起那份宏大的答案，允许自己继续生活。故事没有替你结束游戏，外卖箱也仍在身边。下一次门铃，可以等你准备好再按下。',{rep:5,qi:116})]}
+    ]
+  ];
+  const higherEvents=G.HIGHER_STORY_CHAPTERS.flatMap((chapter,i)=>higherScenes[i].map((scene,part)=>({
+    ...scene,kind:'story',higherChapter:chapter.id,title:`${chapter.chapter} · ${scene.title}`,
+    ready:s=>G.higherChapterReady(s,chapter) && s.stats.delivered>=chapter.deliveries+part*2 &&
+      (part===0||G.storyEventComplete(s,chapter.events[0]))
+  })));
+  G.STORY_FLAG_KEYS.push(...higherEvents.map(e=>e.flag));
+  storyEvents.push(...higherEvents);
   G.EVENTS.push(...storyEvents);
 
   const originalNewGame = G.newGame;
@@ -164,6 +259,15 @@
     G.sanitizeSave = raw => {
       const s = originalSanitize(raw);
       for (const key of G.STORY_FLAG_KEYS) s.flags[key] = key==='storySectInvitation'&&(raw.schemaVersion??raw.version)<17?false:raw?.flags?.[key] === true;
+      // v18 的开放式 flags 白名单扩充：旧档缺失新键视为未触发，不补播、不补奖。
+      for(const event of higherEvents){
+        const value=raw.flags?.[event.flag];
+        if(value!==undefined&&typeof value!=='boolean')throw new Error('高境界主线标记损坏。');
+        const waiting=s.pending?.templateId===event.id||s.activity?.params?.event?.templateId===event.id;
+        if(waiting&&s.activeOrder)throw new Error('高境界主线不能打断已接配送。');
+        if(waiting)s.flags[event.flag]=true;
+        if(s.flags[event.flag]&&!event.ready(s))throw new Error('高境界主线与境界、配送或前章进度不一致。');
+      }
       // 已读引荐由宗门状态佐证；丢失触发标记的旧待选剧情仍可继续，不重发奖励。
       s.flags.storySectInvitation=s.sect.invited||s.pending?.templateId==='story-sect-invitation';
       // 已完成的旧剧情和羁绊补领一次；仍在待选/执行中的主线不算完成。
@@ -176,7 +280,8 @@
   const storyActions = new Set(['deliver','choose','travel','moveHome','rest','sleep','cultivate','breakthrough','explore','visit','heal','meal','alchemy','sectJoin','sectTask','sectPromote']);
   function injectStoryEvent(s) {
     if (s.gameOver || s.pending || s.ending || s.activity || !G.featureUnlocked(s,'system')) return;
-    const next = storyEvents.find(e => !s.flags[e.flag] && e.ready(s));
+    const next = storyEvents.find(e => !s.flags[e.flag] && e.ready(s) &&
+      (!e.higherChapter||(!s.activeOrder&&!s.eventResult&&!s.placeUnlock&&!G.nextUnlockNotice(s))));
     if (!next) return;
     s.flags[next.flag] = true;
     s.pending = {

@@ -1139,7 +1139,7 @@
   };
   G.applyAIEvent = (original, eventId, raw) => {
     if(original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
-    if(['first-order','system-awakening'].includes(original.pending.templateId))return original;
+    if(['first-order','system-awakening'].includes(original.pending.templateId)||G.EVENTS.some(e=>e.id===original.pending.templateId&&e.kind==='story'))return original;
     const s=clone(original),clean=G.validateAIEvent(raw);
     if(!s.pending.npcId)for(const c of clean.choices){delete c.effects.affinity;delete c.effects.trust;}
     Object.assign(s.pending,clean,{source:'ai',aiStatus:'success'});s.updatedAt=Date.now();return s;

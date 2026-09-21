@@ -33,6 +33,11 @@
       if(!base||p.kind!=='story'||p.npcId||s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES-1||s.flags.systemAwakened||s.position!==ticket.target||G.place(ticket.target).permanent)throw new Error('外卖系统解锁剧情与配送进度不一致。');
       return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip',delivery:ticket};
     }
+    if(G.EVENTS.some(e=>e.id===p.templateId&&e.higherChapter)){
+      if(p.delivery||p.npcId||p.kind!=='story')throw new Error('高境界主线不接受配送票据或人物进度。');
+      const base=G.EVENTS.find(e=>e.id===p.templateId);
+      return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip'};
+    }
     if(p.templateId==='story-sect-invitation'){
       if(p.delivery||p.npcId||p.kind!=='story')throw new Error('宗门引荐不接受配送票据或人物进度。');
       const base=G.EVENTS.find(e=>e.id===p.templateId);

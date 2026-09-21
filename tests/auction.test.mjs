@@ -15,7 +15,7 @@ const atomic=(s,action,p={})=>{const before=JSON.stringify(s),r=G.perform(s,acti
 function eligible(seed=123,realm=0){
   const s=G.newGame('万宝客','classic',seed);s.unlockedPlaces=G.PLACES.map(p=>p.id);s.unlockedFeatures=G.FEATURE_UNLOCKS.map(f=>f.id);
   s.position='market';s.minutes=1080;s.player.money=10000;s.player.realm=realm;
-  s.flags.firstOrder=true;for(const e of G.EVENTS.filter(e=>e.kind==='story'))s.flags[e.flag]=true;
+  s.flags.firstOrder=true;for(const e of G.EVENTS.filter(e=>e.kind==='story'&&!e.higherChapter))s.flags[e.flag]=true;
   G.syncFormulaRewards(s);return s;
 }
 const catalog=(seed=123,realm=0)=>act(eligible(seed,realm),'auctionCatalog');

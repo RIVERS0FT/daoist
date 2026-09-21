@@ -20,12 +20,12 @@ const unlockPending=awakeningPending;
 const choose=(s,index=0)=>act(s,'choose',{eventId:s.pending.id,index});
 const label=(s,expected)=>assert.equal(G.storyStageLabel(s),expected);
 
-test('七章配置保留既有 ID 与后五章顺序，系统正式名称统一为外卖系统',()=>{
+test('前七章配置保留既有 ID 与后五章顺序，系统正式名称统一为外卖系统',()=>{
   assert.equal(G.SYSTEM_NAME,'外卖系统');
   assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
-  assert.deepEqual(G.STORY_STAGES.map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
-  assert.deepEqual(G.STORY_STAGES.map(s=>s.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
-  assert.deepEqual(G.STORY_STAGES.map(s=>s.title),['解锁外卖系统','初入仙途','城有第二面','夜路同行','阵眼苏醒','系统为何而来','人间即阵心']);
+  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
+  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
+  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.title),['解锁外卖系统','初入仙途','城有第二面','夜路同行','阵眼苏醒','系统为何而来','人间即阵心']);
   assert.equal(G.EVENTS.filter(e=>e.kind==='delivery').length,60);
 });
 

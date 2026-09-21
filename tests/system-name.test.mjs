@@ -22,7 +22,7 @@ const unlockPending=awakeningPending;
 test('外卖系统正式名称统一，保留首章配送与七章稳定ID',()=>{
   assert.equal(G.SYSTEM_NAME,'外卖系统');
   assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
-  assert.deepEqual(G.STORY_STAGES.map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
+  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
   assert.equal(G.STORY_STAGES[0].title,'解锁外卖系统');
   assert.equal(G.STORY_STAGES[1].title,'初入仙途');
   assert.equal(G.EVENTS.find(e=>e.id==='system-awakening').title,'第一章 · 解锁外卖系统');
