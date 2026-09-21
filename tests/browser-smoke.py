@@ -231,19 +231,19 @@ def system_name_browser_checks(browser):
         ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
         new_game(page, '首章旅人', mode)
         assert page.locator('.chapter-chip strong').inner_text() == '先把第一单送到'
-        assert page.locator('.chapter-chip span').first.inner_text() == '第一章 · 送外卖'
+        assert page.locator('.chapter-chip span').first.inner_text() == '第一章 · 解锁外卖系统'
         assert page.locator('#game-nav [data-panel="system"]').count() == 0
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
         page.screenshot(path=str(OUT/f'opening-chapter-{width}.png'))
         nearest_ui_delivery(page)
         assert current(page)['pending']['templateId'] == 'first-order'
-        assert page.locator('#panel-title').inner_text() == '第一章 · 送外卖'
+        assert page.locator('#panel-title').inner_text() == '第一章 · 解锁外卖系统'
         assert '正在等待' in page.locator('#panel').inner_text()
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'mortal'
         assert current(page)['stats']['delivered'] == 0 and current(page)['player']['coins'] == 0
         assert current(page)['pending']['source'] == 'classic'
         assert current(page)['pending']['aiStatus'] == 'skip'
-        record(f'{width}px {mode} 新档显示第一章送外卖，真实到达仍待绑定且不提前跳章')
+        record(f'{width}px {mode} 新档显示第一章解锁外卖系统，真实到达仍待绑定且不提前跳章')
 
         # Reload an old pending first-order snapshot, without granting permissions.
         before = current(page)
@@ -256,7 +256,7 @@ def system_name_browser_checks(browser):
         ctx, page, errors = setup(browser, width, height, ai=mode=='ai')
         page.evaluate("""entries=>{window.__memory=new Map(entries);window.dispatchEvent(new StorageEvent('storage',{key:NightCourier.STORAGE_KEY}));}""", memory)
         page.locator('.save-card').filter(has_text='首章旅人').locator('[data-ui="load"]').click()
-        assert page.locator('#panel-title').inner_text() == '第一章 · 送外卖'
+        assert page.locator('#panel-title').inner_text() == '第一章 · 解锁外卖系统'
         assert '正在等待' in page.locator('#panel').inner_text()
         assert current(page)['pending']['id'] == before['pending']['id']
         assert current(page)['pending']['delivery'] == before['pending']['delivery']
@@ -267,7 +267,7 @@ def system_name_browser_checks(browser):
 
         page.evaluate('window.__openingSpeed=document.querySelector("#time-speed")')
         page.click('[data-act="choose"][data-index="0"]')
-        assert current(page)['eventResult']['title'] == '第一章 · 送外卖'
+        assert current(page)['eventResult']['title'] == '第一章 · 解锁外卖系统'
         assert '外卖系统' in current(page)['eventResult']['text']
         assert page.evaluate("NightCourier.storyStage(window.__live).id") == 'bound'
         assert current(page)['stats']['delivered'] == 1 and current(page)['player']['coins'] == 0
@@ -281,6 +281,8 @@ def system_name_browser_checks(browser):
             if notice['kind'] == 'feature' and notice['id'] == 'system':
                 seen += 1
                 assert page.locator('#unlocked-item-name').inner_text() == '外卖系统'
+                assert '第一章「解锁外卖系统」已完成' in page.locator('#panel').inner_text()
+                assert '第二章开始' not in page.locator('#panel').inner_text()
                 page.screenshot(path=str(OUT/f'opening-system-unlock-{width}.png'))
             page.click('[data-act="ackUnlock"]')
         assert seen == 1
@@ -291,13 +293,16 @@ def system_name_browser_checks(browser):
         assert page.locator('.currency[data-panel="system"]').get_attribute('title') == '打开外卖系统'
         system.click()
         assert page.locator('#panel-title').inner_text() == '外卖系统'
-        assert '解锁外卖系统' in page.locator('#panel').inner_text()
+        assert '初入仙途' in page.locator('#panel').inner_text()
         assert page.locator('[role="tablist"]').get_attribute('aria-label') == '外卖系统分类'
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         page.screenshot(path=str(OUT/f'opening-system-panel-{width}.png'))
         page.click('[data-ui="close"]')
         page.locator('#game-nav [data-panel="help"]').click()
-        assert '第一章「送外卖」' in page.locator('#panel').inner_text()
+        assert '第一章「解锁外卖系统」' in page.locator('#panel').inner_text()
+        assert '第二章「初入仙途」' in page.locator('#panel').inner_text()
+        assert not page.evaluate("NightCourier.featureUnlocked(window.__live,'cultivation')")
+        record(f'{width}px 解锁提示归属第一章，第二章为初入仙途且修行仍需委托领奖')
         assert not errors, errors
         record(f'{width}px 完成第一章后一次性解锁外卖系统；弹窗、导航、标题与帮助同名，首单仍无币')
         ctx.close()
@@ -333,12 +338,12 @@ def progressive_browser_checks(browser):
 
         nearest_ui_delivery(page)
         assert current(page)['pending']['templateId'] == 'first-order'
-        assert current(page)['pending']['title'] == '第一章 · 送外卖'
+        assert current(page)['pending']['title'] == '第一章 · 解锁外卖系统'
         assert '正在等待' in page.locator('.event-text').inner_text()
         assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第一章'
-        assert page.evaluate('NightCourier.storyStage(window.__live).title') == '送外卖'
+        assert page.evaluate('NightCourier.storyStage(window.__live).title') == '解锁外卖系统'
         page.screenshot(path=str(OUT/f'chapter-one-awakening-{width}.png'))
-        record(f'{width}px 第一章为送外卖；首单待选仍未绑定，剧情标题与章节一致')
+        record(f'{width}px 第一章为解锁外卖系统；首单待选仍未绑定，剧情标题与章节一致')
         assert 'system' not in nav()
         assert current(page)['stats']['delivered'] == 0
         choose_ui(page)
@@ -350,7 +355,7 @@ def progressive_browser_checks(browser):
 
         page.locator('#game-nav [data-panel="system"]').click()
         assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第二章'
-        assert '第二章 · 解锁外卖系统' in page.locator('#panel').inner_text()
+        assert '第二章 · 初入仙途' in page.locator('#panel').inner_text()
         assert page.locator('[data-ui="system-tab"][data-id="endings"]').count() == 0
         assert page.locator('[data-act="buy"][data-id="foundation"]').count() == 0
         page.click('[data-ui="system-tab"][data-id="quests"]')
@@ -435,7 +440,7 @@ def progressive_browser_checks(browser):
         page.click('[data-ui="close"]')
         page.locator('#game-nav [data-panel="system"]').click()
         assert page.evaluate('NightCourier.storyStage(window.__live).chapter') == '第二章'
-        assert '第二章 · 解锁外卖系统' in page.locator('#panel').inner_text()
+        assert '第二章 · 初入仙途' in page.locator('#panel').inner_text()
         assert page.locator('[data-ui="system-tab"][data-id="endings"]').count() == 0
         edits = current(page);edits['stats']['delivered'] = 20
         fixture(page, edits, unlock_gameplay=False)
@@ -1009,8 +1014,8 @@ def story_chapter_browser_checks(browser):
     for width, height in [(1200, 900), (320, 740)]:
         ctx, page, errors = setup(browser, width, height)
         new_game(page, '章回旅人')
-        first = '第一章 · 送外卖'
-        second = '第二章 · 解锁外卖系统'
+        first = '第一章 · 解锁外卖系统'
+        second = '第二章 · 初入仙途'
         assert first in page.locator('.chapter-chip').inner_text()
         assert page.locator('#game-nav [data-panel="system"]').count() == 0
         page.screenshot(path=str(OUT/f'story-chapter-one-{width}.png'))
@@ -1022,7 +1027,7 @@ def story_chapter_browser_checks(browser):
         assert first in page.locator('.chapter-chip').inner_text()
         assert '已绑定' not in page.locator('.event-text').inner_text()
         assert current(page)['stats']['delivered'] == 0
-        record(f'{width}px 第一章送外卖：新档、出发和首单待选均未提前进入第二章')
+        record(f'{width}px 第一章解锁外卖系统：新档、出发和首单待选均未提前进入第二章')
 
         page.click('[data-act="choose"][data-index="0"]')
         assert second in page.locator('.chapter-chip').inner_text()
@@ -1036,7 +1041,7 @@ def story_chapter_browser_checks(browser):
             notice = current(page)['unlockNotices'][0]
             if notice['kind'] == 'feature' and notice['id'] == 'system':
                 assert page.locator('#unlocked-item-name').inner_text() == '外卖系统'
-                assert '第二章开始' in page.locator('#unlocked-item-detail').inner_text()
+                assert '第一章「解锁外卖系统」已完成' in page.locator('#unlocked-item-detail').inner_text()
                 seen_system = True
                 page.screenshot(path=str(OUT/f'story-system-unlock-{width}.png'))
             page.click('[data-act="ackUnlock"]')
@@ -1057,7 +1062,7 @@ def story_chapter_browser_checks(browser):
         page.click('[data-ui="close"]')
         page.locator('#game-nav [data-panel="help"]').click()
         help_text = page.locator('#panel').inner_text()
-        assert '第一章「送外卖」' in help_text and '第二章「解锁外卖系统」' in help_text
+        assert '第一章「解锁外卖系统」' in help_text and '第二章「初入仙途」' in help_text
         assert '万家灯火系统' not in help_text
         assert not errors, errors
         record(f'{width}px 帮助中的章节顺序与外卖币说明同步，页面无运行异常')

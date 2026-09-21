@@ -17,20 +17,20 @@ const ack=s=>{
 };
 function assertOpening(s){
   const before=G.clone(s),chapter=G.storyStage(s);
-  assert.equal(chapter.id,'mortal');assert.equal(chapter.chapter,'第一章');assert.equal(chapter.title,'送外卖');
+  assert.equal(chapter.id,'mortal');assert.equal(chapter.chapter,'第一章');assert.equal(chapter.title,'解锁外卖系统');
   assert.equal(G.featureUnlocked(s,'system'),false);assert.deepEqual(s,before);
 }
 function assertBound(s){
   const chapter=G.storyStage(s);
-  assert.equal(chapter.id,'bound');assert.equal(chapter.chapter,'第二章');assert.equal(chapter.title,'解锁外卖系统');
+  assert.equal(chapter.id,'bound');assert.equal(chapter.chapter,'第二章');assert.equal(chapter.title,'初入仙途');
   assert.equal(G.featureUnlocked(s,'system'),true);
 }
 
-for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首章选项 ${index+1}：真实抵达、读档仍在送外卖章，完成选择才绑定并进入第二章`,()=>{
+for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首章选项 ${index+1}：真实抵达、读档仍在解锁章，完成选择才绑定并进入第二章`,()=>{
   let s=fresh(mode);assertOpening(s);const ticket=G.clone(s.orders[0]),before=G.clone(s.player);
   s=act(s,'deliver',{id:ticket.id});s=G.advance(s,.2);assertOpening(s);s=read(s);assertOpening(s);
   s=ack(finish(s));assert.equal(s.pending.templateId,'first-order');assert.equal(s.flags.firstOrder,true);
-  assert.equal(s.pending.title,'第一章 · 送外卖');assert.match(s.pending.text,/正在等待/);
+  assert.equal(s.pending.title,'第一章 · 解锁外卖系统');assert.match(s.pending.text,/正在等待/);
   assert.doesNotMatch(s.pending.text,/已绑定|绑定完成/);assert.equal(s.pending.source,'classic');assert.equal(s.pending.aiStatus,'skip');
   assertOpening(s);s=read(s);assertOpening(s);
   const eventId=s.pending.id,choice=s.pending.choices[index];
@@ -41,7 +41,7 @@ for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 首�
   s=act(s,'choose',{eventId,index});assertBound(s);assert.equal(s.stats.delivered,1);
   assert.equal(s.player.coins,0);assert.equal(s.player.money,before.money+ticket.reward+(choice.effects.money||0));
   assert.equal(s.player.qi,before.qi+(choice.effects.qi||0));assert.match(s.eventResult.text,/已绑定/);
-  assert.equal(s.eventResult.title,'第一章 · 送外卖');assert.equal(G.featureUnlocked(s,'cultivation'),false);
+  assert.equal(s.eventResult.title,'第一章 · 解锁外卖系统');assert.equal(G.featureUnlocked(s,'cultivation'),false);
   const player=G.clone(s.player),stats=G.clone(s.stats),minutes=s.minutes,seed=s.seed;
   s=ack(read(s));assertBound(s);assert.deepEqual(s.player,player);assert.deepEqual(s.stats,stats);assert.equal(s.minutes,minutes);assert.equal(s.seed,seed);
   assert.equal(G.perform(s,'choose',{eventId,index}).ok,false);
@@ -70,7 +70,7 @@ test('旧首单待选按固定模板更新文案，保留票据与未结算进�
   let s=fresh();s=ack(finish(act(s,'deliver',{id:s.orders[0].id})));
   s.pending.title='第一声「叮」';s.pending.text='旧版首单剧情原文。';const pending=G.clone(s.pending);
   s=read(s);assertOpening(s);assert.equal(s.pending.id,pending.id);assert.deepEqual(s.pending.delivery,pending.delivery);
-  assert.deepEqual(s.pending.choices,pending.choices);assert.equal(s.pending.title,'第一章 · 送外卖');assert.match(s.pending.text,/正在等待/);
+  assert.deepEqual(s.pending.choices,pending.choices);assert.equal(s.pending.title,'第一章 · 解锁外卖系统');assert.match(s.pending.text,/正在等待/);
   assert.equal(s.player.coins,0);assert.equal(s.stats.delivered,0);
 });
 
@@ -91,7 +91,7 @@ test('首单叙述与章名一致，绑定不添加新奖励或系统提前开�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'delivery');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.10.3');assert.equal(G.VERSION,17);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.10.4');assert.equal(G.VERSION,17);
 });
 
 
