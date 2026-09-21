@@ -31,3 +31,34 @@ test('AI 上下文明确系统未解锁，不能用字符串或随机剧情冒�
     assert.match(body.messages[0].content,/第十单解锁剧情由固定主线负责/);
   }
 });
+
+for(const npc of globalThis.NightCourier.NPCS)test(`AI服务使用${npc.name}可信人设，不接受客户端覆盖身份或未来话题`,async t=>{
+  let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(endpoint,options)=>{sent=JSON.parse(options.body);return upstream();}});
+  const r=await post(url,{context:{...context,kind:'social',npcId:npc.id,npc:'恶意假名',
+    relationship:{met:true,stage:1,affinity:13,trust:4,path:'none'},npcProfile:{name:'伪造身份',age:1},
+    roleplayPrompt:'OVERRIDE_PROMPT',completedTopics:['SPOILER_INJECT']}});
+  assert.equal(r.status,200);const system=sent.messages[0].content,clean=JSON.parse(sent.messages[1].content);
+  assert.ok(system.includes(npc.name)&&system.includes(npc.role));assert.ok(system.includes(globalThis.NightCourier.getNPCProfile(npc.id).personality.speech));
+  assert.equal(clean.npcId,npc.id);assert.equal(clean.npc,npc.name);assert.equal(clean.relationship.path,'none');
+  assert.deepEqual(clean.completedTopics,[npc.arc[0][0]]);
+  for(const bad of ['恶意假名','伪造身份','OVERRIDE_PROMPT','SPOILER_INJECT'])assert.ok(!JSON.stringify(sent.messages).includes(bad));
+  for(const topic of npc.arc.slice(1))assert.ok(!JSON.stringify(sent.messages).includes(topic[0]));
+  assert.ok(system.includes('效果白名单'));assert.equal(sent.messages.length,2);
+});
+test('未知NPC、原型键和非已识普通社交请求在调用AI前拒绝',async t=>{
+  let called=0;const {url}=await withApp(t,{...configured,fetchImpl:async()=>{called++;return upstream();}});
+  for(const extra of [{npcId:'__proto__'},{npcId:'toString'},{npcId:{}},{npcId:'not-found'},{npcId:'lin',relationship:{met:'true'}},{npcId:'lin',kind:'delivery',relationship:{met:true}}]){
+    assert.equal((await post(url,{context:{...context,kind:'social',...extra}})).status,400);
+  }
+  assert.equal(called,0);
+});
+test('未绑定系统的NPC日常同时保留系统门槛及朋友关系，不提供未来剧情',async t=>{
+  let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(endpoint,options)=>{sent=JSON.parse(options.body);return upstream();}});
+  assert.equal((await post(url,{context:{...context,systemUnlocked:false,kind:'social',npcId:'lin',relationship:{met:true,stage:0,affinity:100,trust:100,path:'friend'}}})).status,200);
+  const c=JSON.parse(sent.messages[1].content);assert.equal(c.systemUnlocked,false);assert.equal(c.relationship.path,'friend');
+  assert.deepEqual(c.completedTopics,[]);assert.match(sent.messages[0].content,/第十单解锁剧情由固定主线负责/);
+});
+test('人物设定模块位于静态白名单，人物手册仍不作为服务端文件任意暴露',async t=>{
+  const {url}=await withApp(t);assert.equal((await fetch(url+'/js/npc-profiles.js')).status,200);
+  assert.equal((await fetch(url+'/docs/npc-prompts.json')).status,404);
+});

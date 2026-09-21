@@ -316,7 +316,7 @@
     const controller=new AbortController(),serial=++aiSerial,saveId=s.id,id=p.id;aiFlight={controller,id};if(dialogType==='event')renderPanel();
     const timer=setTimeout(()=>controller.abort(),18000);
     try{
-      const context={systemUnlocked:G.featureUnlocked(s,'system'),name:s.name,realm:G.realmLabel(s),day:G.day(s),time:G.clock(s),weather:s.weather,location:G.locationName(s),kind:p.kind,title:p.title,text:p.text,npc:p.npcId?G.NPCS.find(n=>n.id===p.npcId).name:null,stats:{stamina:s.player.stamina,mana:s.player.mana,money:s.player.money,qi:s.player.qi,karma:s.player.karma,rep:s.player.rep},recent:s.logs.slice(-3).map(l=>l.text)};
+      const context={...G.npcAIRequestContext(s,p),systemUnlocked:G.featureUnlocked(s,'system'),name:s.name,realm:G.realmLabel(s),day:G.day(s),time:G.clock(s),weather:s.weather,location:G.locationName(s),kind:p.kind,title:p.title,text:p.text,npc:p.npcId?G.NPCS.find(n=>n.id===p.npcId).name:null,stats:{stamina:s.player.stamina,mana:s.player.mana,money:s.player.money,qi:s.player.qi,karma:s.player.karma,rep:s.player.rep},recent:s.logs.slice(-3).map(l=>l.text)};
       const response=await fetch('/api/story',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({context}),signal:controller.signal});
       const result=await response.json();if(!response.ok)throw new Error(result.error||'服务暂时不可用');
       if(serial!==aiSerial||state?.id!==saveId||state?.pending?.id!==id)return;

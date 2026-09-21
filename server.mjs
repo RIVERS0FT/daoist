@@ -4,13 +4,14 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import './public/js/data.js';
+import './public/js/npc-profiles.js';
 import './public/js/engine.js';
 const G=globalThis.NightCourier;
 const ROOT=dirname(fileURLToPath(import.meta.url));
 const PUBLIC=join(ROOT,'public');
 const FILES=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],
-  ...['data','engine','clock','storage','progression','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`])
+  ...['data','npc-profiles','engine','clock','storage','progression','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`])
 ]);
 class HttpError extends Error{constructor(status,message){super(message);this.status=status;}}
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message);};
@@ -23,10 +24,16 @@ function cleanContext(context){
   const text=(v,max)=>typeof v==='string'?v.slice(0,max):'';
   const allowedKinds=['delivery','explore','cultivation','social'];
   check(allowedKinds.includes(context.kind),400,'事件类型无效。');
+  const id=context.npcId;
+  const hasId=id!==undefined&&id!==null;
+  if(hasId)check(typeof id==='string'&&!!G.getNPCProfile(id),400,'人物标识无效。');
+  // Static profiles are rebuilt on the server, never accepted from context/profile/prompt.
+  if(hasId)check(context.kind==='social'&&context.relationship?.met===true,400,'人物日常需要已结识的社交上下文。');
+  const dialogue=hasId?G.npcDialogueContext(id,context.relationship):null;
   return {
-    systemUnlocked:context.systemUnlocked===true,name:text(context.name,40),realm:text(context.realm,20),day:Number.isFinite(context.day)?Math.max(1,Math.min(99999,Math.floor(context.day))):1,
+    ...(dialogue||{}),systemUnlocked:context.systemUnlocked===true,name:text(context.name,40),realm:text(context.realm,20),day:Number.isFinite(context.day)?Math.max(1,Math.min(99999,Math.floor(context.day))):1,
     time:text(context.time,10),weather:text(context.weather,20),location:text(context.location,40),kind:context.kind,
-    title:text(context.title,80),text:text(context.text,600),npc:text(context.npc,40),
+    title:text(context.title,80),text:text(context.text,600),npc:dialogue?.npc||text(context.npc,40),
     stats:Object.fromEntries(['stamina','mana','money','qi','karma','rep'].map(k=>[k,Number.isFinite(context.stats?.[k])?Math.max(-100,Math.min(999999,context.stats[k])):0])),
     recent:Array.isArray(context.recent)?context.recent.slice(-3).map(v=>text(v,400)):[]
   };
@@ -79,7 +86,7 @@ export function createApp(options={}){
         check(inflight<2,429,'已有剧情正在生成。');
         const data=await readJSON(req);const context=cleanContext(data.context);inflight++;
         try{
-          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
+          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:context.npcId?`${SYSTEM_PROMPT}\n\n${G.npcRoleplayPrompt(context.npcId)}`:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
           check(upstream.ok,502,`AI 服务暂不可用（HTTP ${upstream.status}），本次使用经典剧情。`);
           const rawText=await boundedText(upstream);let raw,content,event;
           try{raw=JSON.parse(rawText);content=raw.choices?.[0]?.message?.content;check(typeof content==='string',502,'AI 没有返回可用的事件。');event=G.validateAIEvent(JSON.parse(content.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')));}

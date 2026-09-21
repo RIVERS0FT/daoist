@@ -16,12 +16,14 @@ OUT.mkdir(exist_ok=True)
 HTML = (ROOT / 'dist/index.html').read_text()
 BOOT = r'''
 window.__memory = new Map();
+window.__storyRequests = [];
 window.__aiConfigured = false; window.__aiDelay = 0; window.__aiFail = false;
 window.__aiEvent = {title:'雨后的小灯',text:'巷口的店主在等一份热饭。',choices:[{label:'认真道谢',result:'店主也笑了。',effects:{qi:5}},{label:'请他喝一杯茶',result:'热茶驱散了寒意。',effects:{money:-5,karma:2}},{label:'留下祝福',result:'灯光亮了一点。',effects:{rep:1}}]};
 Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>window.__memory.get(k)??null,setItem:(k,v)=>window.__memory.set(k,String(v)),removeItem:k=>window.__memory.delete(k),clear:()=>window.__memory.clear()}});
 window.fetch = async (url,options={}) => {
  if(String(url).endsWith('/api/health')) return new Response(JSON.stringify({aiConfigured:window.__aiConfigured}));
  if(String(url).endsWith('/api/story')){
+  window.__storyRequests.push(JSON.parse(options.body));
   await new Promise((resolve,reject)=>{const t=setTimeout(resolve,window.__aiDelay);options.signal?.addEventListener('abort',()=>{clearTimeout(t);reject(new DOMException('Aborted','AbortError'));});});
   if(window.__aiFail) return new Response(JSON.stringify({error:'模拟接口失败'}),{status:503});
   return new Response(JSON.stringify({event:window.__aiEvent}));
@@ -1354,6 +1356,7 @@ def delivery_npc_browser_checks(browser):
         assert page.evaluate('NightCourier.NPCS.length') == 12
         assert page.evaluate('NightCourier.NEW_NPC_IDS.every(id=>!window.__live.bonds[id].met)')
         ids = page.evaluate('NightCourier.NEW_NPC_IDS')
+        ages = {'lin': 24, 'shen': 20, 'su': 19, 'xu': 20, 'tang': 19, 'gu': 18, 'ye': 21, 'wen': 18, 'luo': 27}
         for npc_id in ids:
             # Post-tutorial fixture: choose an actual seeded offer, not a forged NPC ticket.
             data = page.evaluate('''id=>{const G=NightCourier,old=window.__live;
@@ -1375,6 +1378,9 @@ def delivery_npc_browser_checks(browser):
             assert current(page)['bonds'][npc_id]['met'] is False
             finish_ui_activity(page)
             assert current(page)['pending']['templateId'] == f'delivery-npc-{npc_id}'
+            if npc_id == 'luo':
+                assert '已转到社区白班' in page.locator('#panel').inner_text()
+                assert '退休' not in page.locator('#panel').inner_text()
             assert current(page)['pending']['source'] == 'classic'
             assert current(page)['pending']['aiStatus'] == 'skip'
             assert current(page)['bonds'][npc_id]['met'] is False
@@ -1392,7 +1398,14 @@ def delivery_npc_browser_checks(browser):
             page.locator('#game-nav [data-panel="bonds"]').click()
             card = page.locator('.npc-card').filter(has_text=data['npc']['name'])
             assert card.count() == 1
-            assert f"{data['npc']['age']}岁" in card.inner_text()
+            assert data['npc']['age'] == ages[npc_id]
+            assert 18 <= data['npc']['age'] <= 27
+            assert f"{ages[npc_id]}岁" in card.inner_text()
+            if npc_id == 'luo':
+                assert '前巡夜人' in card.inner_text() and '转岗后' in card.inner_text()
+                assert '退休' not in card.inner_text()
+                card.scroll_into_view_if_needed()
+                page.screenshot(path=str(OUT/f'npc-age-luo-{width}.png'))
             assert '常约在' in card.inner_text()
             assert '丹方传授 0/0' not in card.inner_text()
             record(f'{width}px {data["npc"]["name"]}：不同配送地址初遇，结算才弹人物通知，卡片年龄和常约地点正确')
@@ -1430,6 +1443,21 @@ def delivery_npc_browser_checks(browser):
         fixture(page, all_met, unlock_gameplay=False)
         page.locator('#game-nav [data-panel="bonds"]').click()
         assert page.locator('.npc-card').count() == 12
+        women = page.evaluate('NightCourier.NPCS.filter(n=>n.romantic)')
+        assert {n['id']: n['age'] for n in women} == ages
+        for npc in women:
+            card = page.locator('.npc-card').filter(has_text=npc['name'])
+            assert card.count() == 1
+            assert f"{ages[npc['id']]}岁" in card.inner_text()
+            assert 18 <= ages[npc['id']] <= 27 and npc['gender'] == 'female'
+            if npc['id'] in ['lin', 'shen', 'su', 'luo']:
+                card.scroll_into_view_if_needed()
+                page.screenshot(path=str(OUT/f"npc-age-{npc['id']}-{width}.png"))
+        ordered = sorted(ages.values())
+        mean = sum(ordered) / len(ordered)
+        assert mean > ordered[len(ordered)//2]
+        assert sum((age-mean)**3 for age in ordered) > 0
+        record(f'{width}px 全部九位可攻略女性为18至27岁右偏分布，原三位卡片显示年龄且罗映秋为转岗背景')
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         page.screenshot(path=str(OUT/f'twelve-npcs-{width}.png'))
         page.click('[data-ui="close"]')
@@ -1441,12 +1469,51 @@ def delivery_npc_browser_checks(browser):
         record(f'{width}px 十二位已识人物完整显示，同一常约地点的三人均可拜访')
         ctx.close()
 
+def npc_profile_browser_checks(browser):
+    for width, height, npc_id in [(1200, 900, 'lin'), (320, 740, 'luo')]:
+        ctx, page, errors = setup(browser, width, height, ai=True)
+        new_game(page, '人设接线', 'ai')
+        before = current(page)
+        profiles = page.evaluate('NightCourier.npcPromptCatalog()')
+        assert len(profiles) == 12
+        assert all('半身像' in p['portrait']['positive'] for p in profiles)
+        assert current(page) == before
+        assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
+        record(f'{width}px 静态包加载12人设及半身像提示词，查询不结识人物或改变状态')
+        # Explicit already-friends fixture; exercise ordinary UI visit, not a forged request.
+        state = page.evaluate("""id=>{const G=NightCourier,n=G.NPCS.find(n=>n.id===id),s=G.newGame('人设接线','ai',123);
+          s.id=window.__live.id;s.position=n.place;s.location=null;s.unlockedPlaces=[...new Set([...s.unlockedPlaces,n.place])];
+          s.unlockedFeatures=['bonds'];Object.assign(s.bonds[id],{met:true,stage:4,path:'friend',affinity:60,trust:20});
+          return s;}""", npc_id)
+        fixture(page, state, unlock_gameplay=False)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert page.locator('.npc-card').count() == 1
+        page.locator(f'[data-act="visit"][data-id="{npc_id}"]').click()
+        finish_ui_activity(page)
+        page.wait_for_function('window.__storyRequests.length > 0')
+        request = page.evaluate('window.__storyRequests.at(-1).context')
+        assert request['npcId'] == npc_id
+        assert request['relationship']['path'] == 'friend'
+        assert request['relationship']['stage'] == 4
+        assert request['systemUnlocked'] is False
+        assert 'profile' not in request and 'roleplayPrompt' not in request
+        page.wait_for_function("JSON.parse(localStorage.getItem(NightCourier.STORAGE_KEY)).saves[0].pending?.aiStatus === 'success'")
+        assert current(page)['pending']['npcId'] == npc_id
+        assert current(page)['bonds'][npc_id]['path'] == 'friend'
+        assert current(page)['bonds'][npc_id]['stage'] == 4
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.screenshot(path=str(OUT/f'npc-profile-ai-{width}.png'))
+        record(f'{width}px 实际拜访调用AI时携带当前NPC ID及友情进度，模拟响应不改关系或章节')
+        assert not errors, errors
+        ctx.close()
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    npc_profile_browser_checks(browser)
     delivery_npc_browser_checks(browser)
     higher_story_browser_checks(browser)
     story_chapter_browser_checks(browser)
