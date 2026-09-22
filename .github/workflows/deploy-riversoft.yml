@@ -1,0 +1,78 @@
+name: Deploy daoist to RIVERSOFT
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daoist-riversoft-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Check JavaScript
+        run: npm run check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build the static game
+        run: npm run build
+
+      - name: Check the deployment bundle
+        run: node tools/riversoft.mjs check ./dist
+
+      - name: Publish to RIVERSOFT
+        id: publish
+        env:
+          RIVERSOFT_TOKEN: ${{ secrets.RIVERSOFT_TOKEN }}
+        run: |
+          set -euo pipefail
+          node tools/riversoft.mjs deploy ./dist \
+            --slug daoist \
+            --title "外卖修仙录" \
+            --description "白天送达一份热饭，入夜寻一条自己的仙途。" \
+            --kind game \
+            --visibility public \
+            --yes | tee "$RUNNER_TEMP/riversoft-deploy.json"
+          url="$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const result = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/riversoft-deploy.json`, "utf8"));
+            const url = new URL(result.url || "");
+            if (url.protocol !== "https:" || !url.hostname.endsWith(".riversoft.top") || url.pathname !== "/daoist/") {
+              throw new Error("RIVERSOFT returned an unexpected public URL.");
+            }
+            process.stdout.write(url.href);
+          ')"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Published URL: $url"
+
+      - name: Verify the public game
+        env:
+          PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            "$PUBLISHED_URL" --output "$RUNNER_TEMP/riversoft-public.html"
+          expected="$(sha256sum dist/index.html | cut -d ' ' -f1)"
+          actual="$(sha256sum "$RUNNER_TEMP/riversoft-public.html" | cut -d ' ' -f1)"
+          test "$actual" = "$expected"
+          echo "Public page matches the built game: $PUBLISHED_URL"
