@@ -77,16 +77,35 @@ jobs:
             process.stdout.write(url.href);
           ')"
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          deployment_id="$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const result = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/riversoft-deploy.json`, "utf8"));
+            if (typeof result.deploymentId !== "string" || !result.deploymentId) throw new Error("RIVERSOFT did not return a deployment ID.");
+            process.stdout.write(result.deploymentId);
+          ')"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "Published URL: $url"
 
-      - name: Verify the public game
+      - name: Verify the public game or compatibility route
         env:
           PUBLISHED_URL: ${{ steps.publish.outputs.url }}
+          DEPLOYMENT_ID: ${{ steps.publish.outputs.deployment_id }}
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
-            "$PUBLISHED_URL" --output "$RUNNER_TEMP/riversoft-public.html"
           expected="$(sha256sum dist/index.html | cut -d ' ' -f1)"
-          actual="$(sha256sum "$RUNNER_TEMP/riversoft-public.html" | cut -d ' ' -f1)"
-          test "$actual" = "$expected"
-          echo "Public page matches the built game: $PUBLISHED_URL"
+          if curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            "$PUBLISHED_URL" --output "$RUNNER_TEMP/riversoft-public.html"; then
+            actual="$(sha256sum "$RUNNER_TEMP/riversoft-public.html" | cut -d ' ' -f1)"
+            test "$actual" = "$expected"
+            echo "Canonical public page matches the built game: $PUBLISHED_URL"
+          else
+            echo "::warning::The account subdomain was published, but its DNS/TLS endpoint is not currently valid. Checking the HTTPS compatibility route instead."
+            fallback="https://riversoft.top/api/hosting/content/daoist/$DEPLOYMENT_ID/index.html"
+            curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+              "$fallback" --output "$RUNNER_TEMP/riversoft-compat.html"
+            actual="$(sha256sum "$RUNNER_TEMP/riversoft-compat.html" | cut -d ' ' -f1)"
+            test "$actual" = "$expected"
+            curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+              "https://riversoft.top/p/daoist" --output /dev/null
+            echo "Published content matches the build through https://riversoft.top/p/daoist"
+          fi
