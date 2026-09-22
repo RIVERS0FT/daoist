@@ -38,8 +38,10 @@
       return {...G.clone(deliveryFace),id:cleanId(p.id),templateId:deliveryFace.id,
         npcId:id,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:ticket};
     }
-    if(G.NEW_NPC_IDS.includes(p.npcId)&&!s.bonds[p.npcId].met)throw new Error('未结识人物不能具有交谈记录。');
-    if(G.NEW_NPC_IDS.includes(p.npcId)&&p.npcAdvance===true){
+    // Rebuild every revised romance arc from current career prose, including the original three.
+    const fixedRomance=G.NPCS.some(n=>n.id===p.npcId&&n.romantic);
+    if(fixedRomance&&!s.bonds[p.npcId].met)throw new Error('未结识人物不能具有交谈记录。');
+    if(fixedRomance&&p.npcAdvance===true){
       const npc=G.NPCS.find(n=>n.id===p.npcId),bond=s.bonds[npc.id],arc=npc.arc[bond.stage];
       if(!arc||!bond.met||p.kind!=='social'||p.delivery||s.position!==npc.place)
         throw new Error('人物章节与羁绊或拜访地点不一致。');

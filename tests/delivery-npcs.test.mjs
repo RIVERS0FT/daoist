@@ -202,25 +202,25 @@ test('全部九位可攻略女性年龄限定18至27岁，补齐原三位女性�
     assert.equal(n.age,age);assert.ok(Number.isInteger(n.age)&&n.age>=18&&n.age<=27);
     assert.equal(n.gender,'female');assert.equal(n.romantic,true);
   }
-  assert.equal(G.APP_VERSION,'1.14.0');assert.equal(G.VERSION,19);
+  assert.equal(G.APP_VERSION,'1.15.0');assert.equal(G.VERSION,19);
   assert.equal(G.STORAGE_KEY,'night-courier:saves:v19');
 });
 
-test('罗映秋为转岗的前巡夜人，简介、个人故事和配送初遇不再声称退休',()=>{
+test('罗映秋现为活动策划师，简介、个人故事和配送初遇职业一致',()=>{
   const npc=G.NPCS.find(n=>n.id==='luo'),face=G.EVENTS.find(e=>e.id==='delivery-npc-luo');
-  assert.equal(npc.role,'前巡夜人');assert.match(npc.bio,/转岗/);
-  assert.match(npc.arc[0][1],/转到白班/);assert.equal(npc.arc[0][4].label,'问她转岗后想做什么');
-  assert.match(face.text,/已转到社区白班/);
+  assert.equal(npc.role,'活动策划师');assert.match(npc.bio,/活动/);
+  assert.match(npc.arc[0][1],/活动流程表/);assert.equal(npc.arc[0][4].label,'问她忙完最想做什么');
+  assert.match(face.text,/活动策划师/);
   assert.doesNotMatch(JSON.stringify([npc,G.EVENTS.filter(e=>e.deliveryNpc==='luo')]),/退休|46岁/);
   assert.deepEqual(npc.arc[3].slice(2).map(c=>c.path),['friend','romance','friend']);
   assert.equal(npc.arc[3][3].minTrust,12);
 });
 
-test('v19旧待选恢复转岗文案，配送票据和个人选项效果、进度均保留',()=>{
+test('v19旧待选恢复策划职业文案，配送票据和个人选项效果、进度均保留',()=>{
   const {s}=arrive('luo');const ticket=G.clone(s.pending.delivery),effects=s.pending.choices.map(c=>G.clone(c.effects));
   s.pending.text='罗映秋刚结束社区夜路走访，在约定位置等饭。她介绍自己已经退休，今天只是把旧经验讲给接班的人。';
   const before=G.clone(s),loaded=read(s);
-  assert.equal(loaded.schemaVersion,19);assert.match(loaded.pending.text,/已转到社区白班/);
+  assert.equal(loaded.schemaVersion,19);assert.match(loaded.pending.text,/活动策划师/);
   assert.equal(loaded.pending.id,s.pending.id);assert.deepEqual(loaded.pending.delivery,ticket);
   assert.deepEqual(loaded.pending.choices.map(c=>c.effects),effects);assert.deepEqual(loaded.player,before.player);
   assert.deepEqual(loaded.bonds,before.bonds);assert.equal(loaded.minutes,before.minutes);assert.equal(loaded.seed,before.seed);
@@ -230,7 +230,7 @@ test('v19旧待选恢复转岗文案，配送票据和个人选项效果、进�
   assert.equal(social.pending.npcAdvance,true);const choices=G.clone(social.pending.choices);
   social.pending.text='罗映秋带着用了多年的手电，电池却是新的。她说早已不用值夜，只是出门总想带着。';
   social.pending.choices[2].label='问她退休后想做什么';
-  const restored=read(social);assert.match(restored.pending.text,/转到白班/);
+  const restored=read(social);assert.match(restored.pending.text,/活动流程表/);
   assert.deepEqual(restored.pending.choices,choices);assert.deepEqual(restored.bonds,social.bonds);
   assert.deepEqual(restored.player,social.player);assert.equal(restored.pending.id,social.pending.id);
 });

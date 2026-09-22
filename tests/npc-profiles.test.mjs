@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import '../public/js/data.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
@@ -9,7 +10,8 @@ import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 for(const npc of G.NPCS)test(`${npc.name}具备完整且可复用的性格、职业、外貌与两套提示词`,()=>{
   const p=G.getNPCProfile(npc.id),portrait=G.npcPortraitPrompt(npc.id),dialogue=G.npcRoleplayPrompt(npc.id);
-  assert.equal(p.name,npc.name);assert.equal(p.role,npc.role);assert.equal(p.age,npc.age??null);
+  assert.equal(p.name,npc.name);assert.equal(p.role,npc.role);assert.equal(p.age,npc.age);assert.ok(Number.isSafeInteger(p.age)&&p.age>=18);
+  assert.ok(portrait.positive.includes(`${p.age}岁`));assert.ok(dialogue.includes(`${p.age}岁`));
   assert.equal(p.romantic,npc.romantic);
   for(const match of p.appearance.ageLook.matchAll(/(\d+)岁/g))assert.equal(Number(match[1]),npc.age);assert.equal(p.personality.traits.length,4);
   for(const v of Object.values(p.personality))assert.ok(v.length>0);
@@ -21,14 +23,14 @@ for(const npc of G.NPCS)test(`${npc.name}具备完整且可复用的性格、职
   assert.match(portrait.negative,/水印/);assert.match(dialogue,/常约地点/);assert.match(dialogue,/不是当前位置/);
   assert.ok(dialogue.includes(p.personality.exampleLine)&&dialogue.includes(p.profession.description));
   if(npc.romantic){assert.equal(p.gender,'female');assert.ok(p.age>=18&&p.age<=27);assert.ok(portrait.positive.includes(`${p.age}岁`));}
-  else {assert.equal(p.gender,'male');assert.equal(p.age,null);assert.match(dialogue,/不可攻略/);}
+  else {assert.equal(p.gender,'male');assert.match(dialogue,/不可攻略/);}
 });
-test('十二人视觉锚点及语气示例不同，原四段故事和12人身份未改',()=>{
+test('十二人视觉锚点及语气示例不同，四段结构和12人ID保留',()=>{
   const ps=Object.values(G.NPC_PROFILES);assert.equal(ps.length,12);
   for(const key of ['face','hair','clothing','continuity'])assert.equal(new Set(ps.map(p=>p.appearance[key])).size,12,key);
   assert.equal(new Set(ps.map(p=>p.personality.exampleLine)).size,12);
   assert.equal(G.NPCS.filter(n=>n.romantic).length,9);assert.ok(G.NPCS.every(n=>n.arc.length===4));
-  assert.match(G.getNPCProfile('luo').profession.description,/社区白班/);
+  assert.match(G.getNPCProfile('luo').profession.description,/活动策划师/);
   assert.doesNotMatch(G.getNPCProfile('luo').profession.description,/退休/);
 });
 test('角色和嵌套设定只读，不接受未知或原型ID',()=>{
@@ -80,4 +82,46 @@ test('提示词JSON导出与运行配置一致，手册覆盖全部12人而未�
   const text=readFileSync(new URL('../docs/NPC_PROMPTS.md',import.meta.url),'utf8');
   for(const n of G.NPCS)assert.ok(text.includes(`## ${n.name}（${n.id}）`));
   assert.match(text,/半身像尚未生成/);assert.match(text,/Pages为静态部署/);
+});
+
+
+test('全部12位NPC年龄明确，女性右尾配置保留且陆听雨与三十年守阵经历相容',()=>{
+  const ages={lin:24,chen:42,shen:20,lu:58,zhou:25,su:19,xu:20,tang:19,gu:18,ye:21,wen:18,luo:27};
+  assert.deepEqual(Object.fromEntries(G.NPCS.map(n=>[n.id,n.age])),ages);
+  assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
+  const lu=G.NPCS.find(n=>n.id==='lu');assert.ok(lu.age-30>=18);assert.equal(lu.arc[1][0],'守了三十年的阵');
+  assert.equal(G.VERSION,19);assert.equal(G.STORAGE_KEY,'night-courier:saves:v19');
+});
+
+test('年龄缺失、非整数或非成年配置在资料加载时拒绝，不输出未知年龄提示词',()=>{
+  const data=readFileSync(new URL('../public/js/data.js',import.meta.url),'utf8');
+  const profiles=readFileSync(new URL('../public/js/npc-profiles.js',import.meta.url),'utf8');
+  for(const age of [undefined,null,'42',17,0,-1,42.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1]){
+    const context=vm.createContext({});vm.runInContext(data,context);
+    context.NightCourier.NPCS.find(n=>n.id==='chen').age=age;
+    assert.throws(()=>vm.runInContext(profiles,context),/NPC age must be an explicit adult integer: chen/);
+  }
+});
+
+test('男性在导出手册和AI/画像中保留正确性别及同一年龄，不再出现未设年龄',()=>{
+  const text=readFileSync(new URL('../docs/NPC_PROMPTS.md',import.meta.url),'utf8');
+  const exported=JSON.parse(readFileSync(new URL('../docs/npc-prompts.json',import.meta.url),'utf8'));
+  assert.doesNotMatch(text,/实际年龄未设/);assert.doesNotMatch(JSON.stringify(exported),/实际年龄未设/);
+  for(const n of G.NPCS){
+    const p=G.getNPCProfile(n.id),identity=`${n.age}岁成年${p.gender==='female'?'女性':'男性'}`;
+    assert.ok(text.includes(`## ${n.name}（${n.id}）\n\n${identity}；${n.role}`));
+    const row=exported.characters.find(c=>c.profile.id===n.id);assert.equal(row.profile.age,n.age);
+    assert.ok(row.portrait.positive.includes(`${n.age}岁`));assert.ok(row.dialogue.includes(`${n.age}岁`));
+  }
+});
+
+test('旧v19存档不存入或信任NPC年龄覆盖，读档与查询保留原关系和资产',()=>{
+  const s=G.newGame('旧档年龄','classic',789);s.bonds.chen.met=true;s.bonds.chen.affinity=23;
+  s.bonds.chen.trust=8;s.bonds.chen.stage=1;s.bonds.chen.path='friend';
+  const expected=G.sanitizeSave(G.clone(s)),raw=G.clone(s);
+  raw.bonds.chen.age=1;raw.bonds.lu.age=999;raw.npcAges={chen:1,lu:999,zhou:0};
+  const restored=G.sanitizeSave(raw);assert.deepEqual(restored,expected);
+  const before=G.clone(restored);
+  for(const n of G.NPCS){G.getNPCProfile(n.id);G.npcPortraitPrompt(n.id);G.npcRoleplayPrompt(n.id);}
+  assert.deepEqual(restored,before);assert.equal(G.getNPCProfile('chen').age,42);assert.equal(G.getNPCProfile('lu').age,58);
 });

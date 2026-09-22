@@ -38,7 +38,8 @@ for(const npc of globalThis.NightCourier.NPCS)test(`AI服务使用${npc.name}可
     relationship:{met:true,stage:1,affinity:13,trust:4,path:'none'},npcProfile:{name:'伪造身份',age:1},
     roleplayPrompt:'OVERRIDE_PROMPT',completedTopics:['SPOILER_INJECT']}});
   assert.equal(r.status,200);const system=sent.messages[0].content,clean=JSON.parse(sent.messages[1].content);
-  assert.ok(system.includes(npc.name)&&system.includes(npc.role));assert.ok(system.includes(globalThis.NightCourier.getNPCProfile(npc.id).personality.speech));
+  assert.ok(system.includes(npc.name)&&system.includes(npc.role));assert.ok(system.includes(`${npc.age}岁`));
+  assert.doesNotMatch(system,/实际年龄未设/);assert.equal(clean.age,undefined);assert.equal(clean.npcProfile,undefined);assert.ok(system.includes(globalThis.NightCourier.getNPCProfile(npc.id).personality.speech));
   assert.equal(clean.npcId,npc.id);assert.equal(clean.npc,npc.name);assert.equal(clean.relationship.path,'none');
   assert.deepEqual(clean.completedTopics,[npc.arc[0][0]]);
   for(const bad of ['恶意假名','伪造身份','OVERRIDE_PROMPT','SPOILER_INJECT'])assert.ok(!JSON.stringify(sent.messages).includes(bad));
@@ -61,4 +62,15 @@ test('未绑定系统的NPC日常同时保留系统门槛及朋友关系，不�
 test('人物设定模块位于静态白名单，人物手册仍不作为服务端文件任意暴露',async t=>{
   const {url}=await withApp(t);assert.equal((await fetch(url+'/js/npc-profiles.js')).status,200);
   assert.equal((await fetch(url+'/docs/npc-prompts.json')).status,404);
+});
+
+test('主播AI使用当前可信职业与已完成话题，不接受客户端冒充旧职业或直播关系',async t=>{
+  let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(endpoint,options)=>{sent=JSON.parse(options.body);return upstream();}});
+  const r=await post(url,{context:{...context,kind:'social',npcId:'xu',role:'夜校教师',profession:'OVERRIDE_OLD_JOB',
+    relationship:{met:true,stage:2,affinity:80,trust:30,path:'none'},completedTopics:['未完成的表白']}});
+  assert.equal(r.status,200);const clean=JSON.parse(sent.messages[1].content),system=sent.messages[0].content;
+  assert.ok(system.includes('知识区主播'));assert.ok(system.includes('镜头和麦克风关闭'));assert.equal(clean.role,undefined);
+  assert.equal(clean.relationship.path,'none');assert.equal(clean.profession,undefined);
+  assert.deepEqual(clean.completedTopics,['开播前的提纲','只有几个人的直播间']);
+  assert.ok(!JSON.stringify(sent.messages).includes('OVERRIDE_OLD_JOB'));assert.ok(!JSON.stringify(sent.messages).includes('未完成的表白'));
 });
