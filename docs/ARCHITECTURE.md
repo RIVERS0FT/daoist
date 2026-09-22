@@ -1,5 +1,13 @@
 # 架构与扩展说明
 
+## 2026-09-22：RIVERSOFT 自动发布边界
+
+`.github/workflows/deploy-riversoft.yml` 是静态游戏的独立发布入口：`main` 推送或手动运行会使用 `production` 环境中的 `RIVERSOFT_TOKEN`，在 Node.js 22 上依次执行源码检查、1011 项规则/HTTP 测试、Chromium 交互回归、单文件构建和 RIVERSOFT CLI 文件检查，再以 `daoist` slug 发布公开版本。令牌只通过 GitHub Environment Secret 注入；`tools/riversoft.mjs` 是审核后的无依赖 CLI 副本，仓库和日志不得出现令牌。CLI 不执行远端构建，也不发布源目录，只上传带根 `index.html` 的 `dist/`。
+
+发布完成后工作流只接受 API 返回的 `https://<account-subdomain>.riversoft.top/daoist/` 地址，并下载同一地址的 `index.html` 与本次 `dist/index.html` 做 SHA-256 比对；地址、内容或任一前置检查失败都视为未发布。GitHub Pages、仓库 CI 和 RIVERSOFT 发布是互相独立的状态，不能用其中一个替代另一个。
+
+RIVERSOFT 的网页运行在受限静态沙箱中，禁止持久化存储、外部网络和服务端代码。因此该地址用于经典单文件游戏的托管体验；AI 模式仍需要本机 `npm start` 代理，线上沙箱也不能被描述为跨刷新云存档或多人后端。
+
 ## 1.16.0：男性NPC扩充到12名（2026-09-22）
 
 按最新要求在原陈默、陆听雨、周野三位男性之外追加九人；男性合计12名，女性仍为9名，总计21位具名羁绊NPC。此节取代旧版“总计12人、不新增人物”的数量约定，不修改九位女性的年龄、职业、个人故事、形象或感情门槛。新男性均走友情／道友路线，不新增男性恋爱或婚姻系统。

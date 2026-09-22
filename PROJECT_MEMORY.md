@@ -2,6 +2,12 @@
 
 更新时间：2026-09-22。请与源代码和导出的存档一起备份。
 
+## RIVERSOFT 自动发布（2026-09-22）
+
+`main` 的 `.github/workflows/deploy-riversoft.yml` 使用 `production` 环境 Secret `RIVERSOFT_TOKEN`，运行 Node 22 的 `check`、完整 Node 测试、Chromium 回归、`dist/` 构建与 `tools/riversoft.mjs` 校验，然后发布 slug `daoist`。工作流会校验 API 返回的真实子域名地址，并将公网 `index.html` 与构建产物做 SHA-256 比对。不要把 Token 写入仓库、命令行参数或日志；Pages、CI 与 RIVERSOFT 的成功状态分开记录。
+
+RIVERSOFT 仅提供受限静态沙箱：经典单文件页面可托管体验，但 localStorage、外部 API 和 Node AI 代理不可用，不能把该地址当作云存档或多人服务。`tools/riversoft.mjs` 必须保持与 RIVERSOFT 发布端审核版本同步，源代码改动后先更新 CLI 再提交。
+
 ## 1.16.0：男性NPC扩充到12名（2026-09-22）
 
 按最新要求在原陈默、陆听雨、周野三位男性之外追加九人；男性合计12名，女性仍为9名，总计21位具名羁绊NPC。此节取代旧版“总计12人、不新增人物”的数量约定，不修改九位女性的年龄、职业、个人故事、形象或感情门槛。新男性均走友情／道友路线，不新增男性恋爱或婚姻系统。

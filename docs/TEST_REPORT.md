@@ -1,5 +1,9 @@
 # 1.9.0 事件结果与配送扩充
 
+## 2026-09-22 RIVERSOFT 发布工作流
+
+在 1.16.0 最新 `main` 上，本机执行 `npm run check`、`npm test` 和 `npm run build`；结果为提示词导出一致、1011 项测试通过、单文件构建成功。`node tools/riversoft.mjs check ./dist` 通过，构建包只含根 `index.html`，符合静态托管限额。Windows 使用 `python -X utf8 tests/browser-smoke.py` 完成 224 项 Chromium 检查；普通 GBK 默认编码不能读取 UTF-8 构建文件，不能把那次启动失败计为浏览器回归失败。工作流还会在 GitHub 托管 Runner 重跑 Chromium 回归，发布后再以返回的真实子域名 URL 和公网文件 SHA-256 验收；在对应 Action 完成前，不把上述本机结果记为 RIVERSOFT 已上线。
+
 详见 [本次完整测试记录](TEST_REPORT_1.9.0.md)：规则525项、浏览器80组；包含本机存储夹具与CI原生刷新验证的环境区分。
 
 以下为历史版本记录。

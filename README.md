@@ -6,6 +6,12 @@
 
 已交付完整源代码、可直接打开的单文件版本、本机 AI 代理、自动化测试与恢复说明。无需 GitHub 登录即可运行，不依赖原仓库或在线地图服务。
 
+## RIVERSOFT 自动发布
+
+仓库已配置 `.github/workflows/deploy-riversoft.yml`：向 `main` 推送或在 Actions 手动运行，会使用 `production` 环境的 `RIVERSOFT_TOKEN`，依次检查源码、运行 Node 与 Chromium 回归、生成 `dist/index.html`，再将静态游戏发布到账号子域名下的 `/daoist/`。发布后工作流会用公网响应和 SHA-256 校验确认实际内容与本次构建一致；GitHub Pages、CI 和 RIVERSOFT 发布仍分别记录。
+
+RIVERSOFT 是受限静态沙箱，不提供 localStorage、外部网络或 Node 服务端。该地址适合经典单文件游戏体验；AI 模式和跨刷新云存档仍需本机 `npm start` 或其他完整运行环境。
+
 ![桌面游戏界面](docs/previews/game-desktop.png)
 
 ## 1.16.0：男性NPC扩充到12名（2026-09-22）
