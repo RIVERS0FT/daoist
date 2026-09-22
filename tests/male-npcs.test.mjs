@@ -48,12 +48,12 @@ test('男性总数12、女性9、总数21，追加九人有明确年龄、独立
     for(const a of n.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(s,c.effects,c.itemCost)));}
     assert.deepEqual(n.arc[3].slice(2).map(c=>c.path),['friend','friend','friend']);
   }
-  assert.equal(G.VERSION,20);assert.equal(G.STORAGE_KEY,'night-courier:saves:v20');
+  assert.equal(G.VERSION,21);assert.equal(G.STORAGE_KEY,'night-courier:saves:v21');
 });
 
-test('原十二人全部文字数值、九位女性画像AI与地图保持逐项指纹一致',()=>{
-  assert.equal(hash(G.NPCS.slice(0,12).map(({gender,...n})=>n)),'2c3e0bea3a8dc98f41567ff19e3a2340325efccf29cb9ea6e87228e3461cfa17');
-  assert.equal(hash(G.npcPromptCatalog().slice(0,12)),'18433b71b95c310573cdfab8d64ff907aeaa2053efc4b6ac2f3d92531161c4bd');
+test('除周野新故事外原十一人文字数值、画像AI与地图保持指纹一致',()=>{
+  assert.equal(hash(G.NPCS.slice(0,12).filter(n=>n.id!=='zhou').map(({gender,...n})=>n)),'bddd20c6c18b8dc78034e2670d3606e97f58d859ea7b6246066621c8ac386945');
+  assert.equal(hash(G.npcPromptCatalog().slice(0,12).filter(c=>c.profile.id!=='zhou')),'ddc4524ae7071b0de05477eeb31f0d10de765a61cfcb94f9c6a6a84aa976b080');
   assert.equal(hash(G.PLACES),'3772f185dc32cff4ec75996533f4dfe075e418c066f8cab0dd444a6f93fc1429');
   assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,12);
 });
@@ -114,13 +114,13 @@ test('v19旧在途档保留票据、路线、旧十二人和资产，新九人�
   for(const k of ['player','stats','activeOrder','location','activity','minutes','seed','claimed','inventory','alchemy'])assert.deepEqual(out[k],inFlight[k],k);
   for(const n of G.NPCS.slice(0,12))assert.deepEqual(out.bonds[n.id],inFlight.bonds[n.id]);
   for(const id of ids)assert.deepEqual(out.bonds[id],blank);
-  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,20);assert.deepEqual(read(out).bonds,out.bonds);
+  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,21);assert.deepEqual(read(out).bonds,out.bonds);
 });
 
 test('v19存储自动迁移到v20保留原文；损坏v20不回退覆盖；导入生成独立副本',()=>{
   const raw=old19(G.newGame('旧键迁移','classic',91)),text=JSON.stringify({schemaVersion:19,saves:[raw]});
   const map=new Map([[G.LEGACY_STORAGE_KEY,text]]),storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)};
-  const store=G.createStore(storage),out=store.load();assert.equal(out.length,1);assert.equal(out[0].schemaVersion,20);assert.equal(map.get(G.LEGACY_STORAGE_KEY),text);
+  const store=G.createStore(storage),out=store.load();assert.equal(out.length,1);assert.equal(out[0].schemaVersion,21);assert.equal(map.get(G.LEGACY_STORAGE_KEY),text);
   assert.ok(map.has(G.STORAGE_KEY));for(const id of ids)assert.deepEqual(out[0].bonds[id],blank);
   const original=out[0].id;store.import(text);assert.equal(store.saves.length,2);assert.equal(new Set(store.saves.map(s=>s.id)).size,2);assert.ok(store.saves.some(s=>s.id===original));
   const corrupt=G.clone(out[0]);delete corrupt.bonds.han;const broken=JSON.stringify({schemaVersion:20,saves:[corrupt]});map.set(G.STORAGE_KEY,broken);map.delete(G.BACKUP_KEY);

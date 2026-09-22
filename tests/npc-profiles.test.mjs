@@ -29,7 +29,7 @@ test('21人视觉锚点及语气示例不同，四段结构和旧12人ID保留',
   const ps=Object.values(G.NPC_PROFILES);assert.equal(ps.length,21);
   for(const key of ['face','hair','clothing','continuity'])assert.equal(new Set(ps.map(p=>p.appearance[key])).size,21,key);
   assert.equal(new Set(ps.map(p=>p.personality.exampleLine)).size,21);
-  assert.equal(G.NPCS.filter(n=>n.romantic).length,9);assert.ok(G.NPCS.every(n=>n.arc.length===4));
+  assert.equal(G.NPCS.filter(n=>n.romantic).length,9);assert.ok(G.NPCS.every(n=>n.arc.length===(n.id==='zhou'?10:4)));
   assert.match(G.getNPCProfile('luo').profession.description,/活动策划师/);
   assert.doesNotMatch(G.getNPCProfile('luo').profession.description,/退休/);
 });
@@ -81,7 +81,7 @@ test('提示词JSON导出与运行配置一致，手册覆盖全部21人而未�
   assert.deepEqual(data.style,G.NPC_PORTRAIT_STYLE);
   const text=readFileSync(new URL('../docs/NPC_PROMPTS.md',import.meta.url),'utf8');
   for(const n of G.NPCS)assert.ok(text.includes(`## ${n.name}（${n.id}）`));
-  assert.match(text,/半身像尚未生成/);assert.match(text,/Pages为静态部署/);
+  assert.match(text,/半身像尚未生成/);assert.match(text,/静态托管不运行Node代理/);
 });
 
 
@@ -90,7 +90,7 @@ test('原12位NPC年龄保留，女性右尾配置保留且陆听雨与三十年
   assert.deepEqual(Object.fromEntries(G.NPCS.slice(0,12).map(n=>[n.id,n.age])),ages);
   assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
   const lu=G.NPCS.find(n=>n.id==='lu');assert.ok(lu.age-30>=18);assert.equal(lu.arc[1][0],'守了三十年的阵');
-  assert.equal(G.VERSION,20);assert.equal(G.STORAGE_KEY,'night-courier:saves:v20');
+  assert.equal(G.VERSION,21);assert.equal(G.STORAGE_KEY,'night-courier:saves:v21');
 });
 
 test('年龄缺失、非整数或非成年配置在资料加载时拒绝，不输出未知年龄提示词',()=>{

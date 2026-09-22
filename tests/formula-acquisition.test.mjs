@@ -97,7 +97,7 @@ test('房租破产先于同刻剧情完成，不能拿到该段丹方',()=>{
     assert.ok(s.gameOver);assert.deepEqual(s.alchemy.formulas,[]);assert.deepEqual(copy(s).alchemy.formulas,[]);
   }finally{if(old===undefined)delete event.choices[0].duration;else event.choices[0].duration=old;}
 });
-for(const npc of G.NPCS.filter(n=>Object.hasOwn(G.FORMULA_NPC_PRODUCTS,n.id)))test(`${npc.name}分三次传方，每次两张；不绑定情感路线`,()=>{
+for(const npc of G.NPCS.filter(n=>Object.hasOwn(G.FORMULA_NPC_PRODUCTS,n.id)&&n.id!=='zhou'))test(`${npc.name}分三次传方，每次两张；不绑定情感路线`,()=>{
   let s=fresh();const bond=s.bonds[npc.id];bond.met=true;
   for(const [i,m] of G.FORMULA_BOND_MILESTONES.entries()){
     bond.stage=m.stage;bond.trust=m.trust-1;
@@ -146,6 +146,7 @@ test('旧档已购的专属方保留，过去已完成剧情/羁绊的奖励只�
 test('所有专属奖励均可确定取得；多存档之间不共享所有权',()=>{
   const a=fresh(),b=fresh();a.claimed=['q1'];for(const source of G.FORMULA_STORY_SOURCES)if(source.flag)a.flags[source.flag]=true;
   for(const bond of Object.values(a.bonds))Object.assign(bond,{met:true,stage:4,trust:100});
+  Object.assign(a.bonds.zhou,{stage:6,path:'brother'});a.player.realm=2;a.stats.delivered=24;
   const got=copy(a);assert.equal(got.alchemy.formulas.length,72);assert.ok(got.alchemy.formulas.every(id=>G.alchemyRecipe(id).acquisition.type!=='shop'));
   assert.deepEqual(b.alchemy.formulas,[]);
 });

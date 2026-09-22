@@ -86,7 +86,7 @@ export function createApp(options={}){
         check(inflight<2,429,'已有剧情正在生成。');
         const data=await readJSON(req);const context=cleanContext(data.context);inflight++;
         try{
-          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:context.npcId?`${SYSTEM_PROMPT}\n\n${G.npcRoleplayPrompt(context.npcId)}`:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
+          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:context.npcId?`${SYSTEM_PROMPT}\n\n${G.npcRoleplayPrompt(context.npcId,context.relationship)}`:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
           check(upstream.ok,502,`AI 服务暂不可用（HTTP ${upstream.status}），本次使用经典剧情。`);
           const rawText=await boundedText(upstream);let raw,content,event;
           try{raw=JSON.parse(rawText);content=raw.choices?.[0]?.message?.content;check(typeof content==='string',502,'AI 没有返回可用的事件。');event=G.validateAIEvent(JSON.parse(content.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')));}

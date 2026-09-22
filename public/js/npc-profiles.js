@@ -207,12 +207,12 @@
       "habits": "等红灯时把头盔挂在车把，聊得认真就收起玩笑；习惯碰拳告别。",
       "boundaries": [
         "不鼓励危险抢行，不把快写成可以无视路线。",
-        "仅友情路线，不擅自向玩家表白。"
+        "不可攻略；按当前关系称呼，不把热心或高好感自动写成兄弟。"
       ],
-      "exampleLine": "别比这单了。都平安回来，早饭我占个位。"
+      "exampleLine": "别比这单了。都平安回来，吃饭我占个位。"
     },
     "appearance": {
-      "ageLook": "25岁青年成年男性，带着夜班奔忙的朝气",
+      "ageLook": "25岁青年成年男性，带着跑单奔忙的朝气",
       "face": "脸型略方，下颌利落，浓眉",
       "eyes": "深棕眼睛，眼神明亮直接",
       "hair": "稍乱的黑色短发",
@@ -224,14 +224,14 @@
       "continuity": "赭色外套、短发与头盔固定；无平台商标，不把护具画成战甲"
     },
     "profession": {
-      "description": "长乐集周边的夜班外卖骑手，熟悉街巷和骑手互助；不是竞速冠军。",
+      "description": "早高峰、午间和夜里都接单的骑手，熟悉街巷和骑手互助；不是竞速冠军。",
       "skills": [
         "配送路线记录",
         "防雨打包",
         "同行互助"
       ],
       "scenes": [
-        "夜班收餐点",
+        "早晚配送间隙",
         "配送交接与换班"
       ],
       "props": [
@@ -1019,12 +1019,23 @@
   G.getNPCProfile=id=>typeof id==='string'&&Object.hasOwn(G.NPC_PROFILES,id)?G.NPC_PROFILES[id]:null;
   const identity=p=>`${p.name}，${p.age}岁，成年${p.gender==='female'?'女性':'男性'}，${p.role}`;
   const visual=p=>Object.values(p.appearance).join('；');
-  G.npcPortraitPrompt=id=>{
+  G.npcPortraitPrompt=(id,relationship={})=>{
     const p=G.getNPCProfile(id);if(!p)return null;
     const style=G.NPC_PORTRAIT_STYLE;
-    return {positive:[identity(p),style.framing,style.art,visual(p),`职业小道具：${p.profession.props.join('、')}`,style.background].join('。'),negative:style.negative};
+    const hostile=id==='zhou'&&relationship?.met===true&&Number.isInteger(relationship.stage)&&relationship.stage>=9;
+    const appearance=hostile?visual({...p,appearance:{...p.appearance,eyes:'同一双深棕眼睛，眼神冷硬防备',pose:'同一头盔夹在臂弯，手机握紧，收起笑意，不作碰拳或亲密动作'}}):visual(p);
+    return {positive:[identity(p),style.framing,style.art,appearance,`职业小道具：${p.profession.props.join('、')}`,style.background,...(id==='zhou'&&relationship?.met===true&&relationship.stage>=7?['已揭露身份版本：同一张脸、同一件赭色骑手外套，袖口露出虚构黑色蚀灯纹；不改成战甲。']:[])].join('。'),negative:style.negative};
   };
-  G.npcRoleplayPrompt=id=>{
+  G.zhouRoleplayKnowledge=(relationship={})=>{
+    const stage=relationship?.met===true&&Number.isInteger(relationship.stage)?Math.max(0,Math.min(10,relationship.stage)):0;
+    const relation=({none:'路人',friend:'朋友',brother:'兄弟',enemy:'仇人'})[G.zhouPath(stage)];
+    const shared=`周野不可攻略；当前关系为${relation}。只按已经结算的阶段说话，不自行和解或推进关系。`;
+    if(stage<6)return shared+' 当前可知身份只有普通骑手，白天和晚上都能跑单；不添加超出当前可知范围的身份、力量或所属。';
+    if(stage<7)return shared+' 玩家已亲眼见过他施展灵力，他已承认自己也是修仙者；尚未说清师承及归属，不自行补完原因或预告后来事件。';
+    if(stage<9)return shared+' 玩家已经取得证据：周野是虚构邪恶组织蚀灯会的外线成员，曾交出部分互助路线供其掠夺居民愿力。他知道会伤害人，仍以还债和变强为理由辩解；救助同行有真心，但不能抹去主动作恶。尚未完成的对质和决裂不得提前宣告。';
+    return shared+' 周野选择继续为蚀灯会掠夺愿力，与你正式反目。说话冷硬、防备，不再碰拳、邀饭、称兄道弟或当作亲密朋友。不要把配送交付当作和解，不洗白为被操控。';
+  };
+  G.npcRoleplayPrompt=(id,relationship={})=>{
     const p=G.getNPCProfile(id);if(!p)return null;
     return [
       `当前出场NPC的可信设定：${identity(p)}。不得改变姓名、性别、年龄、职业和固定外貌。`,
@@ -1035,9 +1046,9 @@
       `外貌与衣着：${visual(p)}；常用道具：${p.profession.props.join('、')}。不要每次把外貌清单朗读出来。`,
       `可用日常场景：${p.profession.scenes.join('、')}。常约地点为${p.usualPlace}，不是当前位置；配送相逢按本次实际地点叙述，不让人物或玩家瞬移。`,
       `角色边界：${p.personality.boundaries.join('；')}`,
-      p.romantic?'关系未提供时按初识有礼处理。只有已选择romance时可写含蓄的伴侣日常，高好感或高信任不等于已经恋爱。':'此角色不可攻略，只写朋友或道友关系，不出现恋爱表白。',
+      id==='zhou'?G.zhouRoleplayKnowledge(relationship):p.romantic?'关系未提供时按初识有礼处理。只有已选择romance时可写含蓄的伴侣日常，高好感或高信任不等于已经恋爱。':'此角色不可攻略，只写朋友或道友关系，不出现恋爱表白。',
       '关系状态和已完成话题由单独上下文提供。玩家日志不等于该NPC亲历，不把其他人物私事当作其记忆。未出现的话题、角色私事、主线真相及未选的结局不得提前揭露；已完成话题也不代表所有选项都发生过。',
-      '只为当前普通日常对话补充三个选择，不代替固定初遇、人物四段故事或系统主线。不得自动改变关系、好感、章节、位置、资产或权限；不修改既有输出格式与效果白名单。'
+      `只为当前普通日常对话补充三个选择，不代替固定初遇、${p.id==='zhou'?'人物固定故事':'人物四段故事'}或系统主线。不得自动改变关系、好感、章节、位置、资产或权限；不修改既有输出格式与效果白名单。`
     ].join('\n');
   };
   // Only whitelisted progress travels to the proxy; the client never supplies persona instructions.
@@ -1045,8 +1056,8 @@
     const p=G.getNPCProfile(id);if(!p)return null;
     const number=(v,max)=>Number.isFinite(v)?Math.max(0,Math.min(max,Math.floor(v))):0;
     const met=raw?.met===true;
-    const stage=met?number(raw?.stage,4):0;
-    const path=met&&raw?.path==='friend'?'friend':met&&p.romantic&&raw?.path==='romance'?'romance':'none';
+    const stage=met?number(raw?.stage,G.NPCS.find(n=>n.id===id).arc.length):0;
+    const path=id==='zhou'?G.zhouPath(stage):met&&raw?.path==='friend'?'friend':met&&p.romantic&&raw?.path==='romance'?'romance':'none';
     return {npcId:p.id,npc:p.name,relationship:{met,stage,affinity:met?number(raw?.affinity,100):0,trust:met?number(raw?.trust,100):0,path},
       completedTopics:G.NPCS.find(n=>n.id===id).arc.slice(0,stage).map(a=>a[0])};
   };
@@ -1055,5 +1066,5 @@
     const context=G.npcDialogueContext(p.npcId,s.bonds[p.npcId]);
     return context?{npcId:context.npcId,relationship:context.relationship}:{};
   };
-  G.npcPromptCatalog=()=>G.NPCS.map(n=>({profile:G.getNPCProfile(n.id),portrait:G.npcPortraitPrompt(n.id),dialogue:G.npcRoleplayPrompt(n.id)}));
+  G.npcPromptCatalog=()=>G.NPCS.map(n=>({profile:G.getNPCProfile(n.id),portrait:G.npcPortraitPrompt(n.id),dialogue:G.npcRoleplayPrompt(n.id),...(n.id==='zhou'?{disclosureVariants:[0,2,4,6,7,9].map(stage=>({stage,relationship:G.zhouPath(stage),knowledge:G.zhouKnowledge(stage),portrait:G.npcPortraitPrompt(n.id,{met:true,stage}),dialogue:G.npcRoleplayPrompt(n.id,{met:true,stage})}))}:{})}));
 })(globalThis);

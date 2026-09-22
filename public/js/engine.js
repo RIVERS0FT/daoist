@@ -516,7 +516,8 @@
     if(source.type==='story')return G.formulaStoryComplete(s,source);
     if(source.type==='bond'){
       const bond=s.bonds[source.npc];
-      return bond?.met===true&&bond.stage>=source.stage&&bond.trust>=source.trust;
+      return bond?.met===true&&bond.stage>=source.stage&&bond.trust>=source.trust&&
+        (source.npc!=='zhou'||(bond.stage>=6&&bond.path!=='enemy'));
     }
     return false;
   };
@@ -573,7 +574,7 @@
       if (Object.hasOwn(s.player,k)) s.player[k] += v;
       else if (k === 'fragments') s.inventory.fragment = (s.inventory.fragment||0)+v;
       else if (k === 'herb') s.inventory.herb = (s.inventory.herb||0)+v;
-      else if (['affinity','trust'].includes(k) && npcId) s.bonds[npcId][k] += v;
+      else if (['affinity','trust'].includes(k) && npcId && !G.npcEnemy(s,npcId)) s.bonds[npcId][k] += v;
     }
     normalize(s);
   }
@@ -592,10 +593,11 @@
   // Derive a ticket-local draw from the world seed, without perturbing routes or payouts.
   G.orderNPC = (s,place) => {
     const resident=G.NPCS.find(n=>n.place===place.id);
-    if(resident)return resident.id;
+    if(resident)return G.npcEnemy(s,resident.id)?null:resident.id;
     if(!s.flags.firstOrder||G.systemAwakeningDue(s))return null;
     const draw={seed:(s.seed ^ Math.imul(place.x,73856093) ^ Math.imul(place.y,19349663))>>>0};
-    return G.rand(draw)<G.DELIVERY_NPC_CHANCE?G.NPCS[int(draw,0,G.NPCS.length-1)].id:null;
+    const pool=G.NPCS.filter(n=>!G.npcEnemy(s,n.id));
+    return G.rand(draw)<G.DELIVERY_NPC_CHANCE?pool[int(draw,0,pool.length-1)].id:null;
   };
   G.refreshOrders = s => {
     // expiresAt 为未接订单从地图消失的时间；接单后不再作为送达时限。
@@ -649,7 +651,7 @@
     const reward=ticket.reward,coins=G.deliveryCoins(s,ticket);
     s.player.money+=reward;s.player.coins+=coins;s.stats.earned+=reward;s.stats.delivered++;s.daily.delivered++;
     s.player.rep=clamp(s.player.rep+1,-50,100);
-    if(meetRecipient&&ticket.npc){meetNPC(s,ticket.npc,'delivery');const bond=s.bonds[ticket.npc];bond.affinity=clamp(bond.affinity+3,0,100);}
+    if(meetRecipient&&ticket.npc){meetNPC(s,ticket.npc,'delivery');const bond=s.bonds[ticket.npc];if(!G.npcEnemy(s,ticket.npc))bond.affinity=clamp(bond.affinity+3,0,100);}
     G.log(s, `送达「${ticket.title}」至${G.place(ticket.target).name}。现金 +¥${reward}${coins?`，外卖币 +${coins}`:''}。`, '配送');
     G.unlockDeliveryPlace(s,ticket.target);
   }
@@ -666,7 +668,7 @@
     {id:'ascend',ready:s.player.realm>=5&&s.stats.delivered>=40,requirement:'化神 · 40 单'},
     {id:'ordinary',ready:s.stats.delivered>=20&&s.player.money>=500,requirement:'20 单 · 现金 ¥500'},
     {id:'bond',ready:s.stats.delivered>=20&&Object.values(s.bonds).some(b=>b.path==='romance'&&b.stage>=4&&b.affinity>=60),requirement:'20 单 · 完成一条情感线 · 好感 60'},
-    {id:'friendship',ready:s.stats.delivered>=25&&Object.values(s.bonds).filter(b=>b.stage>=4).length>=3,requirement:'25 单 · 完成至少三位朋友的故事'}
+    {id:'friendship',ready:s.stats.delivered>=25&&Object.entries(s.bonds).filter(([id,b])=>b.stage>=4&&!G.npcEnemy(s,id)).length>=3,requirement:'25 单 · 完成至少三位朋友的故事'}
   ];
   const instantWhileBusy = new Set(['buy','sign','claim','stop']);
   G.canStop = s => !!s.activity && !['choice','rescue','auction'].includes(s.activity.kind);
@@ -750,7 +752,16 @@
       must(p.source==='classic'&&!p.delivery&&G.sectInvitationReady(s),'宗门引荐必须完成固定剧情。');
       s.sect.invited=true;
     }
-    if(p.npcId){if(p.npcAdvance)s.bonds[p.npcId].stage++;if(c.path)s.bonds[p.npcId].path=c.path;}
+    if(p.npcId){
+      const bond=s.bonds[p.npcId],oldPath=bond.path;
+      if(p.npcAdvance)bond.stage++;
+      if(c.path)bond.path=c.path;
+      if(p.npcId==='zhou'){
+        bond.path=G.zhouPath(bond.stage);
+        if(bond.path==='enemy')bond.affinity=bond.trust=0;
+        if(oldPath!==bond.path)G.log(s,`周野的关系变为「${G.npcRelationshipLabel(s,'zhou')}」。`,'羁绊');
+      }
+    }
     G.log(s,`${c.result}（${G.effectText(effective)}）`,p.npcId?'羁绊':p.source==='ai'?'AI 奇遇':'奇遇');
     const changes=resultChanges(before,resultValues(s),paid),beforeDelivery=resultValues(s);
     // The awakening story's elder is not the ticket's incidental recipient.
@@ -765,16 +776,21 @@
   }
   function finishVisit(s,id){
     const npc=G.NPCS.find(n=>n.id===id),bond=s.bonds[id];bond.lastTalkDay=G.day(s);
-    const stage=bond.stage,advanced=stage<4&&bond.affinity>=[0,10,24,40][stage];
-    if(advanced){const [title,text,...choices]=npc.arc[stage];s.pending={id:`npc-${s.turn}-${s.seed}`,kind:'social',title,text,choices:clone(choices),npcId:id,npcAdvance:true,source:'classic',aiStatus:'skip'};}
-    else s.pending={id:`npc-talk-${s.turn}-${s.seed}`,kind:'social',title:`与${npc.name}的片刻`,text:stage>=4?'你们说起最近的生活。有些关系走到后来，最珍贵的恰是这些不必特别发生的日常。':`${npc.name}问你今天过得怎么样。再多一点陪伴，也许你们就能谈起更深的往事。`,choices:[{label:'分享今天见到的小事',result:'你们聊得很开心。',effects:{affinity:5,trust:2}},{label:'认真听对方说话',result:'被倾听的感觉，让你们更亲近了一些。',effects:{affinity:4,trust:3}},{label:'带一份热饭一起吃',result:'两个人分一份热饭，也分担了一些疲惫。',effects:{money:-12,affinity:7,stamina:8}}],npcId:id,npcAdvance:false,source:'classic',aiStatus:s.mode==='ai'?'unrequested':'skip'};
+    const stage=bond.stage,advanced=stage<npc.arc.length&&!G.npcStoryBlock(s,id);
+    if(advanced){const [title,text,...choices]=npc.arc[stage];s.pending={id:`npc-${s.turn}-${s.seed}`,kind:'social',title,text,choices:clone(choices),npcId:id,npcAdvance:true,source:'classic',aiStatus:'skip',...(id==='zhou'?{templateId:`zhou-arc-${stage}`}:{})};}
+    else s.pending={id:`npc-talk-${s.turn}-${s.seed}`,kind:'social',title:`与${npc.name}的片刻`,text:stage>=npc.arc.length?'你们说起最近的生活。有些关系走到后来，最珍贵的恰是这些不必特别发生的日常。':`${npc.name}问你今天过得怎么样。再多一点陪伴，也许你们就能谈起更深的往事。`,choices:[{label:'分享今天见到的小事',result:'你们聊得很开心。',effects:{affinity:5,trust:2}},{label:'认真听对方说话',result:'被倾听的感觉，让你们更亲近了一些。',effects:{affinity:4,trust:3}},{label:'带一份热饭一起吃',result:'两个人分一份热饭，也分担了一些疲惫。',effects:{money:-12,affinity:7,stamina:8}}],npcId:id,npcAdvance:false,source:'classic',aiStatus:s.mode==='ai'?'unrequested':'skip'};
+    if(id==='zhou'&&!advanced){
+      s.pending.text=G.npcDisplayBio(s,npc)+' 这次只谈已经发生的事，不提前推进尚未到来的经历。';
+      // Hostile visits are blocked before departure; this only describes a non-hostile daily chat.
+    }
     G.log(s,`拜访${npc.name}，交谈 20 分钟。`,'拜访');
   }
   // The encounter is carried by a ticket: no reroll from opening a panel or resuming a route.
   // Place ownership and first meeting are committed only when this delivery settles.
   function deliveryNPCEvent(s,ticket){
     const met=s.bonds[ticket.npc]?.met===true;
-    const base=G.EVENTS.find(e=>e.deliveryNpc===ticket.npc&&e.deliveryMeeting===!met);
+    const base=ticket.npc==='zhou'&&met?G.EVENTS.find(e=>e.id===G.zhouDeliveryTemplate(s.bonds.zhou.stage)):
+      G.EVENTS.find(e=>e.deliveryNpc===ticket.npc&&e.deliveryMeeting===!met);
     must(base,'配送人物缺少相逢剧情。');
     s.pending={...clone(base),id:`delivery-face-${s.turn}-${s.seed}`,templateId:base.id,
       npcId:ticket.npc,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:clone(ticket)};
@@ -785,7 +801,7 @@
     if(G.systemAwakeningDue(s)&&!G.place(ticket.target).permanent){
       const base=G.EVENTS.find(e=>e.id==='system-awakening');
       s.pending={...clone(base),id:`event-awakening-${s.turn}-${s.seed}`,templateId:base.id,source:'classic',aiStatus:'skip',delivery:clone(ticket)};
-    }else if(s.flags.firstOrder&&ticket.npc&&G.NPCS.find(n=>n.id===ticket.npc)?.place!==ticket.target)deliveryNPCEvent(s,ticket);
+    }else if(s.flags.firstOrder&&ticket.npc&&((ticket.npc==='zhou'&&s.bonds.zhou.stage>=4)||G.NPCS.find(n=>n.id===ticket.npc)?.place!==ticket.target))deliveryNPCEvent(s,ticket);
     else if(!s.flags.firstOrder||G.rand(s)<Math.min(.8,.5+s.player.luck*.01))event(s,'delivery',{delivery:clone(ticket)});
     else settleDelivery(s,ticket);
   }
@@ -1048,7 +1064,7 @@
         }
         case 'explore':must(['park','temple'].includes(s.position),'请先前往月渡公园或听雨观探索。');must(s.player.stamina>=12,'探索需要 12 点体力。');begin(s,'explore');G.log(s,'开始探索周围的街巷与灵息。','探索');break;
         case 'visit':{
-          const npc=G.NPCS.find(n=>n.id===payload.id);must(npc,'人物不存在。');must(s.bonds[npc.id].met,'你还没有在旅途中结识这个人。');must(s.bonds[npc.id].lastTalkDay!==G.day(s),'今天已经深入交谈过了，明天再来吧。');begin(s,'visit',{id:npc.id},npc.place);G.log(s,`出发拜访${npc.name}。`,'拜访');break;
+          const npc=G.NPCS.find(n=>n.id===payload.id);must(npc,'人物不存在。');must(s.bonds[npc.id].met,'你还没有在旅途中结识这个人。');must(!G.npcVisitBlock(s,npc.id),G.npcVisitBlock(s,npc.id));must(s.bonds[npc.id].lastTalkDay!==G.day(s),'今天已经深入交谈过了，明天再来吧。');begin(s,'visit',{id:npc.id},npc.place);G.log(s,`出发拜访${npc.name}。`,'拜访');break;
         }
         case 'charge':must(s.vehicle.battery<G.limits(s).battery-.01,'电量已满。');effects(s,{money:-G.CHARGE.cost});begin(s,'charge');G.log(s,`开始原地充电，现金 -¥${G.CHARGE.cost}，需要 ${G.CHARGE.minutes} 分钟。`,'电动车');break;
         case 'repair':{
@@ -1159,7 +1175,7 @@
   };
   G.applyAIEvent = (original, eventId, raw) => {
     if(original.eventResult||original.placeUnlock||G.nextUnlockNotice(original)||!original.pending||original.pending.id!==eventId||original.pending.aiStatus!=='unrequested')return original;
-    if(original.pending.npcAdvance||['first-order','system-awakening'].includes(original.pending.templateId)||G.EVENTS.some(e=>e.id===original.pending.templateId&&(e.kind==='story'||e.deliveryNpc)))return original;
+    if(G.npcEnemy(original,original.pending.npcId)||original.pending.npcAdvance||['first-order','system-awakening'].includes(original.pending.templateId)||G.EVENTS.some(e=>e.id===original.pending.templateId&&(e.kind==='story'||e.deliveryNpc)))return original;
     const s=clone(original),clean=G.validateAIEvent(raw);
     if(!s.pending.npcId)for(const c of clean.choices){delete c.effects.affinity;delete c.effects.trust;}
     Object.assign(s.pending,clean,{source:'ai',aiStatus:'success'});s.updatedAt=Date.now();return s;

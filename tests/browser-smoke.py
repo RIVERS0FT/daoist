@@ -1618,7 +1618,7 @@ def male_npc_browser_checks(browser):
         legacy = page.evaluate('''()=>{const G=NightCourier,s=G.clone(window.__live);
           s.schemaVersion=19;for(const id of G.NEW_MALE_NPC_IDS)delete s.bonds[id];return s;}''')
         fixture(page, legacy, unlock_gameplay=False)
-        assert current(page)['schemaVersion'] == 20
+        assert current(page)['schemaVersion'] == 21
         assert len(current(page)['bonds']) == 21
         assert all(not b['met'] for b in current(page)['bonds'].values())
         assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
@@ -1713,12 +1713,116 @@ def male_npc_browser_checks(browser):
         record(f'{width}px 21人羁绊可滚动完整显示，共享地点林晚／韩远舟／岳长川均可拜访')
         ctx.close()
 
+def zhou_story_browser_checks(browser):
+    for width, height, mode in [(1200, 900, 'classic'), (320, 740, 'ai')]:
+        ctx, page, errors = setup(browser, width, height, ai=mode == 'ai')
+        new_game(page, '同路与歧路', mode)
+        def zfixture(stage, **extra):
+            data = page.evaluate('''stage=>{const G=NightCourier,s=G.newGame('同路与歧路',window.__live.mode,519);s.id=window.__live.id;
+              s.position='market';s.location=null;s.unlockedPlaces.push('market');s.player.money=20000;s.player.realm=4;
+              s.stats.delivered=44;s.flags.firstOrder=true;s.flags.systemAwakened=true;
+              for(const e of G.EVENTS)if(e.flag&&!e.higherChapter)s.flags[e.flag]=true;
+              Object.assign(s.bonds.zhou,{met:true,stage,path:G.zhouPath(stage),affinity:stage>=9?0:60,trust:stage>=9?0:30});
+              G.syncFeatureUnlocks(s,true);return s;}''', stage)
+            data.update(extra)
+            fixture(page, data, unlock_gameplay=False)
+        def card():
+            return page.locator('.npc-card').filter(has_text='周野')
+        def visit(stage):
+            zfixture(stage)
+            page.locator('#game-nav [data-panel="bonds"]').click()
+            page.locator('[data-act="visit"][data-id="zhou"]').click()
+            finish_ui_activity(page)
+            assert current(page)['pending']['templateId'] == f'zhou-arc-{stage}'
+            assert current(page)['pending']['aiStatus'] == 'skip'
+            assert page.locator('[data-act="choose"]').count() == 3
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        zfixture(0)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        text = card().inner_text()
+        assert '骑手 · 25岁' in text and '夜班骑手' not in text
+        assert '路人' in text and '故事 0/10' in text
+        assert '蚀灯会' not in text and '修仙者' not in text and '丹方传授' not in text
+        page.screenshot(path=str(OUT / f'zhou-rider-{width}.png'))
+        record(f'{width}px 周野是25岁骑手，早期只显示路人和普通职业，不提前暴露身份')
+        for stage, relation in [(1,'朋友'),(3,'兄弟')]:
+            visit(stage)
+            page.click('[data-act="choose"][data-index="0"]')
+            assert current(page)['bonds']['zhou']['stage'] == stage + 1
+            ack_result_ui(page)
+            page.locator('#game-nav [data-panel="bonds"]').click()
+            assert relation in card().inner_text()
+            record(f'{width}px 第{stage+1}段选择实际结算后进入{relation}关系')
+        visit(5)
+        at = current(page)['minutes']
+        page.click('[data-act="choose"][data-index="1"]')
+        assert current(page)['activity']['kind'] == 'choice'
+        assert current(page)['bonds']['zhou']['stage'] == 5
+        finish_ui_activity(page)
+        assert abs(current(page)['minutes'] - at - 10) < 1e-5
+        assert current(page)['bonds']['zhou']['stage'] == 6
+        ack_result_ui(page)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert '修仙者' in card().inner_text() and '蚀灯会' not in card().inner_text()
+        record(f'{width}px 第六段10分钟选择完成才记录修为揭露，尚未披露组织')
+        visit(6)
+        page.click('[data-act="choose"][data-index="0"]')
+        ack_result_ui(page)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert '蚀灯会' in card().inner_text() and '兄弟' in card().inner_text()
+        record(f'{width}px 第七段证据剧情后更新组织信息，尚未提前断绝兄弟关系')
+        visit(8)
+        assert current(page)['bonds']['zhou']['path'] == 'brother'
+        page.screenshot(path=str(OUT / f'zhou-betrayal-{width}.png'))
+        # On narrow screens the last response must remain reachable by vertical scrolling.
+        last_choice = page.locator('[data-act="choose"][data-index="2"]')
+        last_choice.scroll_into_view_if_needed()
+        assert last_choice.is_visible() and last_choice.is_enabled()
+        if width == 320:
+            page.screenshot(path=str(OUT / f'zhou-betrayal-options-{width}.png'))
+        last_choice.click()
+        assert current(page)['bonds']['zhou']['path'] == 'enemy'
+        assert current(page)['bonds']['zhou']['affinity'] == 0 and current(page)['bonds']['zhou']['trust'] == 0
+        ack_result_ui(page)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert '仇人' in card().inner_text() and '丹方传授' not in card().inner_text()
+        assert page.locator('[data-act="visit"][data-id="zhou"]').inner_text() == '改日再查'
+        record(f'{width}px 决裂由明确选择结算，关系变为仇人、好感信任归零')
+        visit(9)
+        page.click('[data-act="choose"][data-index="0"]')
+        ack_result_ui(page)
+        page.locator('#game-nav [data-panel="bonds"]').click()
+        assert '故事 10/10' in card().inner_text() and '仇人' in card().inner_text()
+        assert page.locator('[data-act="visit"][data-id="zhou"]').is_disabled()
+        assert page.locator('[data-act="visit"][data-id="zhou"]').inner_text() == '已反目'
+        assert '不再接受友好拜访' in card().inner_text()
+        page.screenshot(path=str(OUT / f'zhou-enemy-{width}.png'))
+        record(f'{width}px 尾声完成后保留仇人，不再开放友好拜访')
+        # A retained old ticket must still be deliverable, with hostile neutral dialogue.
+        zfixture(10, orders=[{'id':'zhou-old-ticket','target':'stop-0','title':'旧订单','desc':'身份和目的地保留','condition':'ordinary','expiresAt':600,'reward':28,'coins':2,'npc':'zhou'}])
+        page.locator('.order-point[data-place="stop-0"]').focus()
+        page.keyboard.press('Enter')
+        page.click('[data-act="deliver"]')
+        finish_ui_activity(page)
+        assert current(page)['pending']['templateId'] == 'delivery-zhou-enemy'
+        page.click('[data-act="choose"][data-index="0"]')
+        ack_result_ui(page)
+        assert current(page)['stats']['delivered'] == 45
+        assert current(page)['bonds']['zhou']['path'] == 'enemy' and current(page)['bonds']['zhou']['affinity'] == 0
+        assert page.evaluate('window.__storyRequests.length') == 0
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        assert not errors, errors
+        record(f'{width}px 敌对旧订单仍真实送达，专属对白不恢复好感或关系，固定故事不调用AI')
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    zhou_story_browser_checks(browser)
     male_npc_browser_checks(browser)
     npc_career_browser_checks(browser)
     npc_profile_browser_checks(browser)

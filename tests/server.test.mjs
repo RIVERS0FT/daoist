@@ -74,3 +74,14 @@ test('主播AI使用当前可信职业与已完成话题，不接受客户端冒
   assert.deepEqual(clean.completedTopics,['开播前的提纲','只有几个人的直播间']);
   assert.ok(!JSON.stringify(sent.messages).includes('OVERRIDE_OLD_JOB'));assert.ok(!JSON.stringify(sent.messages).includes('未完成的表白'));
 });
+
+for(const [stage,path,revealed,faction] of [[0,'none',false,false],[2,'friend',false,false],[4,'brother',false,false],[6,'brother',true,false],[7,'brother',true,true],[9,'enemy',true,true]])test(`周野AI阶段${stage}：服务端只附加该阶段已知身份和真实关系词`,async t=>{
+ let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(endpoint,options)=>{sent=JSON.parse(options.body);return upstream();}});
+ const r=await post(url,{context:{...context,kind:'social',npcId:'zhou',relationship:{met:true,stage,path,affinity:0,trust:0},secret:'OVERRIDE_HIDDEN_IDENTITY'}});
+ assert.equal(r.status,200);const prompt=sent.messages[0].content,clean=JSON.parse(sent.messages[1].content);
+ assert.equal(clean.relationship.path,path);assert.equal(clean.relationship.stage,stage);assert.equal(clean.secret,undefined);
+ assert.equal(prompt.includes('蚀灯会'),faction);
+ if(stage<6)assert.ok(!prompt.includes('也是修仙者'));else if(stage===6)assert.match(prompt,/也是修仙者/);
+ if(stage===9)assert.match(prompt,/仇人/);
+ assert.equal(clean.completedTopics.length,stage);
+});

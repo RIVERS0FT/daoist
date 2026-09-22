@@ -2,9 +2,9 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v20';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v19';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v18','night-courier:saves:v17','night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
+  G.STORAGE_KEY = 'night-courier:saves:v21';
+  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v20';
+  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v19','night-courier:saves:v18','night-courier:saves:v17','night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
   G.BACKUP_KEY = 'night-courier:saves:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -19,7 +19,7 @@
       expiresAt:num(raw.expiresAt,s.minutes+20,0,1e8,false),reward:num(raw.reward,20,0,1000),coins:num(raw.coins,2,0,20),
       npc:G.NPCS.some(n=>n.id===raw.npc)?raw.npc:null};
   }
-  function cleanPending(p,s){
+  function cleanPending(p,s,version=G.VERSION){
     if(!obj(p))throw new Error('待处理事件已损坏。');
     if(p.kind==='auction'||p.templateId==='auction-bid'){
       const lot=G.auctionLot(s,p.auction?.lotId);
@@ -28,7 +28,14 @@
       if(p.id!==clean.id)throw new Error('拍卖事件标识与轮次不一致。');
       return clean; // 丢弃任何外来 effects / AI 文本；从当前拍品重建三个固定操作。
     }
-    const deliveryFace=G.EVENTS.find(e=>e.id===p.templateId&&e.deliveryNpc);
+    if(typeof p.templateId==='string'&&p.templateId.startsWith('zhou-arc-')&&(p.npcId!=='zhou'||p.npcAdvance!==true))throw new Error('周野固定剧情身份或推进标记无效。');
+    let deliveryFace=G.EVENTS.find(e=>e.id===p.templateId&&e.deliveryNpc);
+    if(deliveryFace?.deliveryNpc==='zhou'&&!deliveryFace.deliveryMeeting){
+      const expected=G.zhouDeliveryTemplate(s.bonds.zhou.stage);
+      const carried=s.bonds.zhou.stage===4&&p.templateId==='delivery-npc-zhou-again'&&(version<21||p.legacyZhouDelivery===true);
+      if(version>=21&&p.templateId!==expected&&!carried)throw new Error('周野配送对白与关系阶段不一致。');
+      if(!carried)deliveryFace=G.EVENTS.find(e=>e.id===expected);
+    }
     if(deliveryFace){
       const ticket=cleanTicket(p.delivery,s),id=deliveryFace.deliveryNpc;
       if(!s.flags.firstOrder||s.stats.delivered<1||p.kind!=='delivery'||p.npcId!==id||p.npcAdvance||ticket.npc!==id||s.position!==ticket.target||
@@ -36,19 +43,22 @@
         throw new Error('配送相逢与人物、地点或票据不一致。');
       // Restore authored identity and effects, never saved AI text or social chapter advancement.
       return {...G.clone(deliveryFace),id:cleanId(p.id),templateId:deliveryFace.id,
-        npcId:id,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:ticket};
+        npcId:id,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:ticket,
+        ...(id==='zhou'&&s.bonds.zhou.stage===4&&deliveryFace.id==='delivery-npc-zhou-again'?{legacyZhouDelivery:true}:{})};
     }
     // New male stories and revised female stories always restore trusted authored text.
-    const fixedRomance=G.NPCS.some(n=>n.id===p.npcId&&(n.romantic||G.NEW_MALE_NPC_IDS.includes(n.id)));
+    const fixedRomance=G.NPCS.some(n=>n.id===p.npcId&&(n.id==='zhou'||n.romantic||G.NEW_MALE_NPC_IDS.includes(n.id)));
     if(fixedRomance&&!s.bonds[p.npcId].met)throw new Error('未结识人物不能具有交谈记录。');
     if(fixedRomance&&p.npcAdvance===true){
       const npc=G.NPCS.find(n=>n.id===p.npcId),bond=s.bonds[npc.id],arc=npc.arc[bond.stage];
       if(!arc||!bond.met||p.kind!=='social'||p.delivery||s.position!==npc.place)
         throw new Error('人物章节与羁绊或拜访地点不一致。');
+      if(npc.id==='zhou'&&version>=21&&p.templateId!==`zhou-arc-${bond.stage}`)throw new Error('周野剧情编号与进度不一致。');
       const [title,text,...choices]=arc;
-      return {id:cleanId(p.id),kind:'social',title,text,choices:G.clone(choices),
+      return {id:cleanId(p.id),...(npc.id==='zhou'?{templateId:`zhou-arc-${bond.stage}`} : {}),kind:'social',title,text,choices:G.clone(choices),
         npcId:npc.id,npcAdvance:true,source:'classic',aiStatus:'skip'};
     }
+    if(p.npcId==='zhou'&&G.npcEnemy(s,'zhou')&&!p.npcAdvance)throw new Error('仇人不能具有友好日常对话。');
     if(p.templateId==='system-awakening'){
       const ticket=cleanTicket(p.delivery,s),base=G.EVENTS.find(e=>e.id===p.templateId);
       if(!base||p.kind!=='story'||p.npcId||s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES-1||s.flags.systemAwakened||s.position!==ticket.target||G.place(ticket.target).permanent)throw new Error('外卖系统解锁剧情与配送进度不一致。');
@@ -196,7 +206,7 @@
     }
     if(kind==='choice'){
       if(p.event?.kind==='auction')throw new Error('拍卖必须使用独立竞价行动。');
-      params.event=cleanPending(p.event,s);
+      params.event=cleanPending(p.event,s,version);
       if(!Number.isInteger(p.index)||!params.event.choices[p.index])throw new Error('正在执行的事件选项无效。');
       params.index=p.index;duration=params.event.choices[p.index].duration||0;params.duration=duration;
       if(!duration)throw new Error('即时选项不应保存为持续行动。');
@@ -238,7 +248,7 @@
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
     const name=str(raw.name??raw.player.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
@@ -308,7 +318,16 @@
          (!b.met&&(b.affinity||b.trust||b.stage||b.path!=='none'||b.lastTalkDay)))
         throw new Error('新增人物羁绊记录损坏。');
     }
-    for(const npc of G.NPCS){const b=raw.bonds?.[npc.id];if(obj(b)){const affinity=num(b.affinity,0,0,100),trust=num(b.trust,0,0,100),stage=num(b.stage,0,0,4),path=['friend','romance'].includes(b.path)&& (b.path!=='romance'||npc.romantic)?b.path:'none';s.bonds[npc.id]={met:b.met===true||affinity>0||trust>0||stage>0||path!=='none',affinity,trust,stage,path,lastTalkDay:num(b.lastTalkDay,0,0,G.day(s))};}}
+    for(const npc of G.NPCS){const b=raw.bonds?.[npc.id];if(obj(b)){const affinity=num(b.affinity,0,0,100),trust=num(b.trust,0,0,100),stage=num(b.stage,0,0,npc.id==='zhou'&&version>=21?npc.arc.length:4),path=['friend','romance',...(npc.id==='zhou'&&version>=21?['brother','enemy']:[])].includes(b.path)&& (b.path!=='romance'||npc.romantic)?b.path:'none';s.bonds[npc.id]={met:b.met===true||affinity>0||trust>0||stage>0||path!=='none',affinity,trust,stage,path,lastTalkDay:num(b.lastTalkDay,0,0,G.day(s))};}}
+    // v21 is a new relationship schema for Zhou only. Old progress is a completed prefix.
+    const zb=raw.bonds?.zhou;
+    if(version>=21){
+      if(!obj(zb)||typeof zb.met!=='boolean'||!Number.isInteger(zb.stage)||zb.stage<0||zb.stage>10||
+         zb.path!==G.zhouPath(zb.stage)||!['affinity','trust'].every(k=>Number.isInteger(zb[k])&&zb[k]>=0&&zb[k]<=100)||
+         !Number.isInteger(zb.lastTalkDay)||zb.lastTalkDay<0||zb.lastTalkDay>G.day(s)||
+         (!zb.met&&(zb.stage||zb.affinity||zb.trust||zb.path!=='none'||zb.lastTalkDay))||
+         (zb.path==='enemy'&&(zb.affinity!==0||zb.trust!==0)))throw new Error('周野关系或剧情进度损坏。');
+    }else s.bonds.zhou.path=G.zhouPath(s.bonds.zhou.stage);
     const d=obj(raw.daily)?raw.daily:{},day=G.day(s);
     s.daily={day,delivered:d.day===day?num(d.delivered,0):0,claimed:d.day===day&&d.claimed===true,signedDay:num(d.signedDay,0,0,day),streak:num(d.streak,0,0,day)};
     s.claimed=Array.isArray(raw.claimed)?[...new Set(raw.claimed.filter(id=>G.QUESTS.some(q=>q.id===id)))]:[];
@@ -325,7 +344,7 @@
     s.lastRoute=null;
     if(obj(raw.lastRoute)&&G.place(raw.lastRoute.from)&&G.place(raw.lastRoute.to))s.lastRoute=G.route(raw.lastRoute.from,raw.lastRoute.to);
     s.auction=version>=11?G.cleanAuction(raw.auction,s):G.emptyAuction();
-    s.pending=raw.pending?cleanPending(raw.pending,s):null;
+    s.pending=raw.pending?cleanPending(raw.pending,s,version):null;
     s.activeOrder=version>=5&&raw.activeOrder?cleanTicket(raw.activeOrder,s):null;
     if(s.activeOrder){
       if(s.pending?.delivery)throw new Error('存档包含重复待结算订单。');
@@ -369,8 +388,15 @@
     if(G.systemAwakeningDue(s))s.orders=s.orders.filter(o=>!G.place(o.target).permanent);
     G.validateSectLinks(s);
     s.unlockNotices=version>=16?cleanUnlockNotices(raw.unlockNotices,s):[];
+    if(s.bonds.zhou.stage>=5){
+      const gate=G.ZHOU_STORY_GATES[s.bonds.zhou.stage-1];
+      if(s.player.realm<gate.realm||s.stats.delivered<gate.delivered||!G.featureUnlocked(s,'system'))throw new Error('周野已完成剧情缺少境界或配送经历。');
+    }
+    const ze=s.pending|| (s.activity?.kind==='choice'?s.activity.params.event:null);
+    if(ze?.npcId==='zhou'&&ze.npcAdvance&&G.npcStoryBlock(s,'zhou'))throw new Error('周野待选剧情缺少前置经历。');
+    if(s.activity?.kind==='visit'&&s.activity.params.id==='zhou'&&G.npcVisitBlock(s,'zhou'))throw new Error('仇人不能恢复友好拜访。');
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回；v19补六位女性、v20补九位男性的隐藏初始记录；原人物关系和配送票据保持不变。`,'存档');
+    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回；v19补六位女性、v20补九位男性的隐藏初始记录；原人物关系和配送票据保持不变；v21将周野旧前四段衔接为路人、朋友、兄弟，后续真相须实际经历，不自动成仇。`,'存档');
     return s;
   };
   G.parseImport = text => {
