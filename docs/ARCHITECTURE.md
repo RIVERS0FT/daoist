@@ -2,7 +2,7 @@
 
 ## 2026-09-22：RIVERSOFT 自动发布边界
 
-`.github/workflows/deploy-riversoft.yml` 是静态游戏的独立发布入口：`main` 推送或手动运行会使用 `production` 环境中的 `RIVERSOFT_TOKEN`，在 Node.js 22 上依次执行源码检查、1011 项规则/HTTP 测试、Chromium 交互回归、单文件构建和 RIVERSOFT CLI 文件检查，再以 `daoist` slug 发布公开版本。令牌只通过 GitHub Environment Secret 注入；`tools/riversoft.mjs` 是审核后的无依赖 CLI 副本，仓库和日志不得出现令牌。CLI 不执行远端构建，也不发布源目录，只上传带根 `index.html` 的 `dist/`。
+`.github/workflows/deploy-riversoft.yml` 是静态游戏的独立发布入口：`main` 推送或手动运行会先在 Node.js 22 上执行源码检查、1011 项规则/HTTP 测试、Chromium 交互回归、单文件构建和 RIVERSOFT CLI 文件检查，再把已验证的 `dist/` 作为一天期工作流产物交给独立发布任务，以 `daoist` slug 发布公开版本。`production` 环境中的 `RIVERSOFT_TOKEN` 只注入发布任务；发布网络失败时可只重跑失败任务，不重复运行浏览器回归。`tools/riversoft.mjs` 是审核后的无依赖 CLI 副本，仓库、产物和日志不得出现令牌。CLI 不执行远端构建，也不发布源目录，只上传带根 `index.html` 的 `dist/`。
 
 发布完成后工作流优先接受 API 返回的 `https://<account-subdomain>.riversoft.top/daoist/` 地址，并下载同一地址的 `index.html` 与本次 `dist/index.html` 做 SHA-256 比对。若该地址的 DNS/TLS 尚未完成，工作流不绕过证书，而是发出警告并改用 HTTPS 主站兼容地址 `/p/daoist` 及带 deployment ID 的内容接口做同样的哈希验收；这表示内容已发布，但不表示用户子域名已经具备可用证书。GitHub Pages、仓库 CI 和 RIVERSOFT 发布是互相独立的状态，不能用其中一个替代另一个。
 

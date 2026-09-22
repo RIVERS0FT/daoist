@@ -13,11 +13,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: production
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -52,6 +50,40 @@ jobs:
         run: python tests/browser-smoke.py
 
       - name: Check the deployment bundle
+        run: node tools/riversoft.mjs check ./dist
+
+      - name: Save the verified deployment bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: daoist-riversoft-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout deployment tooling
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22.16.0"
+          package-manager-cache: false
+
+      - name: Download the verified deployment bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: daoist-riversoft-dist
+          path: dist
+
+      - name: Recheck the downloaded bundle
         run: node tools/riversoft.mjs check ./dist
 
       - name: Publish to RIVERSOFT
