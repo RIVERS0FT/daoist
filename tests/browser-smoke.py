@@ -197,7 +197,13 @@ def location_browser_checks(browser):
         ctx, page, errors = setup(browser, width, height)
         new_game(page, '送餐识路')
         assert current(page)['unlockedPlaces'] == ['home', 'garage']
-        assert page.locator('.service-point').evaluate_all('(els)=>els.map(e=>e.dataset.place)') == ['home', 'garage']
+        # An offer may temporarily target a starting place; the map then renders
+        # that place as an order-point instead of duplicating the service marker.
+        # Assert the public map contract (one visible point per starting place),
+        # not the incidental CSS class chosen for that frame.
+        starting_points = page.locator('.map-point[data-place="home"], .map-point[data-place="garage"]')
+        assert sorted(starting_points.evaluate_all('(els)=>els.map(e=>e.dataset.place)')) == ['garage', 'home']
+        assert starting_points.evaluate_all('(els)=>els.every(e=>e.dataset.discovered === "true")')
         target = page.evaluate('''()=>{const G=NightCourier,s=window.__live;return s.orders.find(o=>G.place(o.target).permanent&&!G.placeUnlocked(s,o.target)).target;}''')
         page.locator('#game-nav [data-panel="rest"]').click()
         assert page.locator('[data-act="moveHome"]').count() == 0
