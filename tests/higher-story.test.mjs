@@ -37,7 +37,7 @@ const invalid=(s,action,p)=>{const before=G.clone(s),r=G.perform(s,action,p);ass
 const ai={title:'不应替换的内容',text:'这是模拟AI文本。',choices:[0,1,2].map(i=>({label:`选择${i}`,result:'虚构的变化',effects:{qi:20}}))};
 
 test('十二章保留原ID顺序，新增五境十场与三十个不同回应，全部有无成本选项',()=>{
-  assert.equal(G.APP_VERSION,'1.15.0');assert.equal(G.VERSION,19);assert.equal(G.STORY_STAGES.length,12);
+  assert.equal(G.APP_VERSION,'1.16.0');assert.equal(G.VERSION,20);assert.equal(G.STORY_STAGES.length,12);
   assert.deepEqual(G.STORY_STAGES.slice(7).map(c=>[c.id,c.realm,c.deliveries]),[
     ['divine',5,54],['void',6,68],['unity',7,84],['mahayana',8,102],['tribulation',9,122]]);
   assert.equal(events.length,10);assert.equal(new Set(events.map(e=>e.id)).size,10);

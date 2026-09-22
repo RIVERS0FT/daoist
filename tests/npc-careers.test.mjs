@@ -22,21 +22,21 @@ function conversation(id,stage=0,mode='ai'){
   return finish(act(s,'visit',{id}));
 }
 
-test('九位可攻略女性职业互不相同，明确包含学生、模特、秘书与主播，人物总数不增加',()=>{
+test('九位可攻略女性职业互不相同，明确包含学生、模特、秘书与主播，扩员后旧女性不变',()=>{
   const women=G.NPCS.filter(n=>n.romantic);
-  assert.equal(G.NPCS.length,12);assert.equal(women.length,9);
+  assert.equal(G.NPCS.length,21);assert.equal(women.length,9);
   assert.deepEqual(Object.fromEntries(women.map(n=>[n.id,n.role])),roles);
-  assert.equal(new Set(G.NPCS.map(n=>n.role)).size,12);
+  assert.equal(new Set(G.NPCS.map(n=>n.role)).size,21);
   assert.deepEqual(women.map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
 });
 
 test('职业改写保留全部48段人物故事的奖励、成本、耗时、关系路径和信任门槛',()=>{
-  const rules=G.NPCS.map(n=>({id:n.id,age:n.age,place:n.place,romantic:n.romantic,arc:n.arc.map(a=>a.slice(2).map(mechanics))}));
+  const rules=G.NPCS.slice(0,12).map(n=>({id:n.id,age:n.age,place:n.place,romantic:n.romantic,arc:n.arc.map(a=>a.slice(2).map(mechanics))}));
   assert.equal(hash(rules),'5908a0de8b19e8c7a0bd62f32dc5ad69194463a34101f3ce6b14e3261c865cb3');
 });
 
-test('所有事件ID、类型、人物关联及数值保持原样，职业不会改变订单或世界随机规则',()=>{
-  const rules=G.EVENTS.map(e=>({id:e.id,kind:e.kind,npc:e.deliveryNpc||e.encounterNpc||null,choices:e.choices.map(mechanics)}));
+test('旧事件ID、类型、人物关联及数值保持原样，职业不会改变订单或世界随机规则',()=>{
+  const rules=G.EVENTS.filter(e=>!G.NEW_MALE_NPC_IDS.includes(e.deliveryNpc)).map(e=>({id:e.id,kind:e.kind,npc:e.deliveryNpc||e.encounterNpc||null,choices:e.choices.map(mechanics)}));
   assert.equal(hash(rules),'ed79e62514a2df13d06c9a1cb9aabd9496802e522d6aa83162506747eb9b9477');
   assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,12);
 });

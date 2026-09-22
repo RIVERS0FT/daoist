@@ -32,10 +32,10 @@ function arrive(id,mode='classic',met=false){
 const choose=(s,index)=>act(s,'choose',{eventId:s.pending.id,index});
 
 // The first six records are published identities, not replacements for the new women.
-test('保留六位原人物，新增六位成年可攻略女性，共12人且9人有感情线',()=>{
+test('保留六位原人物，新增六位成年可攻略女性，原人物保留，扩展后共21人且9人有感情线',()=>{
   assert.deepEqual(G.NPCS.slice(0,6).map(n=>n.id),['lin','chen','shen','lu','zhou','su']);
-  assert.equal(G.NPCS.length,12);assert.equal(G.NPCS.filter(n=>n.romantic).length,9);
-  assert.equal(new Set(G.NPCS.map(n=>n.id)).size,12);
+  assert.equal(G.NPCS.length,21);assert.equal(G.NPCS.filter(n=>n.romantic).length,9);
+  assert.equal(new Set(G.NPCS.map(n=>n.id)).size,21);
   for(const id of G.NEW_NPC_IDS){
     const n=G.NPCS.find(n=>n.id===id);assert.equal(n.gender,'female');assert.ok(Number.isInteger(n.age)&&n.age>=18&&n.age<=27);assert.equal(n.romantic,true);
     assert.equal(n.arc.length,4);assert.ok(G.place(n.place));
@@ -46,8 +46,8 @@ test('保留六位原人物，新增六位成年可攻略女性，共12人且9�
 });
 
 test('每人都有独立配送初遇/重逢，非固定地址叙述且不携带提前关系路线',()=>{
-  const faces=G.EVENTS.filter(e=>e.deliveryNpc);assert.equal(faces.length,24);
-  assert.equal(new Set(faces.map(e=>e.id)).size,24);
+  const faces=G.EVENTS.filter(e=>e.deliveryNpc);assert.equal(faces.length,42);
+  assert.equal(new Set(faces.map(e=>e.id)).size,42);
   for(const n of G.NPCS){
     const events=faces.filter(e=>e.deliveryNpc===n.id);assert.equal(events.length,2);
     assert.deepEqual(events.map(e=>e.deliveryMeeting),[true,false]);
@@ -123,7 +123,7 @@ test('v18及更早的六人存档补六个隐藏羁绊，不改原人物和在�
   let state=G.advance(act(source,'deliver',{id:ticket.id}),.2);
   for(const version of [16,17,18]){
     const raw=G.clone(state);raw.schemaVersion=version;for(const id of G.NEW_NPC_IDS)delete raw.bonds[id];
-    const out=read(raw);assert.equal(out.schemaVersion,19);assert.deepEqual(out.player,state.player);assert.deepEqual(out.activeOrder,state.activeOrder);assert.deepEqual(out.location,state.location);
+    const out=read(raw);assert.equal(out.schemaVersion,20);assert.deepEqual(out.player,state.player);assert.deepEqual(out.activeOrder,state.activeOrder);assert.deepEqual(out.location,state.location);
     for(const n of G.NPCS.slice(0,6))assert.deepEqual(out.bonds[n.id],state.bonds[n.id]);
     for(const id of G.NEW_NPC_IDS)assert.deepEqual(out.bonds[id],{met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0});
     assert.deepEqual(read(out).bonds,out.bonds);
@@ -164,6 +164,7 @@ for(const id of G.NEW_NPC_IDS)test(`${id}：从异地结识到四章和感情选
   // Resource-rich social fixture, no direct writes to affinity/trust/stage/path/time.
   s.player.money=5000;s.player.health=100;s.player.stamina=100;
   for(let i=0;s.bonds[id].stage<4&&i<30;i++){
+    if(s.vehicle.battery<45)s=acknowledge(finish(act(s,'charge')));
     if(s.bonds[id].lastTalkDay===G.day(s))s=acknowledge(finish(act(s,'sleep')));
     if(s.bonds[id].lastTalkDay===G.day(s))continue;
     if(s.player.stamina<50)s=acknowledge(finish(act(s,'rest')));
@@ -202,8 +203,8 @@ test('全部九位可攻略女性年龄限定18至27岁，补齐原三位女性�
     assert.equal(n.age,age);assert.ok(Number.isInteger(n.age)&&n.age>=18&&n.age<=27);
     assert.equal(n.gender,'female');assert.equal(n.romantic,true);
   }
-  assert.equal(G.APP_VERSION,'1.15.0');assert.equal(G.VERSION,19);
-  assert.equal(G.STORAGE_KEY,'night-courier:saves:v19');
+  assert.equal(G.APP_VERSION,'1.16.0');assert.equal(G.VERSION,20);
+  assert.equal(G.STORAGE_KEY,'night-courier:saves:v20');
 });
 
 test('罗映秋现为活动策划师，简介、个人故事和配送初遇职业一致',()=>{
@@ -220,7 +221,7 @@ test('v19旧待选恢复策划职业文案，配送票据和个人选项效果�
   const {s}=arrive('luo');const ticket=G.clone(s.pending.delivery),effects=s.pending.choices.map(c=>G.clone(c.effects));
   s.pending.text='罗映秋刚结束社区夜路走访，在约定位置等饭。她介绍自己已经退休，今天只是把旧经验讲给接班的人。';
   const before=G.clone(s),loaded=read(s);
-  assert.equal(loaded.schemaVersion,19);assert.match(loaded.pending.text,/活动策划师/);
+  assert.equal(loaded.schemaVersion,20);assert.match(loaded.pending.text,/活动策划师/);
   assert.equal(loaded.pending.id,s.pending.id);assert.deepEqual(loaded.pending.delivery,ticket);
   assert.deepEqual(loaded.pending.choices.map(c=>c.effects),effects);assert.deepEqual(loaded.player,before.player);
   assert.deepEqual(loaded.bonds,before.bonds);assert.equal(loaded.minutes,before.minutes);assert.equal(loaded.seed,before.seed);

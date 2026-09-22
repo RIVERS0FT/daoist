@@ -6,8 +6,8 @@ import '../public/js/data.js';
 import '../public/js/npc-profiles.js';
 const G=globalThis.NightCourier,root=dirname(dirname(fileURLToPath(import.meta.url)));
 const catalog={version:G.APP_VERSION,source:'public/js/data.js + public/js/npc-profiles.js',
-  scope:'12位具名羁绊NPC。匿名收餐人与拍卖席位不新增独立人物。',
-  note:'外貌为本版新增的文字设计，不是对已有立绘的识别结果。半身像尚未生成；全部12位具名NPC均有明确实际年龄，来自可信角色配置；外观描述不覆盖实际年龄。',
+  scope:`${G.NPCS.length}位具名羁绊NPC，其中男性${G.NPCS.filter(n=>G.getNPCProfile(n.id).gender==='male').length}位、女性${G.NPCS.filter(n=>G.getNPCProfile(n.id).gender==='female').length}位。匿名收餐人与拍卖席位不新增独立人物。`,
+  note:'外貌为本版新增的文字设计，不是对已有立绘的识别结果。半身像尚未生成；全部具名NPC均有明确实际年龄，来自可信角色配置；外观描述不覆盖实际年龄。',
   style:G.NPC_PORTRAIT_STYLE,characters:G.npcPromptCatalog()};
 let md=`# 外卖修仙录 · NPC设定与提示词手册\n\n版本 ${catalog.version}。${catalog.scope}\n\n${catalog.note}\n\n来源：\`${catalog.source}\`。运行 \`npm run npc:export\` 重新生成本手册及 \`docs/npc-prompts.json\`；\`npm run check\` 会检查两者是否与源码一致，请勿只修改导出文件。\n\n## 使用方式\n\n生成半身像时，使用对应角色的“正向提示词”，支持负向提示词的工具另填“负向提示词”；统一3:4腰部以上构图，人物脸型、发型和标志性配色保持一致。需要透明底时仅替换背景句，不改人物识别特征。本手册不包含图像或模型密钥。\n\nAI对话使用“角色提示词”作为已有编剧规则的补充，不替换JSON格式或效果白名单。游戏客户端只发送NPC ID及经白名单挑选的当前关系；服务端按ID重建静态人设。只将已完成的个人话题加入上下文，不传后续四段剧情全文或未选的结局；关系数值是单机上下文，不是服务端防作弊证明。\n\n不能仅凭好感高就默认恋爱。固定剧情与攻略选择仍由游戏引擎处理。Pages为静态部署，真实AI仍需运行Node服务并自行配置已有AI接口；不会调用图像服务或新增付费请求。\n\n## 总览\n\n| 角色 | 年龄 | 职业 | 性格关键词 |\n| --- | --- | --- | --- |\n`;
 for(const {profile:p} of catalog.characters)md+=`| ${p.name} | ${p.age}岁 | ${p.role} | ${p.personality.traits.join('、')} |\n`;
@@ -22,4 +22,4 @@ for(const [path,text]of Object.entries(outputs)){
     if(existing!==text)throw new Error(`${path} is stale; run npm run npc:export`);
   }else await writeFile(join(root,path),text);
 }
-console.log(process.argv.includes('--check')?'NPC prompt exports match source.':'Exported 12 NPC profiles, portrait and dialogue prompts.');
+console.log(process.argv.includes('--check')?'NPC prompt exports match source.':`Exported ${G.NPCS.length} NPC profiles, portrait and dialogue prompts.`);

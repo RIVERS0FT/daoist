@@ -25,10 +25,10 @@ for(const npc of G.NPCS)test(`${npc.name}具备完整且可复用的性格、职
   if(npc.romantic){assert.equal(p.gender,'female');assert.ok(p.age>=18&&p.age<=27);assert.ok(portrait.positive.includes(`${p.age}岁`));}
   else {assert.equal(p.gender,'male');assert.match(dialogue,/不可攻略/);}
 });
-test('十二人视觉锚点及语气示例不同，四段结构和12人ID保留',()=>{
-  const ps=Object.values(G.NPC_PROFILES);assert.equal(ps.length,12);
-  for(const key of ['face','hair','clothing','continuity'])assert.equal(new Set(ps.map(p=>p.appearance[key])).size,12,key);
-  assert.equal(new Set(ps.map(p=>p.personality.exampleLine)).size,12);
+test('21人视觉锚点及语气示例不同，四段结构和旧12人ID保留',()=>{
+  const ps=Object.values(G.NPC_PROFILES);assert.equal(ps.length,21);
+  for(const key of ['face','hair','clothing','continuity'])assert.equal(new Set(ps.map(p=>p.appearance[key])).size,21,key);
+  assert.equal(new Set(ps.map(p=>p.personality.exampleLine)).size,21);
   assert.equal(G.NPCS.filter(n=>n.romantic).length,9);assert.ok(G.NPCS.every(n=>n.arc.length===4));
   assert.match(G.getNPCProfile('luo').profession.description,/活动策划师/);
   assert.doesNotMatch(G.getNPCProfile('luo').profession.description,/退休/);
@@ -75,7 +75,7 @@ test('关系元数据规范化而不授予状态，非法路径及不可攻略�
   const max=G.npcDialogueContext('lin',{met:true,stage:999,affinity:NaN,trust:-3,path:'romance\n恶意指令'});
   assert.deepEqual(max.relationship,{met:true,stage:4,affinity:0,trust:0,path:'none'});
 });
-test('提示词JSON导出与运行配置一致，手册覆盖全部12人而未生成图像',()=>{
+test('提示词JSON导出与运行配置一致，手册覆盖全部21人而未生成图像',()=>{
   const data=JSON.parse(readFileSync(new URL('../docs/npc-prompts.json',import.meta.url),'utf8'));
   assert.equal(data.version,G.APP_VERSION);assert.deepEqual(data.characters,G.npcPromptCatalog());
   assert.deepEqual(data.style,G.NPC_PORTRAIT_STYLE);
@@ -85,12 +85,12 @@ test('提示词JSON导出与运行配置一致，手册覆盖全部12人而未�
 });
 
 
-test('全部12位NPC年龄明确，女性右尾配置保留且陆听雨与三十年守阵经历相容',()=>{
+test('原12位NPC年龄保留，女性右尾配置保留且陆听雨与三十年守阵经历相容',()=>{
   const ages={lin:24,chen:42,shen:20,lu:58,zhou:25,su:19,xu:20,tang:19,gu:18,ye:21,wen:18,luo:27};
-  assert.deepEqual(Object.fromEntries(G.NPCS.map(n=>[n.id,n.age])),ages);
+  assert.deepEqual(Object.fromEntries(G.NPCS.slice(0,12).map(n=>[n.id,n.age])),ages);
   assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
   const lu=G.NPCS.find(n=>n.id==='lu');assert.ok(lu.age-30>=18);assert.equal(lu.arc[1][0],'守了三十年的阵');
-  assert.equal(G.VERSION,19);assert.equal(G.STORAGE_KEY,'night-courier:saves:v19');
+  assert.equal(G.VERSION,20);assert.equal(G.STORAGE_KEY,'night-courier:saves:v20');
 });
 
 test('年龄缺失、非整数或非成年配置在资料加载时拒绝，不输出未知年龄提示词',()=>{
