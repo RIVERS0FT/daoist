@@ -1,10 +1,16 @@
 # 架构与扩展说明
 
+## 2026-09-23：移除 GitHub Pages 部署
+
+按最新要求，仓库删除 `.github/workflows/pages.yml`，不再创建、配置、上传或部署 GitHub Pages，也不再把 Pages 状态作为交付条件。静态线上发布只保留 `.github/workflows/deploy-riversoft.yml`；普通 PR 仍由 `.github/workflows/ci.yml` 做验证。合并到 `main` 后需要核对 RIVERSOFT 的 verify / publish 两个任务，以及公网 `index.html` 与本次构建 SHA-256 一致。
+
+这项修改只改变仓库发布基础设施，不修改游戏运行时代码、应用版本、存档 schema、存储键或任何玩法。此前版本文档中关于 Pages 的描述保留为当时历史；本节为当前发布规则，并取代旧的“继续保留 Pages 工作流”约定。
+
 ## 2026-09-22：RIVERSOFT 自动发布边界
 
 `.github/workflows/deploy-riversoft.yml` 是静态游戏的独立发布入口：`main` 推送或手动运行会先在 Node.js 22 上执行源码检查、1011 项规则/HTTP 测试、Chromium 交互回归、单文件构建和 RIVERSOFT CLI 文件检查，再把已验证的 `dist/` 作为一天期工作流产物交给独立发布任务，以 `daoist` slug 发布公开版本。`production` 环境中的 `RIVERSOFT_TOKEN` 只注入发布任务；发布网络失败时可只重跑失败任务，不重复运行浏览器回归。`tools/riversoft.mjs` 是审核后的无依赖 CLI 副本，仓库、产物和日志不得出现令牌。CLI 不执行远端构建，也不发布源目录，只上传带根 `index.html` 的 `dist/`。
 
-发布完成后工作流优先接受 API 返回的 `https://<account-subdomain>.riversoft.top/daoist/` 地址，并下载同一地址的 `index.html` 与本次 `dist/index.html` 做 SHA-256 比对。若该地址的 DNS/TLS 尚未完成，工作流不绕过证书，而是发出警告并改用 HTTPS 主站兼容地址 `/p/daoist` 及带 deployment ID 的内容接口做同样的哈希验收；这表示内容已发布，但不表示用户子域名已经具备可用证书。GitHub Pages、仓库 CI 和 RIVERSOFT 发布是互相独立的状态，不能用其中一个替代另一个。
+发布完成后工作流优先接受 API 返回的 `https://<account-subdomain>.riversoft.top/daoist/` 地址，并下载同一地址的 `index.html` 与本次 `dist/index.html` 做 SHA-256 比对。若该地址的 DNS/TLS 尚未完成，工作流不绕过证书，而是发出警告并改用 HTTPS 主站兼容地址 `/p/daoist` 及带 deployment ID 的内容接口做同样的哈希验收；这表示内容已发布，但不表示用户子域名已经具备可用证书。仓库 CI 与 RIVERSOFT 发布是互相独立的状态：CI 负责合并前验证，RIVERSOFT 负责 `main` 的静态线上发布。GitHub Pages 工作流已于 2026-09-23 删除。
 
 RIVERSOFT 的网页运行在受限静态沙箱中，禁止持久化存储、外部网络和服务端代码。因此该地址用于经典单文件游戏的托管体验；AI 模式仍需要本机 `npm start` 代理，线上沙箱也不能被描述为跨刷新云存档或多人后端。
 

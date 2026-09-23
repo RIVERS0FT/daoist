@@ -2,9 +2,13 @@
 
 更新时间：2026-09-23。请与源代码和导出的存档一起备份。
 
+## GitHub Pages 已移除（2026-09-23）
+
+按最新要求删除 `.github/workflows/pages.yml`。此后仓库只保留 PR/代码 CI 与 RIVERSOFT 静态发布；合并到 `main` 后验证 RIVERSOFT 的构建、Chromium 回归、发布与公网 SHA-256 校验，不再创建或检查 GitHub Pages 部署。此前文档中的 Pages 说明仅是历史记录，不代表当前发布方式。此次为基础设施调整，不改变应用1.18.0或存档v21。
+
 ## RIVERSOFT 自动发布（2026-09-22）
 
-`main` 的 `.github/workflows/deploy-riversoft.yml` 先运行 Node 22 的 `check`、完整 Node 测试、Chromium 回归、`dist/` 构建与 `tools/riversoft.mjs` 校验，再把已验证的 `dist/` 保存为一天期产物；独立发布任务才读取 `production` 环境 Secret `RIVERSOFT_TOKEN` 并发布 slug `daoist`，因此网络失败可只重跑发布任务。工作流优先校验 API 返回的真实子域名地址，并将公网 `index.html` 与构建产物做 SHA-256 比对；子域名证书未就绪时不绕过 TLS，而是警告并验收 HTTPS `/p/daoist` 兼容路由和带 deployment ID 的内容接口。不要把 Token 写入仓库、命令行参数、产物或日志；Pages、CI 与 RIVERSOFT 的成功状态分开记录。
+`main` 的 `.github/workflows/deploy-riversoft.yml` 先运行 Node 22 的 `check`、完整 Node 测试、Chromium 回归、`dist/` 构建与 `tools/riversoft.mjs` 校验，再把已验证的 `dist/` 保存为一天期产物；独立发布任务才读取 `production` 环境 Secret `RIVERSOFT_TOKEN` 并发布 slug `daoist`，因此网络失败可只重跑发布任务。工作流优先校验 API 返回的真实子域名地址，并将公网 `index.html` 与构建产物做 SHA-256 比对；子域名证书未就绪时不绕过 TLS，而是警告并验收 HTTPS `/p/daoist` 兼容路由和带 deployment ID 的内容接口。不要把 Token 写入仓库、命令行参数、产物或日志；CI 与 RIVERSOFT 的成功状态分开记录。GitHub Pages 已移除。
 
 RIVERSOFT 仅提供受限静态沙箱：经典单文件页面可托管体验，但 localStorage、外部 API 和 Node AI 代理不可用，不能把该地址当作云存档或多人服务。`tools/riversoft.mjs` 必须保持与 RIVERSOFT 发布端审核版本同步，源代码改动后先更新 CLI 再提交。
 

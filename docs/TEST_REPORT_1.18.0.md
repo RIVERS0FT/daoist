@@ -71,6 +71,10 @@ PR 验证工作流 **Validate pull request #92**（run `35814083437`）通过。
 
 因此 Pages 失败不是本版代码或构建失败，而是仓库尚未启用 GitHub Pages。该 Action 的 `enablement` 选项需要一个不同于 `GITHUB_TOKEN` 的令牌，并要求仓库管理／Pages 写权限；当前仓库工作流没有这样的令牌配置。本版不向仓库写入新的高权限令牌，也不把 RIVERSOFT 的成功状态冒充为 Pages 成功。
 
+## 发布流程后续调整（2026-09-23）
+
+在上述 1.18.0 功能发布完成后，用户明确要求停止 GitHub Pages 部署。仓库因此删除 `.github/workflows/pages.yml`，并同步更新协作规则、架构、项目记忆和 README。此前记录的 Pages #41 失败保留为历史事实；删除工作流后，后续 `main` 推送不再触发 Pages，静态线上发布只由 RIVERSOFT 负责。
+
 ## 兼容结论
 
 应用版本为 **1.18.0**，存档 schema 继续为 **v21**，存储键仍为 `night-courier:saves:v21`。

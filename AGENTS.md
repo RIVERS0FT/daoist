@@ -19,4 +19,4 @@
 
 执行 `npm run check && npm test && npm run build`，界面改动还需 `python tests/browser-smoke.py`（开发依赖：Playwright、Chromium）。新规则同时新增边界测试，更新架构、项目记忆与测试记录。只修改 `public` 源码，不只改 `dist`。
 
-按用户要求在功能分支提交，检查 CI 后 squash merge，并验证 Pages 工作流是否成功。区分本机测试、模拟 AI、浏览器视口与真实线上部署；未完成的验证如实说明。不要提交 `.env`、API 密钥、用户存档或临时产物。
+按用户要求在功能分支提交，检查 CI 后 squash merge，并验证 RIVERSOFT 工作流及公网内容校验是否成功。仓库不再使用 GitHub Pages 部署。区分本机测试、模拟 AI、浏览器视口与真实线上部署；未完成的验证如实说明。不要提交 `.env`、API 密钥、用户存档或临时产物。

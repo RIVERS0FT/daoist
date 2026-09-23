@@ -8,7 +8,7 @@
 
 ## RIVERSOFT 自动发布
 
-仓库已配置 `.github/workflows/deploy-riversoft.yml`：向 `main` 推送或在 Actions 手动运行，会使用 `production` 环境的 `RIVERSOFT_TOKEN`，依次检查源码、运行 Node 与 Chromium 回归、生成 `dist/index.html`，再将静态游戏发布到账号子域名下的 `/daoist/`。发布后工作流会优先用子域名公网响应和 SHA-256 校验确认实际内容；如果账号子域名的 DNS/TLS 还未完成，则改验收 HTTPS 兼容入口 [`https://riversoft.top/p/daoist`](https://riversoft.top/p/daoist)，并在 Action 中保留警告。GitHub Pages、CI 和 RIVERSOFT 发布仍分别记录。
+仓库已配置 `.github/workflows/deploy-riversoft.yml`：向 `main` 推送或在 Actions 手动运行，会使用 `production` 环境的 `RIVERSOFT_TOKEN`，依次检查源码、运行 Node 与 Chromium 回归、生成 `dist/index.html`，再将静态游戏发布到账号子域名下的 `/daoist/`。发布后工作流会优先用子域名公网响应和 SHA-256 校验确认实际内容；如果账号子域名的 DNS/TLS 还未完成，则改验收 HTTPS 兼容入口 [`https://riversoft.top/p/daoist`](https://riversoft.top/p/daoist)，并在 Action 中保留警告。仓库已移除 GitHub Pages 工作流；PR/代码 CI 与 RIVERSOFT 发布分别记录。
 
 RIVERSOFT 是受限静态沙箱，不提供 localStorage、外部网络或 Node 服务端。该地址适合经典单文件游戏体验；AI 模式和跨刷新云存档仍需本机 `npm start` 或其他完整运行环境。
 
