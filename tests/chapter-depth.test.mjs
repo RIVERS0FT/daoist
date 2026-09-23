@@ -91,3 +91,12 @@ test('未知章节侧写返回空结果；显式查询旧章节不会改变当�
   assert.equal(G.storyStageLabel(s),stage);
   assert.deepEqual(s,before);
 });
+
+
+test('篇章委托只补人物主题，不越过第六、七章提前披露器灵与护城阵真相',()=>{
+  assert.equal(G.QUESTS.length,8);
+  for(const q of G.QUESTS)assert.doesNotMatch(q.story,/器灵|护城阵/);
+  const q3=G.QUESTS.find(q=>q.id==='q3');
+  assert.deepEqual({delivery:q3.delivery,realm:q3.realm,reward:q3.reward},{delivery:12,realm:1,reward:{coins:15,fragments:1,qi:50}});
+  assert.match(q3.story,/先求证，再修行/);
+});
