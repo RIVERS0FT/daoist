@@ -41,7 +41,7 @@
     s.player.realm>=chapter.realm && s.stats.delivered>=chapter.deliveries && G.storyEventComplete(s,chapter.previous);
 
   G.STORY_STAGES = [
-    { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'你还只是为房租、饭钱和下一张订单奔忙的普通骑手。九次寻常送达让“抵达”慢慢有了重量；第十份热饭把问题摆到你面前：没有奖励时，你为什么仍愿意把一份饭送热。', ready:()=>true },
+    { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'你还只是为房租、饭钱和下一张订单奔忙的普通骑手。九次寻常送达让“抵达”慢慢有了重量；第十份热饭把问题摆到你面前：没有奖励时，你为什么仍愿意把一份饭送热。完成第十单固定剧情，在本章解锁外卖系统。', ready:()=>true },
     { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启，但力量没有替你解决生活。你一边接单、领取第一份委托、学习吐纳，一边发现系统更像一个不会表达的记录者：它会计算连接，却还不懂每次抵达对人意味着什么。', ready:s=>G.featureUnlocked(s,'system') },
     { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'炼气后，门牌、桥墩与旧墙开始露出另一层纹理。你学着不把所有异常都叫作机缘，也不把所有陌生都当成危险；青岚城的背面首先是一段需要被求证的历史。', ready:s=>s.flags?.storySecondCity === true || (s.stats.delivered>=8 && s.player.realm>=1) },
     { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识的夜行人越来越多：有人交班，有人守车，有人等末班车，也有人只是想吃完一顿不被打断的饭。修行圈不再是一张强者名单，而是一群各有疲惫、原则和牵挂的人。', ready:s=>G.metNPCCount(s)>=2 && s.player.realm>=1 },
