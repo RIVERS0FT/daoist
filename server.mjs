@@ -4,14 +4,17 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import './public/js/data.js';
+import './public/js/sects.js';
 import './public/js/npc-profiles.js';
 import './public/js/engine.js';
+import './public/js/sect-engine.js';
+import './public/js/sect-stories.js';
 const G=globalThis.NightCourier;
 const ROOT=dirname(fileURLToPath(import.meta.url));
 const PUBLIC=join(ROOT,'public');
 const FILES=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],
-  ...['data','npc-profiles','engine','clock','storage','progression','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`])
+  ...['data','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`])
 ]);
 class HttpError extends Error{constructor(status,message){super(message);this.status=status;}}
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message);};

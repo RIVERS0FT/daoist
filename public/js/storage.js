@@ -2,9 +2,9 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v21';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v20';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v19','night-courier:saves:v18','night-courier:saves:v17','night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
+  G.STORAGE_KEY = 'night-courier:saves:v22';
+  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v21';
+  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v20','night-courier:saves:v19','night-courier:saves:v18','night-courier:saves:v17','night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
   G.BACKUP_KEY = 'night-courier:saves:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
@@ -66,6 +66,11 @@
     }
     if(G.EVENTS.some(e=>e.id===p.templateId&&e.higherChapter)){
       if(p.delivery||p.npcId||p.kind!=='story')throw new Error('高境界主线不接受配送票据或人物进度。');
+      const base=G.EVENTS.find(e=>e.id===p.templateId);
+      return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip'};
+    }
+    if(G.EVENTS.some(e=>e.id===p.templateId&&(e.sectStory||e.sectCouncil!==undefined))){
+      if(p.delivery||p.npcId||p.kind!=='story')throw new Error('宗门剧情不接受配送票据或人物进度。');
       const base=G.EVENTS.find(e=>e.id===p.templateId);
       return {...G.clone(base),id:cleanId(p.id),templateId:base.id,source:'classic',aiStatus:'skip'};
     }
@@ -193,9 +198,12 @@
       params.day=p.day;params.lotId=p.lotId;params.round=p.round;duration=G.AUCTION.roundMinutes;
     }
     if(['sectJoin','sectTask','sectPromote'].includes(kind)){
+      const sectId=p.sectId||'tingyu';
+      if(!G.sectDefinition(sectId)||(version<22&&sectId!=='tingyu'))throw new Error('宗门行动身份无效。');
+      if(p.sectId!==undefined)params.sectId=sectId;
       if(raw.phase!=='work'||raw.target||raw.route||raw.travelled||Object.keys(raw.recovery||{}).length||raw.gainedQi)throw new Error('宗门行动不能携带路线或额外收益。');
       if(kind==='sectTask'){
-        if(!G.sectDuty(p.id)||!Number.isInteger(p.day)||p.day<1||p.day!==Math.floor(raw.startedAt/1440)+1)throw new Error('执事行动的日期或类型无效。');
+        if(!G.sectDuty(p.id,sectId)||!Number.isInteger(p.day)||p.day<1||p.day!==Math.floor(raw.startedAt/1440)+1)throw new Error('执事行动的日期或类型无效。');
         params.id=p.id;params.day=p.day;
       }
       if(kind==='sectPromote'){
@@ -248,7 +256,7 @@
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
+    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
     const name=str(raw.name??raw.player.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
@@ -268,7 +276,8 @@
       s.gameOver={reason:'rent',day:num(raw.gameOver.day,G.day(s),1,999999),residenceId:home.id,rent:home.rent,money:num(raw.gameOver.money,s.player.money,0,9999999)};
     }else s.gameOver=null;
     s.weather=G.WEATHER.some(w=>w.id===raw.weather)?raw.weather:'clear';
-    s.learned=Array.isArray(raw.learned)?[...new Set(raw.learned.filter(id=>G.ITEMS.some(i=>i.id===id&&i.type==='technique')))]:[];
+    s.learned=Array.isArray(raw.learned)?[...new Set(raw.learned.filter(id=>G.ITEMS.some(i=>i.id===id&&i.type==='technique'&&i.source==='system')))]:[];
+    if(version>=22&&(!Array.isArray(raw.learned)||new Set(raw.learned).size!==raw.learned.length||raw.learned.some(id=>!G.technique(id)||G.technique(id).source!=='system')))throw new Error('已学通用功法记录损坏。');
     s.equipment=Array.isArray(raw.equipment)?[...new Set(raw.equipment.filter(id=>G.ITEMS.some(i=>i.id===id&&i.type==='equipment')))]:[];
     const legacyLevel=num(raw.player.realmLevel,version<7&&raw.activity?.kind==='breakthrough'?9:1,1,9);
     s.player.realm=num(raw.player.realm,0,0,version<13?5:G.REALMS.length-1);
@@ -364,6 +373,10 @@
       for(const id of G.STARTING_PLACES)if(!s.unlockedPlaces.includes(id))s.unlockedPlaces.push(id);
     }
     s.sect=version>=17?G.cleanSect(raw.sect,s):G.emptySect();
+    s.sectWorld=version>=22?G.cleanSectWorld(raw.sectWorld,s):G.emptySectWorld();
+    // 宗门功法所有权恢复后再恢复资源，避免旧上限截断新上限下的余额。
+    const techniqueCap=G.limits(s);
+    for(const k of ['health','stamina','mana'])s.player[k]=num(raw.player[k],techniqueCap[k],0,techniqueCap[k],false);
     s.activity=version>=5&&raw.activity?cleanActivity(raw.activity,s,version):null;
     if(s.activity){
       const a=s.activity,params=a.kind==='travel'?{target:a.target}:a.params;
@@ -396,7 +409,7 @@
     if(ze?.npcId==='zhou'&&ze.npcAdvance&&G.npcStoryBlock(s,'zhou'))throw new Error('周野待选剧情缺少前置经历。');
     if(s.activity?.kind==='visit'&&s.activity.params.id==='zhou'&&G.npcVisitBlock(s,'zhou'))throw new Error('仇人不能恢复友好拜访。');
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回；v19补六位女性、v20补九位男性的隐藏初始记录；原人物关系和配送票据保持不变；v21将周野旧前四段衔接为路人、朋友、兄弟，后续真相须实际经历，不自动成仇。`,'存档');
+    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回；v19补六位女性、v20补九位男性的隐藏初始记录；原人物关系和配送票据保持不变；v21保留周野旧故事前缀，不自动成仇；v22保留听雨观全部记录及在途行为，新增四宗与宗际剧情空白进度，不补发功法、贡献或奖励。`,'存档');
     return s;
   };
   G.parseImport = text => {

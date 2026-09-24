@@ -5,6 +5,7 @@
   const clone = x => JSON.parse(JSON.stringify(x));
   const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
   class RuleError extends Error {}
+  G.RuleError = RuleError;
   const must = (ok, message) => { if (!ok) throw new RuleError(message); };
   G.clone = clone;
   G.clamp = clamp;
@@ -33,7 +34,7 @@
     const realm=s.player.realm,next=level<G.realmLevelCount(realm)?{realm,realmLevel:level+1}:{realm:realm+1,realmLevel:1};
     return G.realmLabel({player:next});
   };
-  G.limits = s => {const rank=G.realmRank(s);return {health:100+Math.floor(rank*12/9)+(s.equipment.includes('robe')?25:0),stamina:100+Math.floor(rank*8/9),mana:60+Math.floor(rank*16/9)+(s.equipment.includes('jade')?30:0),battery:80+s.vehicle.levels.battery*35,durability:100+s.vehicle.levels.durability*30};};
+  G.limits = s => {const rank=G.realmRank(s),bonus=G.techniqueBonuses(s);return {health:100+Math.floor(rank*12/9)+(s.equipment.includes('robe')?25:0)+bonus.health,stamina:100+Math.floor(rank*8/9)+bonus.stamina,mana:60+Math.floor(rank*16/9)+(s.equipment.includes('jade')?30:0)+bonus.mana,battery:80+s.vehicle.levels.battery*35,durability:100+s.vehicle.levels.durability*30};};
   G.log = (s, text, tag = '日常') => { s.logs.push({ id: `${s.turn}-${s.logs.length}-${s.seed}`, at: s.minutes, tag, text: String(text).slice(0, 600) }); s.logs = s.logs.slice(-180); };
   // 地点所有权只由已结算配送授予；地图呈现与所有快捷入口共用查询。
   G.placeUnlocked = (s,id) => !!G.place(id) && Array.isArray(s.unlockedPlaces) && s.unlockedPlaces.includes(id);
@@ -51,7 +52,9 @@
     else if(action==='heal')target='clinic';
     else if(['meal','cauldron','formula','herb','material','auctionCatalog','auctionBid'].includes(action))target='market';
     else if(action==='explore')target=s.position;
-    else if(['sectJoin','sectLeave','sectTask','sectPromote','sectAccept','sectClaim','sectBuy'].includes(action))target=G.SECT.place;
+    else if(['sectJoin','sectLeave','sectTask','sectPromote','sectAccept','sectClaim','sectBuy'].includes(action))target=G.sectDefinition(payload.sectId??G.currentSect(s).id)?.place;
+    else if(action==='sectStory')target=G.sectDefinition(payload.sectId)?.place;
+    else if(action==='sectCouncil')target='market';
     return G.place(target)&&!G.placeUnlocked(s,target)?`尚未解锁${G.place(target).name}，请先完成送往这里的外卖。`:'';
   };
   G.unlockDeliveryPlace = (s,id) => {
@@ -88,7 +91,7 @@
       player: { money: 120, coins: 0, health: 100, stamina: 100, mana: 60, qi: 0, realm: 0, realmLevel: 1, mortalProgress: 0, insight: 5, constitution: 5, agility: 5, luck: 5, karma: 0, rep: 0 },
       vehicle: { battery: 80, durability: 100, levels: {speed:0,battery:0,durability:0} },
       alchemy: {cauldron:0,cauldrons:[],formulas:[],xp:0,brews:0,successes:0},
-      auction:G.emptyAuction(),sect:G.emptySect(),
+      auction:G.emptyAuction(),sect:G.emptySect(),sectWorld:G.emptySectWorld(),
       inventory: {...Object.fromEntries(G.ITEMS.filter(i=>!i.unique).map(i=>[i.id,0])),qi:1,heal:1,stamina:1}, learned: [], equipment: [],
       stats: {delivered:0,earned:0,distance:0,trained:0,explored:0},
       bonds: Object.fromEntries(G.NPCS.map(n => [n.id, {met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0}])),
@@ -151,11 +154,11 @@
   G.routeFrom = (s,target) => G.route(G.playerPoint(s),target);
   G.movementRates = (s,transport=s.transport) => {
     const bike=transport==='bike';
-    let speed=bike?22+4*s.vehicle.levels.speed:(4.5+s.player.agility*.08)*(s.learned.includes('lightstep')?1.3:1);
+    let speed=bike?22+4*s.vehicle.levels.speed:(4.5+s.player.agility*.08)*(1+G.techniqueBonuses(s).walk);
     if(bike&&s.vehicle.durability<=20+EPS)speed*=.7;
     speed*=(G.WEATHER.find(w=>w.id===s.weather)||G.WEATHER[0]).speed;
     return {speed,metersPerMinute:speed*1000/60,battery:bike?.005:0,
-      stamina:(bike?2.5:8)*Math.max(.55,1-s.player.constitution*.01)/1000,
+      stamina:(bike?2.5:8)*Math.max(.55,1-s.player.constitution*.01)*(1-G.techniqueBonuses(s).travelStamina)/1000,
       wear:bike?.0006/(1+s.vehicle.levels.durability*.3):0};
   };
   G.travelPlan = (s,target,transport=s.transport) => {
@@ -214,7 +217,7 @@
     if(action==='cultivate')return (payload.kind||'breath')==='breath'?'cultivation':'practice';
     const gates={buy:'system',sign:'system',claim:'system',breakthrough:'practice',explore:'practice',
       alchemy:'alchemy',cauldron:'alchemy',formula:'alchemy',herb:'alchemy',material:'alchemy',
-      upgrade:'upgrades',visit:'bonds',finale:'endings',auctionCatalog:'auction',auctionBid:'auction',auction:'auction',sectJoin:'sect',sectLeave:'sect',sectTask:'sect',sectPromote:'sect',sectAccept:'sect',sectClaim:'sect',sectBuy:'sect'};
+      upgrade:'upgrades',visit:'bonds',finale:'endings',auctionCatalog:'auction',auctionBid:'auction',auction:'auction',sectJoin:'sect',sectLeave:'sect',sectTask:'sect',sectPromote:'sect',sectAccept:'sect',sectClaim:'sect',sectBuy:'sect',sectStory:'practice',sectCouncil:'sect'};
     return Object.hasOwn(gates,action)?gates[action]:null;
   };
   G.featureBlock = (s,action,payload={}) => {
@@ -253,118 +256,6 @@
     // 已经合法保存的在途付费行动继续恢复，不重复扣款、不回收能力。
     if(s.activity){const id=G.featureForAction(s.activity.kind,s.activity.params);if(id)grant(id);}
     G.syncFeatureUnlocks(s,true);
-  };
-  G.emptySect = () => ({invited:false,member:false,rank:0,contribution:0,earned:0,completed:0,
-    joinedAt:null,rejoinDay:0,dutyDay:0,duties:[],manuals:[],commission:null,commissionDay:0});
-  G.sectMember = s => s.sect?.member===true;
-  G.sectRank = s => G.SECT.ranks[s.sect?.rank||0];
-  G.sectManual = (s,id) => s.sect?.manuals.includes(id)===true;
-  G.sectTrainingBonus = s => (G.sectMember(s)?G.sectRank(s).training:0)+(G.sectManual(s,'rain-breath')?.10:0);
-  G.sectInvitationReady = s => G.featureUnlocked(s,'practice')&&s.player.realm>=1&&
-    G.placeUnlocked(s,G.SECT.place)&&s.bonds.lu?.met===true;
-  G.sectDuty = id => G.SECT.duties.find(d=>d.id===id);
-  G.sectDutyUsed = (s,id) => s.sect.dutyDay===G.day(s)&&s.sect.duties.includes(id);
-  G.sectCommissionProgress = s => s.sect.commission?Math.min(G.SECT.commission.count,
-    Math.max(0,s.stats.delivered-s.sect.commission.startDelivered)):0;
-  G.sectPromotionReady = (s,rank) => !!rank&&s.player.realm>=rank.realm&&
-    (s.player.realm>rank.realm||G.realmLevel(s)>=rank.level)&&s.sect.earned>=rank.earned&&s.sect.completed>=rank.completed;
-  G.sectPromotionHint = rank => rank?`${G.realmLabel({player:{realm:rank.realm,realmLevel:rank.level}})} · 累计贡献 ${rank.earned} · 完成宗门委托 ${rank.completed} 次`:'';
-  // 与面板共用的纯查询；真正付费、开始和结算只在 perform / advance 内发生。
-  G.sectBlock = (s,action,payload={}) => {
-    if(!s.sect?.invited||!G.featureUnlocked(s,'sect'))return '请先完成陆听雨的宗门引荐剧情。';
-    if(!G.placeUnlocked(s,G.SECT.place))return '请先通过配送解锁听雨观。';
-    if(s.position!==G.SECT.place)return '请先沿道路前往听雨观。';
-    if(action==='sectJoin'){
-      if(G.sectMember(s))return '已经加入听雨观。';
-      if(G.day(s)<s.sect.rejoinDay)return `第 ${s.sect.rejoinDay} 日才可重新入宗。`;
-      return s.player.realm<1?'入宗需要炼气境界。':'';
-    }
-    if(!G.sectMember(s))return '需要先加入听雨观。';
-    if(action==='sectTask'){
-      const d=G.sectDuty(payload.id);
-      if(!d)return '宗门执事不存在。';
-      if(s.sect.rank<d.rank)return `需要晋升${G.SECT.ranks[d.rank].name}。`;
-      if(G.sectDutyUsed(s,d.id))return '今日已经领过这项执事，明日再来。';
-      if(s.player.stamina<d.stamina||s.player.mana<d.mana)return `需要体力 ${d.stamina}、灵力 ${d.mana}。`;
-    }else if(action==='sectPromote'){
-      const next=G.SECT.ranks[s.sect.rank+1];
-      if(!next)return '已经是护法长老，无需再次晋升。';
-      if(!G.sectPromotionReady(s,next))return `晋升需要：${G.sectPromotionHint(next)}。`;
-      if(s.sect.contribution<next.cost)return `晋升需要可用贡献 ${next.cost}。`;
-      if(s.player.stamina<next.stamina)return `晋升考核需要体力 ${next.stamina}。`;
-    }else if(action==='sectAccept'){
-      if(s.sect.commission)return '已有未交还的外送委托。';
-      if(s.sect.commissionDay===G.day(s))return '今日已经领过外送委托，明日再来。';
-    }else if(action==='sectClaim'){
-      const task=s.sect.commission;
-      if(!task||payload.id!==String(task.day))return '这项外送委托已经交还或已失效。';
-      if(G.sectCommissionProgress(s)<G.SECT.commission.count)return '领取后需要实际完成 3 单配送，再回观交还。';
-    }else if(action==='sectBuy'){
-      const item=G.SECT.library.find(i=>i.id===payload.id);
-      if(!item)return '藏经阁没有这项兑换。';
-      if(s.sect.rank<item.rank)return `需要晋升${G.SECT.ranks[item.rank].name}。`;
-      if(item.manual&&G.sectManual(s,item.id))return '已经研习过这部典籍，不重复兑换。';
-      if(s.sect.contribution<item.cost)return `需要可用贡献 ${item.cost}。`;
-      if(!item.manual&&(s.inventory[item.item]||0)+item.count>9999)return '行囊中该物品已接近上限。';
-    }else if(action!=='sectLeave')return '宗门行动无效。';
-    return '';
-  };
-  G.sectWork = (kind,p={}) => kind==='sectJoin'?{minutes:G.SECT.joinMinutes,stamina:0}:
-    kind==='sectTask'?G.sectDuty(p.id):kind==='sectPromote'?G.SECT.ranks[p.rank]:null;
-  function awardSect(s,contribution,qi,label){
-    const gained=Math.min(contribution,999999-s.sect.contribution),qiGain=Math.min(qi,999999-s.player.qi);
-    s.sect.contribution+=gained;s.sect.earned+=gained;s.sect.completed++;s.player.qi+=qiGain;
-    G.log(s,`${label}完成。宗门贡献 +${gained}，修为 +${qiGain}。`,'宗门');
-  }
-  function finishSect(s,a){
-    if(a.kind==='sectJoin'){
-      s.sect.member=true;s.sect.joinedAt=s.minutes;
-      G.log(s,`你正式加入听雨观，身份为${G.sectRank(s).name}。宗门不收走你的外卖箱；白天送饭，夜里修行。`,'宗门');
-    }else if(a.kind==='sectTask'){
-      const d=G.sectDuty(a.params.id);awardSect(s,d.contribution,d.qi,`「${d.name}」`);
-    }else if(a.kind==='sectPromote'){
-      s.sect.rank=a.params.rank;G.log(s,`考核完成，晋升听雨观${G.sectRank(s).name}。门内修炼加成提高至 ${Math.round(G.sectRank(s).training*100)}%。`,'宗门');
-    }
-  }
-  // 有余额、资格和已付费在途行为的记录必须严格校验，不能吞掉损坏字段后重发奖励。
-  G.cleanSect = (raw,s) => {
-    const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x),integer=(n,min,max)=>Number.isInteger(n)&&n>=min&&n<=max;
-    must(object(raw)&&typeof raw.invited==='boolean'&&typeof raw.member==='boolean','宗门存档缺失或损坏。');
-    must(integer(raw.rank,0,G.SECT.ranks.length-1)&&integer(raw.contribution,0,999999)&&integer(raw.earned,raw.contribution,1e9)&&integer(raw.completed,0,1e8),'宗门身份或贡献无效。');
-    must(raw.joinedAt===null||(Number.isFinite(raw.joinedAt)&&raw.joinedAt>=0&&raw.joinedAt<=s.minutes),'入宗时刻无效。');
-    must(integer(raw.rejoinDay,0,G.day(s)+G.SECT.rejoinDays)&&integer(raw.dutyDay,0,G.day(s))&&integer(raw.commissionDay,0,G.day(s)),'宗门日历记录无效。');
-    must(Array.isArray(raw.duties)&&raw.duties.length<=G.SECT.duties.length&&new Set(raw.duties).size===raw.duties.length&&raw.duties.every(id=>!!G.sectDuty(id)),'宗门执事记录无效。');
-    must(Array.isArray(raw.manuals)&&new Set(raw.manuals).size===raw.manuals.length&&raw.manuals.every(id=>G.SECT.library.some(i=>i.id===id&&i.manual)),'宗门典籍记录无效。');
-    must(!raw.duties.length||raw.dutyDay>0,'执事记录缺少日期。');
-    must(raw.invited||(!raw.member&&raw.joinedAt===null&&!raw.rank&&!raw.earned&&!raw.completed&&!raw.manuals.length&&!raw.duties.length&&!raw.commissionDay&&!raw.rejoinDay),'未引荐的宗门记录包含非法进度。');
-    must(raw.joinedAt!==null||(!raw.member&&!raw.rank&&!raw.earned&&!raw.completed&&!raw.manuals.length&&!raw.duties.length&&!raw.commissionDay&&!raw.rejoinDay),'未入宗的存档包含门内进度。');
-    must(!raw.member||raw.rejoinDay<=G.day(s),'入宗状态与退出冷却冲突。');
-    const rank=G.SECT.ranks[raw.rank];
-    must(!raw.rank||(raw.earned>=rank.earned&&raw.completed>=rank.completed&&s.player.realm>=rank.realm&&(s.player.realm>rank.realm||G.realmLevel(s)>=rank.level)),'宗门晋升条件与记录不一致。');
-    must(raw.manuals.every(id=>G.SECT.library.find(i=>i.id===id).rank<=raw.rank)&&raw.duties.every(id=>G.sectDuty(id).rank<=raw.rank),'宗门记录超出当前身份。');
-    const paid=G.SECT.ranks.slice(1,raw.rank+1).reduce((n,r)=>n+r.cost,0)+raw.manuals.reduce((n,id)=>n+G.SECT.library.find(i=>i.id===id).cost,0);
-    must(raw.earned-raw.contribution>=paid,'宗门典籍或晋升缺少贡献支出。');
-    let commission=null;
-    if(raw.commission!==null){
-      const t=raw.commission;must(object(t)&&raw.member&&integer(t.day,1,G.day(s))&&t.day===raw.commissionDay&&integer(t.startDelivered,0,s.stats.delivered)&&Number.isFinite(t.acceptedAt)&&t.acceptedAt>=0&&t.acceptedAt<=s.minutes&&Math.floor(t.acceptedAt/1440)+1===t.day,'外送委托记录无效。');
-      commission={day:t.day,startDelivered:t.startDelivered,acceptedAt:t.acceptedAt};
-    }
-    return {invited:raw.invited,member:raw.member,rank:raw.rank,contribution:raw.contribution,earned:raw.earned,completed:raw.completed,
-      joinedAt:raw.joinedAt,rejoinDay:raw.rejoinDay,dutyDay:raw.dutyDay,duties:[...raw.duties],manuals:[...raw.manuals],commission,commissionDay:raw.commissionDay};
-  };
-  G.validateSectLinks = s => {
-    const v=s.sect,a=s.activity;
-    if(v.invited)must(G.placeUnlocked(s,G.SECT.place)&&s.bonds.lu.met&&s.player.realm>=1,'宗门引荐缺少地点或人物经历。');
-    if(a?.kind==='sectJoin')must(v.invited&&!v.member&&G.day(s)>=v.rejoinDay,'入宗仪式与宗门状态不一致。');
-    if(a?.kind==='sectTask')must(v.member&&a.params.day===v.dutyDay&&v.duties.includes(a.params.id)&&v.rank>=G.sectDuty(a.params.id).rank,'执事行动与领取记录不一致。');
-    if(a?.kind==='sectPromote'){
-      const next=G.SECT.ranks[a.params.rank];
-      must(v.member&&a.params.rank===v.rank+1&&G.sectPromotionReady(s,next),'晋升考核与当前身份不一致。');
-      const paid=G.SECT.ranks.slice(1,a.params.rank+1).reduce((n,r)=>n+r.cost,0)+v.manuals.reduce((n,id)=>n+G.SECT.library.find(i=>i.id===id).cost,0);
-      must(v.earned-v.contribution>=paid,'晋升考核缺少已经投入的贡献。');
-    }
-    if(a&&['sectJoin','sectTask','sectPromote'].includes(a.kind))must(G.placeUnlocked(s,G.SECT.place)&&s.position===G.SECT.place,'宗门行动缺少听雨观地点权限。');
-    if(s.pending?.templateId==='story-sect-invitation')must(!v.invited&&G.sectInvitationReady(s),'宗门引荐剧情与实际经历不符。');
   };
   // 拍品与对手预算只在首次查看当日图录时生成；渲染和每帧推进均不抽奖。
   G.emptyAuction = () => ({day:0,realm:0,lots:[],activeId:null,wins:0,spent:0});
@@ -548,8 +439,8 @@
   G.alchemyQualified = (s,recipe) => !!recipe && s.player.realm>=recipe.realm && (s.alchemy?.xp||0)>=recipe.need;
   G.alchemyUnlocked = (s,recipe) => G.alchemyHasFormula(s,recipe) && G.alchemyQualified(s,recipe);
   G.alchemyCauldronReady = (s,recipe) => !!recipe && (G.cauldron(s).tier||0)>=recipe.minCauldronTier;
-  G.alchemyChance = (s,recipe) => clamp(recipe.base+s.player.insight*.007+G.cauldron(s).success+(G.alchemistTier(s)-1)*.015+(G.sectManual(s,'gentle-fire')?.03:0),.20,.98);
-  G.alchemyExtraChance = s => clamp(G.cauldron(s).extra+(G.alchemistTier(s)-1)*.02+s.player.insight*.002,0,.65);
+  G.alchemyChance = (s,recipe) => clamp(recipe.base+s.player.insight*.007+G.cauldron(s).success+(G.alchemistTier(s)-1)*.015+G.techniqueBonuses(s).alchemy,.20,.98);
+  G.alchemyExtraChance = s => clamp(G.cauldron(s).extra+(G.alchemistTier(s)-1)*.02+s.player.insight*.002+G.techniqueBonuses(s).alchemyExtra,0,.65);
   G.alchemyPillTier = (s,roll=0) => {
     const cap=Math.max(1,Math.min(G.cauldron(s).tier||1,G.alchemistTier(s))),quality=roll+(G.cauldron(s).quality||0);
     return quality>=.78?cap:quality>=.40?Math.max(1,cap-1):Math.max(1,cap-2);
@@ -655,13 +546,13 @@
     G.log(s, `送达「${ticket.title}」至${G.place(ticket.target).name}。现金 +¥${reward}${coins?`，外卖币 +${coins}`:''}。`, '配送');
     G.unlockDeliveryPlace(s,ticket.target);
   }
-  G.breakChance = (s, pillTier=0) => clamp(53+s.player.insight*2+Math.max(0,s.player.karma)*.12+(G.isNight(s)?10:0)+G.breakthroughPillBonus(pillTier===true?1:pillTier)-s.player.realm*3-(G.realmLevel(s)-1)*1.25+(G.sectManual(s,'steady-heart')?3:0),35,95);
+  G.breakChance = (s, pillTier=0) => clamp(53+s.player.insight*2+Math.max(0,s.player.karma)*.12+(G.isNight(s)?10:0)+G.breakthroughPillBonus(pillTier===true?1:pillTier)-s.player.realm*3-(G.realmLevel(s)-1)*1.25+G.techniqueBonuses(s).breakthrough,35,95);
   G.upgradeCost = (s, kind) => 90 + (s.vehicle.levels[kind]||0)*85;
   G.questReady = (s,q) => s.stats.delivered>=q.delivery && s.player.realm>=q.realm;
   G.choiceBlock = (s,c) => {
     if(s.pending?.kind==='auction')return c.auctionRaise===0?'':G.auctionBidBlock(s,G.auctionLot(s,s.pending.auction.lotId),c.auctionRaise);
     if (c.minTrust && s.pending?.npcId && s.bonds[s.pending.npcId].trust<c.minTrust) return `需要信任 ${c.minTrust}。`;
-    return G.effectBlock(s,c.effects,c.itemCost);
+    return G.sectStoryChoiceBlock(s,c)||G.effectBlock(s,c.effects,c.itemCost);
   };
   G.endingOptions = s => [
     {id:'guardian',ready:s.stats.delivered>=25&&s.player.realm>=2&&(s.inventory.fragment||0)>=3&&s.player.karma>=5,requirement:'25 单 · 筑基 · 3 枚碎玉 · 善缘 5'},
@@ -748,6 +639,7 @@
     // Spendable negative costs were paid once when the choice was committed.
     const result=Object.fromEntries(Object.entries(effective).filter(([k,v])=>!(v<0&&['money','coins','stamina','mana'].includes(k))));
     effects(s,result,p.npcId);
+    if(p.sectStory||p.sectCouncil!==undefined)G.finishSectStory(s,p,index);
     if(p.templateId==='story-sect-invitation'){
       must(p.source==='classic'&&!p.delivery&&G.sectInvitationReady(s),'宗门引荐必须完成固定剧情。');
       s.sect.invited=true;
@@ -842,9 +734,10 @@
           tier=G.alchemyPillTier(s,G.rand(s));count=1;if(G.rand(s)<G.alchemyExtraChance(s))count++;
           const itemId=G.pillItemId(recipe.product,tier);s.inventory[itemId]=(s.inventory[itemId]||0)+count;s.alchemy.successes++;
         }
-        s.alchemy.brews++;s.alchemy.xp+=success?1+Math.ceil(recipe.complexity/3):1;
+        s.alchemy.brews++;const baseXp=success?1+Math.ceil(recipe.complexity/3):1,bonusXp=G.techniqueBonuses(s).alchemyXp;
+        const gainedXp=baseXp+(bonusXp?Math.max(1,Math.floor(baseXp*bonusXp)):0);s.alchemy.xp=Math.min(999999,s.alchemy.xp+gainedXp);
         const rank=G.ALCHEMY_RANKS[G.alchemyRank(s)].name,pill=G.pillType(recipe.product);
-        G.log(s,success?`按${recipe.name}，以${G.cauldron(s).name}炼成${tier}阶${pill.name} ×${count}。炼药熟练度 ${s.alchemy.xp}，当前 ${rank}。`:`按${recipe.name}开炉失败，药力散去。药材已消耗；炼药熟练度 +1。`,'炼药');break;
+        G.log(s,success?`按${recipe.name}，以${G.cauldron(s).name}炼成${tier}阶${pill.name} ×${count}。炼药熟练度 ${s.alchemy.xp}，当前 ${rank}。`:`按${recipe.name}开炉失败，药力散去。药材已消耗；炼药熟练度 +${gainedXp}。`,'炼药');break;
       }
       case 'explore':{
         s.stats.explored++;
@@ -863,7 +756,7 @@
       }
       case 'heal':G.log(s,'医馆治疗完成，气血已恢复。','生活');break;
       case 'meal':G.log(s,'吃完一碗热面，体力与气血已逐步恢复。','生活');break;
-      case 'sectJoin':case 'sectTask':case 'sectPromote':finishSect(s,a);break;
+      case 'sectJoin':case 'sectTask':case 'sectPromote':G.finishSect(s,a);break;
       case 'auction':finishAuctionBid(s,a);break;
       case 'choice':finishChoice(s,a.params.event,a.params.index);break;
       case 'rescue':{
@@ -912,7 +805,7 @@
     s.player.stamina=Math.max(0,s.player.stamina-resourceRate(s,a)*dt);
     if(a.kind==='cultivate'){
       const kind=a.params.kind,base=kind==='meditate'?32:kind==='body'?9:17;
-      const gain=base*(G.isNight(s)?1.45:1)*(s.position==='temple'?1.25:1)*(s.learned.includes('breathing')?1.3:1)*(1+s.player.insight*.015)*(1+G.sectTrainingBonus(s))*fraction;
+      const gain=base*(G.isNight(s)?1.45:1)*(s.position==='temple'?1.25:1)*(s.learned.includes('breathing')?1.3:1)*(1+s.player.insight*.015)*(1+G.sectTrainingBonus(s))*(1+(kind==='body'?G.techniqueBonuses(s).body:kind==='meditate'?G.techniqueBonuses(s).meditation:0))*fraction;
       s.player.qi+=gain;a.gainedQi+=gain;if(kind!=='body')s.player.mana=Math.min(cap.mana,s.player.mana+12*fraction);
     }
     a.elapsed+=dt;
@@ -1093,31 +986,33 @@
           if(payload.id==='daily'){must(!s.daily.claimed,'每日奖励已经领取。');must(s.daily.delivered>=3,'今天需要完成 3 单。');s.daily.claimed=true;effects(s,{coins:5,money:30,qi:10});G.log(s,'每日委托完成。外卖币 +5，现金 +¥30，修为 +10。','系统');}
           else{const q=G.QUESTS.find(q=>q.id===payload.id);must(q,'委托不存在。');must(!s.claimed.includes(q.id),'奖励已经领取。');must(G.questVisible(s,q),'请先领取前一篇章奖励。');must(G.questReady(s,q),'委托条件尚未达成。');s.claimed.push(q.id);effects(s,q.reward);G.log(s,`「${q.title}」：${q.story} 奖励：${G.effectText(q.reward)}。`,'主线');}break;
         }
+        case 'sectStory':G.openSectStory(s,payload.sectId);break;
+        case 'sectCouncil':G.openSectStory(s,null,true);break;
         case 'sectJoin':case 'sectTask':case 'sectPromote':case 'sectAccept':case 'sectClaim':case 'sectBuy':case 'sectLeave':{
           const block=G.sectBlock(s,action,payload);must(!block,block);
-          const v=s.sect;
+          const sectId=payload.sectId??G.currentSect(s).id,d=G.sectDefinition(sectId),v=G.sectState(s,sectId),identity=sectId==='tingyu'?{}:{sectId};
           if(action==='sectJoin'){
-            begin(s,action);G.log(s,`开始入宗仪式，需要 ${G.SECT.joinMinutes} 分钟；完成前仍是散修。`,'宗门');
+            begin(s,action,identity);G.log(s,`开始${d.name}入宗仪式，需要 ${d.joinMinutes} 分钟；完成前仍是散修。`,'宗门');
           }else if(action==='sectTask'){
-            const d=G.sectDuty(payload.id),day=G.day(s);
-            if(v.dutyDay!==day){v.dutyDay=day;v.duties=[];}v.duties.push(d.id);
-            s.player.mana-=d.mana;begin(s,action,{id:d.id,day});
-            G.log(s,`领取「${d.name}」。用时 ${d.minutes} 分钟，体力随进度消耗 ${d.stamina}，灵力已投入 ${d.mana}；中断不返还今日名额或已投入资源，完成才获得贡献。`,'宗门');
+            const task=G.sectDuty(payload.id,sectId),day=G.day(s);
+            if(v.dutyDay!==day){v.dutyDay=day;v.duties=[];}v.duties.push(task.id);
+            s.player.mana-=task.mana;begin(s,action,{id:task.id,day,...identity});
+            G.log(s,`领取「${task.name}」。用时 ${task.minutes} 分钟，体力随进度消耗 ${task.stamina}，灵力已投入 ${task.mana}；中断不退名额，完成才获得贡献。`,'宗门');
           }else if(action==='sectPromote'){
-            const rank=v.rank+1,next=G.SECT.ranks[rank];v.contribution-=next.cost;begin(s,action,{rank});
+            const rank=v.rank+1,next=d.ranks[rank];v.contribution-=next.cost;begin(s,action,{rank,...identity});
             G.log(s,`开始${next.name}考核，投入贡献 ${next.cost}，需 ${next.minutes} 分钟与 ${next.stamina} 体力；中断不退贡献。`,'宗门');
           }else if(action==='sectAccept'){
             v.commissionDay=G.day(s);v.commission={day:G.day(s),startDelivered:s.stats.delivered,acceptedAt:s.minutes};
-            G.log(s,'领取「人间行走」：从现在起完成 3 单地图配送，再回听雨观交还。此前送达不计，委托跨日保留。','宗门');
+            G.log(s,`领取「人间行走」：从现在起完成 3 单地图配送，再回${d.name}交还。此前送达不计，委托跨日保留。`,'宗门');
           }else if(action==='sectClaim'){
-            v.commission=null;awardSect(s,G.SECT.commission.contribution,G.SECT.commission.qi,'「人间行走」');
+            v.commission=null;G.awardSect(s,d.commission.contribution,d.commission.qi,'「人间行走」',sectId);
           }else if(action==='sectBuy'){
-            const item=G.SECT.library.find(i=>i.id===payload.id);v.contribution-=item.cost;
+            const item=d.library.find(i=>i.id===payload.id);v.contribution-=item.cost;
             if(item.manual)v.manuals.push(item.id);else s.inventory[item.item]=(s.inventory[item.item]||0)+item.count;
             G.log(s,`藏经阁兑换「${item.name}」，贡献 −${item.cost}。${item.manual?'典籍已研习，离宗后心得仍保留。':'物品已收入行囊。'}`,'宗门');
           }else{
-            v.member=false;v.commission=null;v.rejoinDay=G.day(s)+G.SECT.rejoinDays;
-            G.log(s,`你辞别听雨观，重新成为散修。贡献、身份记录和已学典籍保留，门内福利停用，未交外送委托作废；第 ${v.rejoinDay} 日可重新入宗，今日执事名额不重置。`,'宗门');
+            v.member=false;v.commission=null;v.rejoinDay=G.day(s)+d.rejoinDays;
+            G.log(s,`你辞别${d.name}，重新成为散修。贡献、身份记录和已学典籍保留，门内福利停用，未交外送委托作废；第 ${v.rejoinDay} 日可重新入宗或转宗。`,'宗门');
           }break;
         }
         case 'auctionCatalog':

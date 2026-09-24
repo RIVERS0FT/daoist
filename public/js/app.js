@@ -96,31 +96,41 @@
     return `${travelLine(target)}${block?`<p class="alert" style="margin-bottom:12px">${esc(block)}</p>`:''}${btn(`${icon('pin')} ${label}`,`data-act="travel" data-target="${target}"${disabled(!!block||target===state.position)}`,'wide soft')}`;
   }
   function renderSect(s){
-    const v=s.sect,member=G.sectMember(s),at=s.position===G.SECT.place;
-    const button=(text,action,id='')=>{const block=G.sectBlock(s,action,{id});return `${btn(esc(text),`data-act="${action}" data-id="${esc(id)}"${disabled(!!block)}`,'wide')}${block?`<p class="copy">${esc(block)}</p>`:''}`;};
-    let html=`<section class="sect-view"><div class="sect-banner"><span class="sect-seal" aria-hidden="true">雨</span><div><h3>${G.SECT.name}</h3><p>${G.SECT.motto}</p><small>${member?G.sectRank(s).name:'散修 · 已获引荐'}</small></div></div><div class="stat-grid sect-stats">${statsBox('可用贡献',v.contribution)}${statsBox('累计贡献',v.earned)}${statsBox('完成委托',v.completed,'次')}</div>`;
-    html+=`<nav class="tabs sect-tabs" aria-label="宗门事务">${[['hall','山门'],['duties','执事堂'],['library','藏经阁']].map(([id,name])=>`<button class="${sectTab===id?'active':''}" data-ui="sect-tab" data-id="${id}" aria-pressed="${sectTab===id}">${name}</button>`).join('')}</nav>`;
-    if(!at)html+=`<div class="card sect-travel"><p class="copy">门内事务需到场办理。</p>${routeButton(G.SECT.place,'前往听雨观')}</div>`;
+    const id=G.sectDefinition(dialogData.sectId)?dialogData.sectId:G.currentSect(s).id,d=G.sectDefinition(id),v=G.sectState(s,id),member=v.member,at=s.position===d.place;
+    const button=(text,action,itemId='')=>{const block=G.sectBlock(s,action,{id:itemId,sectId:id});return `${btn(esc(text),`data-act="${action}" data-id="${esc(itemId)}" data-sect-id="${id}"${disabled(!!block)}`,'wide')}${block?`<p class="copy">${esc(block)}</p>`:''}`;};
+    let html=`<section class="sect-view"><label class="form-label" for="sect-select">选择宗门</label><select id="sect-select" class="text-input">${G.SECTS.map(x=>`<option value="${x.id}"${x.id===id?' selected':''}>${esc(x.name)} · ${x.discipline}${G.sectState(s,x.id).member?' · 已加入':''}</option>`).join('')}</select><div class="sect-banner"><span class="sect-seal" aria-hidden="true">${d.seal}</span><div><h3>${d.name}</h3><p>${d.motto}</p><small>${d.discipline} · ${member?G.sectRank(s,id).name:v.invited?'已获引荐':'尚未引荐'}</small></div></div><div class="stat-grid sect-stats">${statsBox('可用贡献',v.contribution)}${statsBox('累计贡献',v.earned)}${statsBox('完成委托',v.completed,'次')}</div>`;
+    html+=`<nav class="tabs sect-tabs" aria-label="宗门事务">${[['hall','山门'],['duties','执事堂'],['library','藏经阁'],['story','宗门剧情'],['relations','五宗关系']].map(([key,name])=>`<button class="${sectTab===key?'active':''}" data-ui="sect-tab" data-id="${key}" aria-pressed="${sectTab===key}">${name}</button>`).join('')}</nav>`;
+    if(!at&&sectTab!=='relations')html+=`<div class="card sect-travel"><p class="copy">${esc(d.station)} · 门内事务需到场办理。</p>${routeButton(d.place,`前往${d.name}驻点`)}</div>`;
     if(sectTab==='hall'){
-      if(!member)html+=`<article class="card"><h3>${v.joinedAt===null?'山门为你留着':'重归山门'}</h3><p class="copy">由陆听雨引荐，完成 ${G.SECT.joinMinutes} 分钟入宗仪式后成为${G.sectRank(s).name}。不收现金，不强制放弃配送，也可继续散修。</p>${button(v.joinedAt===null?'开始入宗仪式':'重新入宗','sectJoin')}</article>`;
-      else {
-        const next=G.SECT.ranks[v.rank+1];
-        html+=`<article class="card"><h3>${G.sectRank(s).name}</h3><p class="copy">门内修炼加成 +${Math.round(G.sectRank(s).training*100)}% · 已研习典籍 ${v.manuals.length} 部</p>${next?`<div class="divider"></div><h3>晋升${next.name}</h3><p class="copy">${esc(G.sectPromotionHint(next))}</p><p class="copy">消耗贡献 ${next.cost} · ${next.minutes} 分钟 · 体力 −${next.stamina}</p>${button('开始晋升考核','sectPromote')}`:'<p class="copy">已至本宗最高身份，可以继续守阵与行走人间。</p>'}</article>`;
-      }
-      html+=`<details class="card sect-ranks"><summary>宗门身份</summary><div class="stack">${G.SECT.ranks.map((r,i)=>`<div><strong>${esc(r.name)}${member&&i===v.rank?' · 当前':''}</strong><p class="copy">${i?esc(G.sectPromotionHint(r)):'完成入宗仪式'}${r.training?` · 门内修炼 +${Math.round(r.training*100)}%`:''}</p></div>`).join('')}</div></details>`;
-      if(member)html+=`<div class="sect-leave"><p class="copy">离宗保留贡献、身份和已学典籍，但停用门内加成，放弃未交外送委托，次日才可重入。</p>${btn('辞别宗门',`data-ui="sect-leave"${disabled(!at||!!s.activity)}`,'danger small')}</div>`;
-    }else if(sectTab==='duties'){
-      if(!member)html+='<div class="empty">入宗后可领取执事与外送委托。</div>';
+      html+=`<article class="card"><h3>${d.discipline}</h3><p class="copy">${esc(d.specialty)}</p><p class="copy">${esc(d.background)}</p><details><summary>实力与短板</summary><p class="copy">青岚区域综合第 ${d.standing} · 实力设定 ${d.power}/100 · 最高战力 ${d.leaderRealm}</p><p class="copy">${esc(d.weakness)} 这是世界设定，不自动计算战斗胜负。</p></details></article>`;
+      if(!v.invited){
+        const block=G.sectStoryBlock(s,id);
+        html+=id==='tingyu'?'<p class="copy">通过配送解锁听雨观、结识陆听雨并进入炼气后，完成固定引荐剧情。</p>':`<p class="copy">先了解本宗门规，再自行决定是否入宗。</p>${btn('了解宗门并取得引荐',`data-act="sectStory" data-sect-id="${id}"${disabled(!!block)}`,'wide')}${block?`<p class="copy">${esc(block)}</p>`:''}`;
+      }else if(!member)html+=`<article class="card"><h3>${v.joinedAt===null?'山门为你留着':'重归山门'}</h3><p class="copy">完成 ${d.joinMinutes} 分钟入宗仪式后取得身份。不收现金，可继续配送，也可一直散修。</p>${button(v.joinedAt===null?'开始入宗仪式':'重新入宗','sectJoin')}</article>`;
       else{
-        const task=v.commission,progress=G.sectCommissionProgress(s),usedToday=v.commissionDay===G.day(s);
-        html+=`<p class="copy sect-note">每项每日可领一次。执事中断不退名额，实际完成才结算；外送委托跨日保留。</p><div class="stack sect-duties">`;
-        html+=`<article class="card ${!task&&usedToday?'complete':''}" data-sect-commission><div class="row"><h3>人间行走</h3>${tag(task?`${progress} / ${G.SECT.commission.count} 单`:usedToday?'今日已领取':'外送委托',task&&progress===3?'gold':'')}</div><p class="copy">领取后完成 ${G.SECT.commission.count} 单地图外卖，再回观交还。贡献 +${G.SECT.commission.contribution} · 修为 +${G.SECT.commission.qi}</p>${task?button('交还外送委托','sectClaim',String(task.day)):button('领取外送委托','sectAccept')}</article>`;
-        html+=G.SECT.duties.filter(d=>d.rank<=v.rank).map(d=>{const used=G.sectDutyUsed(s,d.id);return `<article class="card ${used?'complete':''}" data-sect-duty="${d.id}"><div class="row"><h3>${d.name}</h3>${used?tag(s.activity?.kind==='sectTask'&&s.activity.params.id===d.id?'执行中':'今日名额已用'):tag(`${d.minutes} 分钟`)}</div><p class="copy">${d.desc}</p><p class="copy">体力 −${d.stamina}${d.mana?` · 灵力 −${d.mana}`:''} · 贡献 +${d.contribution} · 修为 +${d.qi}</p>${button('领取并开始','sectTask',d.id)}</article>`;}).join('')+'</div>';
+        const next=d.ranks[v.rank+1];
+        html+=`<article class="card"><h3>${G.sectRank(s,id).name}</h3><p class="copy">门内修炼加成 +${Math.round(G.sectRank(s,id).training*100)}% · 本宗已学功法 ${v.manuals.length}/5</p>${next?`<h3>晋升${next.name}</h3><p class="copy">${esc(G.sectPromotionHint(next))}</p><p class="copy">贡献 ${next.cost} · ${next.minutes} 分钟 · 体力 −${next.stamina}</p>${button('开始晋升考核','sectPromote')}`:'<p class="copy">已至本宗最高身份。</p>'}</article>`;
+        html+=`<div class="sect-leave"><p class="copy">离宗保留贡献、身份与功法，停用门内加成，放弃未交委托；次日才可重入或转宗。</p>${btn('辞别宗门',`data-ui="sect-leave" data-sect-id="${id}"${disabled(!at||!!s.activity)}`,'danger small')}</div>`;
       }
-    }else{
-      html+='<p class="copy sect-note">贡献仅用于宗门，不扣现金或外卖币。典籍研习一次永久保留；丹方仍从原有三种途径获取。</p>';
-      const items=G.SECT.library.filter(i=>member?i.rank<=v.rank:G.sectManual(s,i.id));
-      html+=items.length?`<div class="stack">${items.map(item=>{const owned=item.manual&&G.sectManual(s,item.id);return `<article class="card" data-sect-item="${item.id}"><div class="row"><h3>${item.name}</h3>${tag(owned?'已研习':`${item.cost} 贡献`,owned?'mint':'gold')}</div><p class="copy">${item.desc}</p>${owned?'':button(item.manual?'兑换并研习':'兑换物品','sectBuy',item.id)}</article>`;}).join('')}</div>`:'<div class="empty">入宗后开放藏经阁。</div>';
+      html+=`<details class="card sect-ranks"><summary>宗门身份</summary><div class="stack">${d.ranks.map((r,i)=>`<div><strong>${r.name}${member&&i===v.rank?' · 当前':''}</strong><p class="copy">${i?esc(G.sectPromotionHint(r)):'完成入宗仪式'}</p></div>`).join('')}</div></details>`;
+    }else if(sectTab==='duties'){
+      if(!member)html+='<div class="empty">加入本宗后可领取执事与外送委托；各宗贡献独立。</div>';
+      else{
+        const task=v.commission,progress=G.sectCommissionProgress(s,id),usedToday=v.commissionDay===G.day(s);
+        html+=`<p class="copy sect-note">每项每日一次；中断不退名额，完成才结算。外送委托跨日保留。</p><div class="stack sect-duties"><article class="card ${!task&&usedToday?'complete':''}" data-sect-commission><div class="row"><h3>人间行走</h3>${tag(task?`${progress} / 3 单`:usedToday?'今日已领取':'外送委托')}</div><p class="copy">领取后完成 3 单地图外卖，再回本宗交还。贡献 +${d.commission.contribution} · 修为 +${d.commission.qi}</p>${task?button('交还外送委托','sectClaim',String(task.day)):button('领取外送委托','sectAccept')}</article>`;
+        html+=d.duties.filter(task=>task.rank<=v.rank).map(task=>{const used=G.sectDutyUsed(s,task.id,id);return `<article class="card ${used?'complete':''}" data-sect-duty="${task.id}"><div class="row"><h3>${task.name}</h3>${tag(used?'今日名额已用':`${task.minutes} 分钟`)}</div><p class="copy">${esc(task.desc)}</p><p class="copy">体力 −${task.stamina} · 灵力 −${task.mana} · 贡献 +${task.contribution} · 修为 +${task.qi}</p>${button('领取并开始','sectTask',task.id)}</article>`;}).join('')+'</div>';
+      }
+    }else if(sectTab==='library'){
+      html+='<p class="copy sect-note">典籍为本宗功法，研习一次永久保留。丹方获取与炼药条件不变。</p>';
+      const items=d.library.filter(i=>member?i.rank<=v.rank:G.sectManual(s,i.id));
+      html+=items.length?`<div class="stack">${items.map(item=>{const owned=item.manual&&G.sectManual(s,item.id);return `<article class="card" data-sect-item="${item.id}"><div class="row"><h3>${item.name}</h3>${tag(owned?'已研习':`${item.cost} 贡献`,owned?'mint':'gold')}</div><p class="copy">${item.desc}</p>${owned?'':button(item.manual?'兑换并研习':'兑换物品','sectBuy',item.id)}</article>`;}).join('')}</div>`:'<div class="empty">入宗后开放本宗藏经阁。</div>';
+    }else if(sectTab==='story'){
+      const next=G.nextSectStory(s,id),block=G.sectStoryBlock(s,id),done=s.sectWorld.stories[id].length;
+      html+=`<article class="card"><div class="row"><h3>本宗故事</h3>${tag(`${done} / 4`)}</div>${next?`<h3>${esc(next.title)}</h3><p class="copy">固定剧情，选择会影响五宗关系；完成后才记录进度。</p>${btn('进入下一段剧情',`data-act="sectStory" data-sect-id="${id}"${disabled(!!block)}`,'wide')}${block?`<p class="copy">${esc(block)}</p>`:''}`:'<p class="copy">本宗故事已经完成，选择的影响保留在五宗关系中。</p>'}</article>`;
+    }else if(sectTab==='relations'){
+      html+=`<p class="copy">综合序位描述青岚区域实力；主修不同，各有所长。攻坚、防御、补给、洞察为设定数值，不替代尚未实现的战斗。</p><div class="stack">${[...G.SECTS].sort((a,b)=>a.standing-b.standing).map(x=>`<details class="card"><summary>第 ${x.standing} · ${x.name} · ${x.discipline}</summary><p class="copy">综合 ${x.power} · 最高战力 ${x.leaderRealm}</p><p class="copy">攻坚 ${x.strength.combat} / 防御 ${x.strength.defense} / 补给 ${x.strength.supply} / 洞察 ${x.strength.insight}</p><p class="copy">${esc(x.specialty)} ${esc(x.weakness)}</p></details>`).join('')}</div><div class="section-title"><h3>宗际关系</h3><span class="tag">−100 至 100</span></div><div class="stack">${G.SECT_RELATIONS.map(r=>{const value=G.sectRelation(s,r.a,r.b);return `<details class="card"><summary>${G.sectDefinition(r.a).name} ↔ ${G.sectDefinition(r.b).name} · ${G.sectRelationLabel(value)} ${value}</summary><p class="copy">${esc(r.reason)}</p></details>`;}).join('')}</div>`;
+      const next=G.SECT_COUNCILS[s.sectWorld.councils.length],block=G.sectCouncilBlock(s);
+      html+=`<div class="section-title"><h3>跨宗议事</h3>${tag(`${s.sectWorld.councils.length} / 3`)}</div>${next?`<article class="card"><h3>${esc(next.title)}</h3><p class="copy">在长乐集会馆进行，散修也可参与，不强制入宗。</p>${btn('进入议事',`data-act="sectCouncil"${disabled(!!block)}`,'wide')}${block?`<p class="copy">${esc(block)}</p>`:''}${s.position!=='market'?routeButton('market','前往长乐集议事'):''}</article>`:'<p class="copy">三场议事已完成。五宗仍可各修其道，继续相处。</p>'}`;
     }
     return html+'</section>';
   }
@@ -137,7 +147,13 @@
           body+=`<article class="order-box"><div class="row"><h3>${esc(order.title)}</h3>${tag(`${G.durationText(G.orderOfferRemaining(s,order))}后消失`,'gold')}</div><p class="copy" style="margin-top:10px">${esc(order.desc)}</p><div class="order-reward"><span>¥${order.reward}<small> 现金</small></span>${G.deliveryCoins(s,order)?`<span>${G.deliveryCoins(s,order)}<small> 外卖币</small></span>`:''}</div>${travelLine(p.id)}${order.condition==='mystic'?'<p class="copy">交付需要灵力 −8。</p>':''}${block?`<div class="alert" style="margin:12px 0">${esc(block)}</div>`:''}${btn('接单并配送 →',`data-act="deliver" data-id="${esc(order.id)}"${disabled(!!block)}`,'primary wide')}</article>`;
         }
         if(p.permanent&&known){body+='<div class="section-title"><h3>在这里</h3></div>';if(s.position!==p.id)body+=routeButton(p.id);else{
-          const localActions={garage:actionCard('查看座驾',G.featureUnlocked(s,'upgrades')?'维修与升级':'维修与保养','panel-vehicle','','bike'),clinic:actionCard('接受治疗','30 分钟 · ¥25 · 气血补满','heal','','shield',s.player.health>=c.health||s.player.money<25),temple:actionCard('听雨观宗门','执事、身份与藏经阁','panel-sect','','home')+actionCard('在灵地修行','修炼收益额外提高 25%','panel-cultivation','','lotus')+actionCard('探寻古阵','30 分钟 · 体力 −12','explore','','spark',s.player.stamina<12),park:actionCard('沿江探索','30 分钟 · 体力 −12','explore','','spark',s.player.stamina<12),market:actionCard('吃一碗热面','20 分钟 · ¥12 · 体力 +45 / 气血 +10','meal','','tea',s.player.money<12)+actionCard('逛炼药摊','购买药鼎、药材并寻购丹方','panel-alchemy','','lotus')+actionCard('万宝拍卖场','查看今日拍品 · 每晚 18:00–24:00','panel-auction','','auction')};
+          const localActions={garage:actionCard('查看座驾',G.featureUnlocked(s,'upgrades')?'维修与升级':'维修与保养','panel-vehicle','','bike'),clinic:actionCard('接受治疗','30 分钟 · ¥25 · 气血补满','heal','','shield',s.player.health>=c.health||s.player.money<25),temple:actionCard('在灵地修行','修炼收益额外提高 25%','panel-cultivation','','lotus')+actionCard('探寻古阵','30 分钟 · 体力 −12','explore','','spark',s.player.stamina<12),park:actionCard('沿江探索','30 分钟 · 体力 −12','explore','','spark',s.player.stamina<12),market:actionCard('吃一碗热面','20 分钟 · ¥12 · 体力 +45 / 气血 +10','meal','','tea',s.player.money<12)+actionCard('逛炼药摊','购买药鼎、药材并寻购丹方','panel-alchemy','','lotus')+actionCard('万宝拍卖场','查看今日拍品 · 每晚 18:00–24:00','panel-auction','','auction')};
+          const onsiteSect=G.SECTS.find(x=>x.place===p.id);
+          if(onsiteSect&&G.featureUnlocked(s,'practice')){
+            const id=onsiteSect.id;
+            if(G.featureUnlocked(s,'sect'))localActions[p.id]=(localActions[p.id]||'')+actionCard(`${onsiteSect.name}宗门`,onsiteSect.discipline,'panel-sect',`data-sect-id="${id}"`,'home');
+            else if(id!=='tingyu'){const block=G.sectStoryBlock(s,id);localActions[p.id]=(localActions[p.id]||'')+actionCard(`${onsiteSect.name}引荐`,block||onsiteSect.discipline,'sectStory',`data-sect-id="${id}"`,'home',!!block);}
+          }
           const currentHome=G.currentResidence(s),listedHome=G.RESIDENCES.find(h=>h.place===p.id);
           if(currentHome.place===p.id)localActions[p.id]=(localActions[p.id]||'')+actionCard(`在${currentHome.name}睡一觉`,`8 小时 · ${G.residenceRecoveryText(currentHome)}`,'sleep','','moon');
           else if(listedHome)localActions[p.id]=(localActions[p.id]||'')+actionCard(`搬入${listedHome.name}`,`周租 ¥${listedHome.rent} · ${G.residenceRecoveryText(listedHome)}`,'moveHome',`data-id="${listedHome.id}"`,'home');
@@ -149,7 +165,7 @@
       }
       case 'character':{
         title=s.name;label='Your character';const labels={insight:'悟性',constitution:'根骨',agility:'身法',luck:'机缘',karma:'善缘',rep:'口碑'};
-        body=`<div class="row">${tag(`${G.realmLabel(s)} · ${G.locationName(s)}`,'gold')}${tag(s.mode==='ai'?'AI 剧情':'经典剧情')}</div><div class="stat-grid" style="margin-top:20px">${statsBox('气血',captext(s.player.health,c.health))}${statsBox('体力',captext(s.player.stamina,c.stamina))}${statsBox('灵力',captext(s.player.mana,c.mana))}</div><div class="section-title"><h3>修行资质</h3></div><div class="detail-list">${Object.entries(labels).map(([k,n])=>`<div><span>${n}</span><strong>${s.player[k]}</strong></div>`).join('')}</div><div class="section-title"><h3>沿途留下的印记</h3></div><div class="stat-grid">${statsBox('送达订单',s.stats.delivered,'单')}${statsBox('累计行程',(s.stats.distance/1000).toFixed(1),'km')}${statsBox('配送收入',s.stats.earned,'元')}</div><p class="copy" style="margin:17px 0">已习得：${s.learned.map(id=>G.ITEMS.find(i=>i.id===id).name).join('、')||'暂无心法'}<br>已装备：${s.equipment.map(id=>G.ITEMS.find(i=>i.id===id).name).join('、')||'暂无法器'}</p>${btn(`${icon('download')} 导出当前存档`,'data-ui="export-current"','wide')}`;break;
+        body=`<div class="row">${tag(`${G.realmLabel(s)} · ${G.locationName(s)}`,'gold')}${tag(s.mode==='ai'?'AI 剧情':'经典剧情')}</div><div class="stat-grid" style="margin-top:20px">${statsBox('气血',captext(s.player.health,c.health))}${statsBox('体力',captext(s.player.stamina,c.stamina))}${statsBox('灵力',captext(s.player.mana,c.mana))}</div><div class="section-title"><h3>修行资质</h3></div><div class="detail-list">${Object.entries(labels).map(([k,n])=>`<div><span>${n}</span><strong>${s.player[k]}</strong></div>`).join('')}</div><div class="section-title"><h3>沿途留下的印记</h3></div><div class="stat-grid">${statsBox('送达订单',s.stats.delivered,'单')}${statsBox('累计行程',(s.stats.distance/1000).toFixed(1),'km')}${statsBox('配送收入',s.stats.earned,'元')}</div><p class="copy" style="margin:17px 0">已习得：${G.TECHNIQUES.filter(t=>G.knowsTechnique(s,t.id)).map(t=>t.name).join('、')||'暂无心法'}<br>已装备：${s.equipment.map(id=>G.ITEMS.find(i=>i.id===id).name).join('、')||'暂无法器'}</p>${btn(`${icon('download')} 导出当前存档`,'data-ui="export-current"','wide')}`;break;
       }
       case 'cultivation':{
         title='今夜，向内而行';label='Cultivation';
@@ -157,6 +173,8 @@
         if(!foundationCount)usePill=false;
         const chance=G.breakChance(s,usePill?foundationTier:0);
         body=`<div class="row"><h3>${G.realmLabel(s)}${nextRealm?` <span class="muted">→</span> ${nextRealm}`:''}</h3>${tag(G.isNight(s)?'夜间灵气 +45%':'白昼 · 灵气平缓',G.isNight(s)?'gold':'')}</div><div class="wide-progress"><i style="width:${need?Math.min(100,s.player.qi/need*100):100}%"></i></div><div class="progress-label"><span>修为</span><span>${Math.floor(s.player.qi)}${need?` / ${need}`:` · ${G.realmLabel(s)}圆满`}</span></div><div class="section-title"><h3>功课</h3>${s.position==='temple'?tag('灵地 +25%','mint'):tag(G.locationName(s))}</div><div class="stack">${actionCard('吐纳','45 分钟 · 体力 −12 · 恢复灵力','cultivate','data-kind="breath"','lotus',s.player.stamina<12)}${advanced?actionCard('静坐入定','90 分钟 · 体力 −24 · 更多修为','cultivate','data-kind="meditate"','moon',s.player.stamina<24)+actionCard('淬体练步','30 分钟 · 体力 −20 · 积累根骨与身法','cultivate','data-kind="body"','sword',s.player.stamina<20):''}</div>`;
+        const techniqueBonus=G.techniqueBonuses(s);
+        body+=`<details class="card technique-summary"><summary>已学功法 ${G.TECHNIQUES.filter(t=>G.knowsTechnique(s,t.id)).length} / 36</summary><p class="copy">入定额外 +${Math.round(techniqueBonus.meditation*100)}% · 淬体额外 +${Math.round(techniqueBonus.body*100)}% · 步行速度 +${Math.round(techniqueBonus.walk*100)}% · 行路体力降低 ${Math.round(techniqueBonus.travelStamina*100)}%</p><p class="copy">突破、炼药与资源上限加成已计入对应面板。功法永久生效，提升上限不即时补满。</p></details>`;
         if(G.sectTrainingBonus(s))body+=`<p class="copy sect-bonus">宗门与典籍修炼加成 +${Math.round(G.sectTrainingBonus(s)*100)}%</p>`;
         if(!advanced)body+='<p class="copy" style="margin-top:16px">先完成一次吐纳，再开启进阶修行与街巷探索。中途停止不算完成。</p>';
         else{
@@ -202,9 +220,9 @@
       case 'inventory':{
         title='随身行囊';label='What you carry';const items=G.ITEMS.filter(i=>!i.unique&&(s.inventory[i.id]||0)>0);
         body=items.length?`<div class="stack">${items.map(item=>`<article class="card"><div class="row"><h3>${item.name} <span class="badge-number">${s.inventory[item.id]}</span></h3>${item.effect?btn('使用',`data-act="use" data-id="${item.id}"`,'small'):tag(item.type==='pill'?'突破用':'材料')}</div><p class="copy">${item.desc}</p></article>`).join('')}</div>`:'<div class="empty">行囊很轻。外卖系统里可以兑换丹药与材料。</div>';
-        body+=`<div class="section-title"><h3>心法与装备</h3></div><div class="stack">${[...s.learned,...s.equipment].map(id=>{const i=G.ITEMS.find(i=>i.id===id);return `<div class="card"><h3>${i.name} <span class="tag mint">已生效</span></h3><p class="copy">${i.desc}</p></div>`;}).join('')||'<p class="copy">还没有习得心法或装备法器。</p>'}</div>`;break;
+        body+=`<div class="section-title"><h3>心法与装备</h3></div><div class="stack">${[...G.TECHNIQUES.filter(t=>G.knowsTechnique(s,t.id)).map(t=>t.id),...s.equipment].map(id=>{const i=G.ITEMS.find(i=>i.id===id);return `<div class="card"><h3>${i.name} <span class="tag mint">已生效</span></h3><p class="copy">${i.desc}</p></div>`;}).join('')||'<p class="copy">还没有习得心法或装备法器。</p>'}</div>`;break;
       }
-      case 'sect':title='听雨观 · 宗门';body=renderSect(s);break;
+      case 'sect':title='五宗 · 修行之路';body=renderSect(s);break;
       case 'auction':{
         title=G.AUCTION.name;label='';
         const at=s.position===G.AUCTION.place&&G.placeUnlocked(s,G.AUCTION.place),today=s.auction.day===G.day(s),hours=G.auctionHours();
@@ -299,7 +317,7 @@
   }
   function loadGame(id,autoStart=false){const found=store.saves.find(s=>s.id===id);if(!found)return showError('没有找到这个存档。');abortAI();clock.pause('manual');clock.speed=1;state=G.clone(found);systemTab='shop';sectTab='hall';usePill=false;conflict=false;dirtySinceSave=false;lastSavedAt=Date.now();saveOk=!store.unavailable;dialog.close();dialogType=null;clearError();renderGame();requestAnimationFrame(()=>map.center());if(state.gameOver)openPanel('gameover');else if(state.eventResult)openPanel('result');else if(state.placeUnlock)openPanel('place-unlock');else if(G.nextUnlockNotice(state))openPanel('unlock');else if(state.pending){openPanel('event');maybeGenerateAI();}else if(state.ending)openPanel('ending');if(autoStart)clock.release('manual');syncPause();renderLive();}
   function act(action,payload={}){
-    if(!state)return;if(['panel-cultivation','panel-alchemy','panel-vehicle','panel-auction','panel-sect'].includes(action)){openPanel(action.slice(6));return;}
+    if(!state)return;if(['panel-cultivation','panel-alchemy','panel-vehicle','panel-auction','panel-sect'].includes(action)){openPanel(action.slice(6),{sectId:payload.sectId});return;}
     if(conflict){showError('另一标签页已更新本地存档。请返回开始页重新载入，以免覆盖。');return;}
     clearError();const oldPending=state.pending?.id,oldPendingKind=state.pending?.kind,oldPlaceUnlock=state.placeUnlock?.place;let r;try{r=G.perform(state,action,payload);}catch(error){console.error(error);showError('行动发生异常，未写入本次变更。请导出存档保留现场。');return;}
     if(!r.ok){showError(r.error);return;}state=r.state;if(oldPending!==state.pending?.id)abortAI();persist();renderGame();
@@ -339,14 +357,14 @@
   document.addEventListener('click',e=>{
     const button=e.target.closest('button');if(!button||button.disabled)return;
     if(button.dataset.panel){if(state?.gameOver)openPanel('gameover');else if(state?.eventResult)openPanel('result');else if(state?.placeUnlock)openPanel('place-unlock');else if(G.nextUnlockNotice(state))openPanel('unlock');else if(state?.pending)openPanel('event');else if(state?.ending)openPanel('ending');else openPanel(button.dataset.panel);return;}
-    if(button.dataset.act){const d=button.dataset;const payload={id:d.id,target:d.target,kind:d.kind,mode:d.mode,recipe:d.recipe,raise:d.raise===undefined?undefined:Number(d.raise),index:Number(d.index),eventId:d.event,usePill:usePill&&(state?.inventory.foundation||0)>0};act(d.act,payload);return;}
+    if(button.dataset.act){const d=button.dataset;const payload={sectId:d.sectId,id:d.id,target:d.target,kind:d.kind,mode:d.mode,recipe:d.recipe,raise:d.raise===undefined?undefined:Number(d.raise),index:Number(d.index),eventId:d.event,usePill:usePill&&(state?.inventory.foundation||0)>0};act(d.act,payload);return;}
     const d=button.dataset;
     switch(d.ui){
       case 'new-game':if(store.saves.length>=G.MAX_SAVES)showError('存档已满，请先导出并删除不需要的旅程。');else openPanel('new');break;
       case 'close':closePanel();break;
       case 'pause':if(state){if(clock.reasons.has('manual'))clock.release('manual');else clock.pause('manual');persist();syncPause();renderLive();}break;
-      case 'sect-tab':if(state&&G.featureUnlocked(state,'sect')&&['hall','duties','library'].includes(d.id)){sectTab=d.id;renderPanel();}break;
-      case 'sect-leave':if(state&&confirm('确定辞别听雨观？未交外送委托会放弃，门内加成停用，次日才可重入；贡献、身份和已学典籍保留。'))act('sectLeave');break;
+      case 'sect-tab':if(state&&G.featureUnlocked(state,'sect')&&['hall','duties','library','story','relations'].includes(d.id)){sectTab=d.id;renderPanel();}break;
+      case 'sect-leave':if(state&&confirm(`确定辞别${G.sectDefinition(d.sectId)?.name}？未交委托会放弃，门内加成停用，次日才可重入或转宗；贡献、身份和功法保留。`))act('sectLeave',{sectId:d.sectId});break;
       case 'cancel-delivery':if(confirm('取消这张订单？不会获得配送报酬。'))act('cancelDelivery');break;
       case 'load':loadGame(d.id);break;
       case 'home':returnHome();break;
@@ -368,7 +386,7 @@
     if(e.target.id!=='new-game-form')return;e.preventDefault();
     try{const data=new FormData(e.target),newState=G.newGame(data.get('name'),data.get('mode'));const result=store.upsert(newState);if(!result.ok&&store.saves.length>=G.MAX_SAVES&&!store.saves.some(s=>s.id===newState.id))throw new Error(result.error);saveOk=result.ok;if(!result.ok)storageWarning(result.error);loadGame(newState.id,true);}catch(err){showError(err.message);}
   });
-  document.addEventListener('change',e=>{if(e.target.id==='time-speed'){clock.setSpeed(Number(e.target.value));renderLive();}if(e.target.id==='break-pill'){usePill=e.target.checked;renderPanel();}});
+  document.addEventListener('change',e=>{if(e.target.id==='sect-select'&&G.sectDefinition(e.target.value)){dialogData.sectId=e.target.value;renderPanel();}if(e.target.id==='time-speed'){clock.setSpeed(Number(e.target.value));renderLive();}if(e.target.id==='break-pill'){usePill=e.target.checked;renderPanel();}});
   $('#import-file').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw new Error('文件过大，上限为 2 MB。');const text=await file.text();const r=store.import(text);if(!r.ok)storageWarning(r.error);if(!state){dialog.close();dialogType=null;renderStart();}else if(dialogType==='help')renderPanel();}catch(err){showError(err.message);}});
   dialog.addEventListener('cancel',e=>{if(state?.gameOver||state?.eventResult||state?.placeUnlock||G.nextUnlockNotice(state)||state?.pending||state?.ending)e.preventDefault();else{dialogType=null;map?.select(null);}});
   dialog.addEventListener('close',()=>{syncPause();renderLive();});

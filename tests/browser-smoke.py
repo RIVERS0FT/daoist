@@ -1618,7 +1618,7 @@ def male_npc_browser_checks(browser):
         legacy = page.evaluate('''()=>{const G=NightCourier,s=G.clone(window.__live);
           s.schemaVersion=19;for(const id of G.NEW_MALE_NPC_IDS)delete s.bonds[id];return s;}''')
         fixture(page, legacy, unlock_gameplay=False)
-        assert current(page)['schemaVersion'] == 21
+        assert current(page)['schemaVersion'] == 22
         assert len(current(page)['bonds']) == 21
         assert all(not b['met'] for b in current(page)['bonds'].values())
         assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
@@ -1816,12 +1816,68 @@ def zhou_story_browser_checks(browser):
         ctx.close()
 
 
+def five_sects_browser_checks(browser):
+    for width,height in [(1200,900),(320,740)]:
+        for sect_id,place,duty,manual in [('jingang','park','iron-load','iron-skin'),('baicao','clinic','herbal-sort','fire-sense'),('lingxiao','market','sword-forms','sword-step'),('xuanwei','bookshop','mind-index','mind-lamp')]:
+            ctx,page,errors=setup(browser,width,height,ai=True)
+            new_game(page,'五宗试炼','ai')
+            edits=page.evaluate('''(place)=>{const G=NightCourier,s=window.__live,flags={...s.flags,firstOrder:true,systemAwakened:true};
+              for(const k of G.STORY_FLAG_KEYS.slice(0,6))flags[k]=true;
+              return {position:place,location:null,player:{...s.player,realm:4,money:100000,coins:10000},stats:{...s.stats,delivered:42,trained:1},claimed:['q1'],flags,
+                unlockedPlaces:G.PLACES.filter(p=>p.permanent).map(p=>p.id),unlockedFeatures:G.FEATURE_UNLOCKS.filter(f=>!['sect','bonds'].includes(f.id)).map(f=>f.id)};
+            }''',place)
+            fixture(page,edits,unlock_gameplay=False)
+            assert page.locator('#game-nav [data-panel="sect"]').count()==0
+            page.locator(f'[data-place="{place}"]').focus();page.keyboard.press('Enter')
+            page.click(f'[data-act="sectStory"][data-sect-id="{sect_id}"]')
+            assert current(page)['pending']['aiStatus']=='skip'
+            assert not current(page)['sectWorld']['records'][sect_id]['invited']
+            page.click('[data-act="choose"][data-index="0"]');ack_result_ui(page)
+            assert current(page)['sectWorld']['records'][sect_id]['invited']
+            assert not current(page)['sectWorld']['records'][sect_id]['member']
+            page.click('#game-nav [data-panel="sect"]');page.select_option('#sect-select',sect_id)
+            assert page.locator('#sect-select option').count()==5
+            page.click('[data-ui="sect-tab"][data-id="hall"]');page.click('[data-act="sectJoin"]')
+            assert not current(page)['sectWorld']['records'][sect_id]['member']
+            finish_ui_activity(page);settle_ui(page)
+            assert current(page)['sectWorld']['records'][sect_id]['member']
+            page.select_option('#sect-select',sect_id)
+            page.click('[data-ui="sect-tab"][data-id="duties"]')
+            page.click(f'[data-sect-duty="{duty}"] [data-act="sectTask"]');finish_ui_activity(page);settle_ui(page)
+            assert current(page)['sectWorld']['records'][sect_id]['completed']==1
+            assert current(page)['sect']['earned']==0
+            page.click('[data-ui="sect-tab"][data-id="story"]');page.click('[data-act="sectStory"]')
+            title=page.locator('#panel-title').inner_text();page.click('[data-act="choose"][data-index="1"]')
+            if current(page)['activity']:
+                assert current(page)['sectWorld']['stories'][sect_id]==[0]
+                page.click('[data-ui="home"]');page.locator('[data-ui="load"]').first.click()
+                finish_ui_activity(page)
+            ack_result_ui(page)
+            assert len(current(page)['sectWorld']['stories'][sect_id])==2
+            assert page.evaluate('window.__storyRequests.length')==0
+            # Fund only this sect in a white-box fixture; then use actual buy UI.
+            edits=page.evaluate('''id=>{const s=window.__live,w=structuredClone(s.sectWorld);w.records[id].earned=500;w.records[id].contribution=500;return {sectWorld:w};}''',sect_id)
+            fixture(page,edits,unlock_gameplay=False)
+            page.click('#game-nav [data-panel="sect"]');page.select_option('#sect-select',sect_id)
+            page.click('[data-ui="sect-tab"][data-id="library"]');page.click(f'[data-act="sectBuy"][data-id="{manual}"]')
+            assert manual in current(page)['sectWorld']['records'][sect_id]['manuals']
+            assert page.locator(f'[data-sect-item="{manual}"] [data-act="sectBuy"]').count()==0
+            page.click('[data-ui="sect-tab"][data-id="relations"]')
+            assert page.locator('.sect-view details').count()==15
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            assert page.locator('.sect-view').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+            page.screenshot(path=str(OUT/f'five-sects-{sect_id}-{width}.png'))
+            assert not errors,errors
+            record(f'{width}px {sect_id} 地点引荐、五宗选择、入宗执事、剧情中途读档、专属功法和十组关系可用且无AI请求')
+            ctx.close()
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    five_sects_browser_checks(browser)
     zhou_story_browser_checks(browser)
     male_npc_browser_checks(browser)
     npc_career_browser_checks(browser)

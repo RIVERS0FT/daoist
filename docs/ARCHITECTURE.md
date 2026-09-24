@@ -2,9 +2,9 @@
 
 本文档只描述**当前技术架构、状态推进方式和工程约束**。当前玩法规则见 [GAME_DESIGN.md](GAME_DESIGN.md)，版本历史见 [VERSIONS.md](VERSIONS.md)。
 
-当前应用版本：**1.18.0**  
-当前存档 schema：**v21**  
-当前存储键：`night-courier:saves:v21`
+当前应用版本：**1.19.0**
+当前存档 schema：**v22**
+当前存储键：`night-courier:saves:v22`
 
 ## 1. 文档职责
 
@@ -25,7 +25,7 @@
 加载顺序：
 
 ```text
-data → npc-profiles → engine → clock → storage → progression → map → app
+data → sects → npc-profiles → engine → sect-engine → sect-stories → clock → storage → progression → map → app
 ```
 
 主要职责：
@@ -36,7 +36,7 @@ data → npc-profiles → engine → clock → storage → progression → map �
 | `npc-profiles.js` | 人物性格、职业边界、画像/AI提示词 |
 | `engine.js` | 核心行动校验、状态复制、结算、路线与规则查询 |
 | `clock.js` | 连续时间、倍率、暂停理由与前后台时钟 |
-| `storage.js` | v21 存档、迁移、清洗、导入导出与备份 |
+| `storage.js` | v22 存档、迁移、清洗、导入导出与备份 |
 | `progression.js` | 功能开放、固定主线、章节侧写与成长扩展 |
 | `map.js` | SVG 地图、路线表现、订单点与手势 |
 | `app.js` | UI 渲染、面板、事件请求与输入编排 |
@@ -240,13 +240,13 @@ NPC 身份、年龄、职业以 `data.js` 为主；扩展人设在 `npc-profiles
 
 周野的分阶段身份披露必须按已结算阶段裁剪，不能把完整制作端剧透直接发送给早期 AI。
 
-## 11. 存档 v21
+## 11. 存档 v22
 
 当前：
 
 ```text
-G.VERSION = 21
-G.STORAGE_KEY = night-courier:saves:v21
+G.VERSION = 22
+G.STORAGE_KEY = night-courier:saves:v22
 G.MAX_SAVES = 12
 ```
 
@@ -399,3 +399,11 @@ RIVERSOFT 静态沙箱不等于完整 Node 环境：真实 AI 代理和可靠本
 9. 更新对应 TEST_REPORT。
 10. PR CI 通过后 squash merge。
 11. 合并到 main 后验证 RIVERSOFT verify、publish 与公网哈希。
+
+## 16. 五宗与功法模块
+
+`sects.js` 保存五宗方向、实力设定、36 种功法和 10 对基础关系；`sect-engine.js` 负责独立账户、资格查询、封顶加成、在途与存档校验；`sect-stories.js` 保存固定剧情、选择记录与关系派生。UI 只选择查看对象，不改变所属宗门。
+
+原 `s.sect` 专属听雨观，v22 新增 `s.sectWorld.records` 保存其余四宗，`stories` 保存五宗已结算选项前缀，`councils` 保存三场议事前缀。不保存可任意写入的关系值。旧活动不带 sectId 时只指听雨观，新宗门活动必须携带合法 sectId。至多一宗 member=true，退出冷却取全部宗门记录的最大值。
+
+`G.techniqueBonuses` 为只读白名单合计，资源上限在宗门所有权恢复后再裁剪。`finishChoice` 在真实完成后提交宗门故事，`cleanPending` 从可信模板重建；AI 不得提供资格、贡献、外交或已学功法。新字段缺失或关系矛盾时拒绝现代存档，v21 及更早只新增空白记录，不补算。

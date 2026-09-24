@@ -2,7 +2,10 @@ import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.m
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
+import '../public/js/sects.js';
 import '../public/js/engine.js';
+import '../public/js/sect-engine.js';
+import '../public/js/sect-stories.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
@@ -92,7 +95,7 @@ test('解锁单叙述与章名一致，绑定不添加新奖励或系统提前�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'story');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.18.0');assert.equal(G.VERSION,21);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.19.0');assert.equal(G.VERSION,22);
 });
 
 

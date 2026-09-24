@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
+import '../public/js/sects.js';
 import '../public/js/engine.js';
+import '../public/js/sect-engine.js';
+import '../public/js/sect-stories.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 
@@ -15,8 +18,8 @@ const coreEvents=[
 ];
 
 test('十二章都有扩写主题、章节问题和至少三个人物侧写，21位NPC全部进入主线视角',()=>{
-  assert.equal(G.APP_VERSION,'1.18.0');
-  assert.equal(G.VERSION,21);
+  assert.equal(G.APP_VERSION,'1.19.0');
+  assert.equal(G.VERSION,22);
   assert.deepEqual(G.STORY_STAGES.map(stage=>stage.id),chapterIds);
   assert.deepEqual(G.CHAPTER_CHARACTER_BEATS.map(stage=>stage.id),chapterIds);
   const covered=new Set();

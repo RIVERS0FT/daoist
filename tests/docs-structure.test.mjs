@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import '../public/js/data.js';
+import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
+import '../public/js/sect-engine.js';
+import '../public/js/sect-stories.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 

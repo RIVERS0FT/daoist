@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/data.js';
+import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
+import '../public/js/sect-engine.js';
+import '../public/js/sect-stories.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier,npc=G.NPCS.find(n=>n.id==='zhou');
@@ -37,7 +40,7 @@ test('周野职业统一骑手、25岁、十段三选项，其他二十人仍四
  assert.equal(new Set(npc.arc.map(a=>a[0])).size,10);
  for(const a of npc.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(G.newGame('可选'),c.effects,c.itemCost)));}
  assert.equal(G.getNPCProfile('zhou').role,'骑手');assert.doesNotMatch(JSON.stringify(G.getNPCProfile('zhou')),/夜班骑手/);
- assert.equal(G.VERSION,21);
+ assert.equal(G.VERSION,22);
 });
 for(const mode of ['classic','ai'])for(let stage=0;stage<10;stage++)test(`${mode} 周野第${stage+1}段：三个选项实际结算、读档和顺序关系`,()=>{
  for(let index=0;index<3;index++){

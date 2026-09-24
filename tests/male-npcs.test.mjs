@@ -4,8 +4,11 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import '../public/js/data.js';
+import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
+import '../public/js/sect-engine.js';
+import '../public/js/sect-stories.js';
 import '../public/js/storage.js';
 import '../public/js/progression.js';
 import {act,finish,acknowledge,awakeningPending} from './helpers/opening.mjs';
@@ -48,7 +51,7 @@ test('男性总数12、女性9、总数21，追加九人有明确年龄、独立
     for(const a of n.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(s,c.effects,c.itemCost)));}
     assert.deepEqual(n.arc[3].slice(2).map(c=>c.path),['friend','friend','friend']);
   }
-  assert.equal(G.VERSION,21);assert.equal(G.STORAGE_KEY,'night-courier:saves:v21');
+  assert.equal(G.VERSION,22);assert.equal(G.STORAGE_KEY,'night-courier:saves:v22');
 });
 
 test('除周野新故事外原十一人文字数值、画像AI与地图保持指纹一致',()=>{
@@ -114,13 +117,13 @@ test('v19旧在途档保留票据、路线、旧十二人和资产，新九人�
   for(const k of ['player','stats','activeOrder','location','activity','minutes','seed','claimed','inventory','alchemy'])assert.deepEqual(out[k],inFlight[k],k);
   for(const n of G.NPCS.slice(0,12))assert.deepEqual(out.bonds[n.id],inFlight.bonds[n.id]);
   for(const id of ids)assert.deepEqual(out.bonds[id],blank);
-  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,21);assert.deepEqual(read(out).bonds,out.bonds);
+  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,22);assert.deepEqual(read(out).bonds,out.bonds);
 });
 
 test('v19存储自动迁移到v20保留原文；损坏v20不回退覆盖；导入生成独立副本',()=>{
   const raw=old19(G.newGame('旧键迁移','classic',91)),text=JSON.stringify({schemaVersion:19,saves:[raw]});
   const map=new Map([[G.LEGACY_STORAGE_KEY,text]]),storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)};
-  const store=G.createStore(storage),out=store.load();assert.equal(out.length,1);assert.equal(out[0].schemaVersion,21);assert.equal(map.get(G.LEGACY_STORAGE_KEY),text);
+  const store=G.createStore(storage),out=store.load();assert.equal(out.length,1);assert.equal(out[0].schemaVersion,22);assert.equal(map.get(G.LEGACY_STORAGE_KEY),text);
   assert.ok(map.has(G.STORAGE_KEY));for(const id of ids)assert.deepEqual(out[0].bonds[id],blank);
   const original=out[0].id;store.import(text);assert.equal(store.saves.length,2);assert.equal(new Set(store.saves.map(s=>s.id)).size,2);assert.ok(store.saves.some(s=>s.id===original));
   const corrupt=G.clone(out[0]);delete corrupt.bonds.han;const broken=JSON.stringify({schemaVersion:20,saves:[corrupt]});map.set(G.STORAGE_KEY,broken);map.delete(G.BACKUP_KEY);
