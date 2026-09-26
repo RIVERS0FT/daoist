@@ -3,7 +3,7 @@
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
   G.VERSION = 23;
-  G.APP_VERSION = '1.20.0';
+  G.APP_VERSION = '1.20.1';
   G.SYSTEM_UNLOCK_DELIVERIES = 10;
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';

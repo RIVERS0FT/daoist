@@ -1,7 +1,8 @@
 """Offline Chromium integration checks.
 
 Build first: npm run build. Requires Python Playwright and Chromium. Uses the
-actual bundled application with in-memory localStorage and explicitly mocked AI.
+actual bundled application with in-memory localStorage and explicitly mocked AI;
+hosting probes separately use the real CSP sandbox without storage/fetch mocks.
 Most cases drive GameClock with controlled timestamps; a separate case uses real
 requestAnimationFrame. HTTP allowlist/CSP/AI proxy have independent Node tests.
 """
@@ -77,15 +78,65 @@ def new_game(page, name='云行', mode='classic'):
     page.click('#new-game-form button[type="submit"]')
     page.wait_for_selector('#game-screen:not([hidden])')
 
-def route_bundle(page):
+def route_bundle(page, csp=None):
     def serve(route):
         relative = unquote(urlparse(route.request.url).path).removeprefix('/daoist/') or 'index.html'
         target = (ROOT / 'dist' / relative).resolve()
         if not target.is_relative_to((ROOT / 'dist').resolve()) or not target.is_file():
             route.fulfill(status=404, body='Not found')
             return
-        route.fulfill(status=200, body=target.read_bytes(), content_type=mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
+        headers = {'Content-Security-Policy': csp} if csp and relative == 'index.html' else {}
+        route.fulfill(status=200, body=target.read_bytes(), content_type=mimetypes.guess_type(target.name)[0] or 'application/octet-stream', headers=headers)
     page.route('https://daoist.test/daoist/**', serve)
+
+
+def sandbox_new_game_checks(browser):
+    # Match the production hosting restrictions without mocking storage or fetch.
+    base = 'https://daoist.test/daoist/'
+    csp = (f"sandbox allow-scripts allow-pointer-lock; default-src 'none'; "
+           f"script-src {base} 'unsafe-inline' 'wasm-unsafe-eval'; "
+           f"style-src {base} 'unsafe-inline'; img-src {base} data: blob:; "
+           f"font-src {base} data:; connect-src {base}; form-action 'none'; "
+           "base-uri 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'")
+    for method, mode, width, height in [('click', 'classic', 1440, 1000), ('Enter', 'ai', 375, 812), ('click', 'classic', 667, 375)]:
+        ctx = browser.new_context(viewport={'width': width, 'height': height}, has_touch=width<900)
+        page = ctx.new_page()
+        errors, blocked_forms = [], []
+        page.on('pageerror', lambda err: errors.append(str(err)))
+        page.on('console', lambda message: blocked_forms.append(message.text) if 'Blocked form submission' in message.text else None)
+        route_bundle(page, csp)
+        page.goto(base, wait_until='load')
+        assert page.evaluate("()=>{try{void localStorage;return false;}catch(e){return e.name==='SecurityError';}}")
+        page.evaluate('() => {' + CAPTURE + '}')
+        page.evaluate('''()=>{const original=NightCourier.newGame;window.__creations=0;NightCourier.newGame=(...args)=>{window.__creations++;return original(...args);};}''')
+        page.click('[data-ui="new-game"]')
+        page.click('#new-game-form button[type="submit"]')
+        page.locator('#player-name-input').press('Enter')
+        assert page.locator('#new-game-form').is_visible()
+        assert page.evaluate('window.__creations') == 0
+        page.fill('#player-name-input', '沙箱旅人')
+        page.check(f'input[name="mode"][value="{mode}"]')
+        page.locator('#player-name-input').dispatch_event('keydown', {'key': 'Enter', 'isComposing': True})
+        assert page.evaluate('window.__creations') == 0
+        if method == 'click':
+            page.click('#new-game-form button[type="submit"]')
+        else:
+            page.locator('#player-name-input').press('Enter')
+        page.wait_for_selector('.player-marker')
+        toggle(page)
+        assert current(page)['name'] == '沙箱旅人' and current(page)['mode'] == mode
+        assert page.evaluate('window.__creations') == 1
+        assert page.locator('#storage-warning').is_visible()
+        assert page.evaluate("document.querySelector('#storage-warning').getBoundingClientRect().bottom<=document.querySelector('#game-header').getBoundingClientRect().top")
+        for control in ['zoom-in', 'zoom-out', 'fit-map', 'locate']:
+            page.click(f'[data-ui="{control}"]')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.screenshot(path=str(OUT/f'sandbox-map-{width}.png'))
+        page.click('[data-ui="home"]')
+        assert page.locator('[data-ui="load"]').count() == 1
+        assert not errors and not blocked_forms, (errors, blocked_forms)
+        record(f'真实托管沙箱 {width}×{height}：{method} 开局校验、单次创建与提示不遮挡控制栏')
+        ctx.close()
 
 
 def setup(browser, width=1440, height=1000, ai=False, controlled=True):
@@ -1922,6 +1973,7 @@ with sync_playwright() as p:
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    sandbox_new_game_checks(browser)
     leaflet_browser_checks(browser)
     five_sects_browser_checks(browser)
     zhou_story_browser_checks(browser)

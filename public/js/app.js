@@ -137,7 +137,7 @@
   function renderPanel(){
     if(!dialogType)return;const s=state,c=s?G.limits(s):null;let title='',label='',body='',foot='';
     switch(dialogType){
-      case 'new':title='从你的名字开始';label='A new journey';body=`<form id="new-game-form"><label class="form-label" for="player-name-input">你的名字</label><input class="text-input" id="player-name-input" name="name" maxlength="16" required autocomplete="off" placeholder="给这段旅程起一个名字"><div class="section-title"><span class="form-label" style="margin:0">选择剧情模式</span><span class="tag">开局确定 · 局内不切换</span></div><div class="mode-options"><label class="mode-option"><input type="radio" name="mode" value="classic" checked><strong>经典剧情</strong><small>原创固定事件，多选择、多走向。无需网络。</small></label><label class="mode-option"><input type="radio" name="mode" value="ai"><strong>AI 生成剧情</strong><small>随机奇遇动态生成，关键主线保持连贯。</small></label></div><div class="alert soft">${esc(aiHealth.configured?'AI 接口已配置。选择 AI 模式后，角色名、部分状态与最近剧情摘要会发往你配置的服务，并可能产生接口费用。':'AI 接口未配置或无法连接。仍可创建 AI 存档，接口不可用时自动使用经典事件；之后配置接口即可继续生成。')}</div><p class="copy" style="margin:13px 0 20px">每次关键行动与运行期间都会自动保存。新旅程不会覆盖已有存档。</p>${btn('进入青岚城 →','type="submit"','primary wide')}</form>`;break;
+      case 'new':title='从你的名字开始';label='A new journey';body=`<form id="new-game-form"><label class="form-label" for="player-name-input">你的名字</label><input class="text-input" id="player-name-input" name="name" maxlength="16" required autocomplete="off" placeholder="给这段旅程起一个名字"><div class="section-title"><span class="form-label" style="margin:0">选择剧情模式</span><span class="tag">开局确定 · 局内不切换</span></div><div class="mode-options"><label class="mode-option"><input type="radio" name="mode" value="classic" checked><strong>经典剧情</strong><small>原创固定事件，多选择、多走向。无需网络。</small></label><label class="mode-option"><input type="radio" name="mode" value="ai"><strong>AI 生成剧情</strong><small>随机奇遇动态生成，关键主线保持连贯。</small></label></div><div class="alert soft">${esc(aiHealth.configured?'AI 接口已配置。选择 AI 模式后，角色名、部分状态与最近剧情摘要会发往你配置的服务，并可能产生接口费用。':'AI 接口未配置或无法连接。仍可创建 AI 存档，接口不可用时自动使用经典事件；之后配置接口即可继续生成。')}</div><p class="copy" style="margin:13px 0 20px">每次关键行动与运行期间都会自动保存。新旅程不会覆盖已有存档。</p>${btn('进入青岚城 →','type="submit" data-ui="create-game"','primary wide')}</form>`;break;
       case 'place':{
         const p=G.place(dialogData.id);if(!p){closePanel();return;}title=p.name;label='City destination';const known=G.placeUnlocked(s,p.id);
         body=`<div class="row">${tag(!known?'送达后解锁':s.position===p.id?'当前位置':p.permanent?'城市地点':'配送目的地',s.position===p.id?'mint':'')}<span class="muted" style="font-size:11px">${s.transport==='bike'?'电动车出行':'步行推车'}</span></div>${known&&p.desc?`<p class="copy" style="margin-top:12px">${esc(p.desc)}</p>`:''}`;
@@ -354,6 +354,10 @@
   }
   function download(saves,name='night-courier-saves.json'){const blob=new Blob([G.exportSaves(saves)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
   function returnHome(){if(!conflict)persist();clock.pause('menu');clock.pause('manual');abortAI();state=null;dialog.close();dialogType=null;dialogData={};conflict=false;clearError();store.load();renderStart();}
+  function createGame(form){
+    if(form?.id!=='new-game-form'||!form.isConnected||!form.reportValidity())return;
+    try{const data=new FormData(form),newState=G.newGame(data.get('name'),data.get('mode'));const result=store.upsert(newState);if(!result.ok&&store.saves.length>=G.MAX_SAVES&&!store.saves.some(s=>s.id===newState.id))throw new Error(result.error);saveOk=result.ok;if(!result.ok)storageWarning(result.error);loadGame(newState.id,true);}catch(err){showError(err.message);}
+  }
   document.addEventListener('click',e=>{
     const button=e.target.closest('button');if(!button||button.disabled)return;
     if(button.dataset.panel){if(state?.gameOver)openPanel('gameover');else if(state?.eventResult)openPanel('result');else if(state?.placeUnlock)openPanel('place-unlock');else if(G.nextUnlockNotice(state))openPanel('unlock');else if(state?.pending)openPanel('event');else if(state?.ending)openPanel('ending');else openPanel(button.dataset.panel);return;}
@@ -361,6 +365,7 @@
     const d=button.dataset;
     switch(d.ui){
       case 'new-game':if(store.saves.length>=G.MAX_SAVES)showError('存档已满，请先导出并删除不需要的旅程。');else openPanel('new');break;
+      case 'create-game':e.preventDefault();createGame(button.form);break;
       case 'close':closePanel();break;
       case 'pause':if(state){if(clock.reasons.has('manual'))clock.release('manual');else clock.pause('manual');persist();syncPause();renderLive();}break;
       case 'sect-tab':if(state&&G.featureUnlocked(state,'sect')&&['hall','duties','library','story','relations'].includes(d.id)){sectTab=d.id;renderPanel();}break;
@@ -384,7 +389,12 @@
   });
   document.addEventListener('submit',e=>{
     if(e.target.id!=='new-game-form')return;e.preventDefault();
-    try{const data=new FormData(e.target),newState=G.newGame(data.get('name'),data.get('mode'));const result=store.upsert(newState);if(!result.ok&&store.saves.length>=G.MAX_SAVES&&!store.saves.some(s=>s.id===newState.id))throw new Error(result.error);saveOk=result.ok;if(!result.ok)storageWarning(result.error);loadGame(newState.id,true);}catch(err){showError(err.message);}
+    createGame(e.target);
+  });
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!e.isComposing&&e.target.id==='player-name-input'){
+      e.preventDefault();createGame(e.target.form);
+    }
   });
   document.addEventListener('change',e=>{if(e.target.id==='sect-select'&&G.sectDefinition(e.target.value)){dialogData.sectId=e.target.value;renderPanel();}if(e.target.id==='time-speed'){clock.setSpeed(Number(e.target.value));renderLive();}if(e.target.id==='break-pill'){usePill=e.target.checked;renderPanel();}});
   $('#import-file').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>2*1024*1024)throw new Error('文件过大，上限为 2 MB。');const text=await file.text();const r=store.import(text);if(!r.ok)storageWarning(r.error);if(!state){dialog.close();dialogType=null;renderStart();}else if(dialogType==='help')renderPanel();}catch(err){showError(err.message);}});

@@ -19,7 +19,7 @@ const coreEvents=[
 ];
 
 test('十二章都有扩写主题、章节问题和至少三个人物侧写，21位NPC全部进入主线视角',()=>{
-  assert.equal(G.APP_VERSION,'1.20.0');
+  assert.equal(G.APP_VERSION,'1.20.1');
   assert.equal(G.VERSION,23);
   assert.deepEqual(G.STORY_STAGES.map(stage=>stage.id),chapterIds);
   assert.deepEqual(G.CHAPTER_CHARACTER_BEATS.map(stage=>stage.id),chapterIds);

@@ -94,7 +94,7 @@ test('解锁单叙述与章名一致，绑定不添加新奖励或系统提前�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'story');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.20.0');assert.equal(G.VERSION,23);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.20.1');assert.equal(G.VERSION,23);
 });
 
 
