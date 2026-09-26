@@ -2325,10 +2325,24 @@ with sync_playwright() as p:
     toggle(expanded);pump(expanded, 120);toggle(expanded)
     ring_after = float(offer.locator('.order-expiry-ring').get_attribute('stroke-dashoffset'))
     assert ring_after > ring_before
+    # Capture removal styling in the same browser turn as the class change.
+    # Cross-process polling can arrive after the 280ms animation on a busy runner.
+    expanded.evaluate("""()=>{
+      window.__offerExit=null;
+      const observer=new MutationObserver(()=>{
+        const point=document.querySelector('.order-leaving[data-order-id="fleeting-offer"]');
+        if(!point)return;
+        window.__offerExit={count:document.querySelectorAll('.order-leaving').length,
+          animation:getComputedStyle(point.querySelector('.point-visual')).animationName,
+          interactive:point.hasAttribute('data-place'),tabIndex:point.getAttribute('tabindex'),
+          hidden:point.getAttribute('aria-hidden')};
+        observer.disconnect();
+      });
+      observer.observe(document.querySelector('.points-layer'),{subtree:true,attributes:true,attributeFilter:['class']});
+    }""")
     toggle(expanded);pump(expanded, 180);toggle(expanded)
-    assert expanded.locator('.order-leaving').count() == 1
-    assert expanded.evaluate("""()=>getComputedStyle(document.querySelector('.order-leaving .point-visual')).animationName""") == 'orderPointOut'
-    expanded.wait_for_timeout(350)
+    assert expanded.evaluate('window.__offerExit') == {'count':1,'animation':'orderPointOut','interactive':False,'tabIndex':'-1','hidden':'true'}
+    expanded.wait_for_selector('.order-leaving', state='detached')
     assert expanded.locator('.order-leaving').count() == 0
     assert expanded.locator('[data-place="lingxi-20"]').count() == 0
     record('配送点用圆形进度显示消失时间，并在出现与消失时播放动画')
