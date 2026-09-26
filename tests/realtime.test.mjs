@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -25,7 +26,7 @@ test('出发不跳时、不瞬移、不提前扣完整行程',()=>{const s=fresh
 test('移动中段坐标、时间、资源和距离同步',()=>{const s=fresh(),p=G.travelPlan(s,'temple');let a=start(s,'travel',{target:'temple'});a=G.advance(a,p.minutes/3);near(a.stats.distance,p.meters/3);near(a.vehicle.battery,s.vehicle.battery-p.battery/3);near(a.player.stamina,s.player.stamina-p.stamina/3);assert.notEqual(a.position,'temple');assert.ok(G.roadAnchors(G.playerPoint(a)).length);});
 test('角色离开地点后不能使用该地点服务',()=>{let s=fresh();s.position='garage';s.vehicle.durability=50;s=start(s,'travel',{target:'temple'});s=G.advance(s,.3);s=start(s,'stop');assert.equal(s.position,null);assert.equal(G.perform(s,'repair').ok,false);});
 test('停止后改道从实际位置出发，不回到原点',()=>{let s=start(fresh(),'travel',{target:'temple'});s=G.advance(s,.7);s=start(s,'stop');const p=G.playerPoint(s);s=start(s,'travel',{target:'garage'});assert.deepEqual(s.activity.route.points[0],p);assert.deepEqual(G.playerPoint(s),p);});
-test('路段内虚拟起点不能从非桥位置穿江',()=>{const p={x:970,y:300};for(const target of ['temple','home']){const r=G.route(p,target);assert.deepEqual(r.points[0],p);assert.equal(r.points[1].y,300);}assert.throws(()=>G.route({x:970,y:480},'home'));});
+
 test('停止移动不暂停世界，已接订单继续计时',()=>{const original=fresh(),ticket=original.orders[0];let s=start(original,'deliver',{id:ticket.id});s=G.advance(s,.2);s=start(s,'stop');const p=G.playerPoint(s),m=s.minutes;s=G.advance(s,30);near(s.minutes,m+30);assert.deepEqual(G.playerPoint(s),p);assert.equal(s.activeOrder.id,ticket.id);assert.equal(s.stats.delivered,0);});
 test('已接订单超过原地图消失时间后仍可继续，结算不减报酬也不重扣灵力',()=>{let s=fresh();s.orders[0].condition='mystic';const ticket=G.clone(s.orders[0]);s=start(s,'deliver',{id:ticket.id});near(s.player.mana,52);s=G.advance(s,.1);s=start(s,'stop');s=G.advance(s,60);assert.ok(s.minutes>ticket.expiresAt);s=finish(start(s,'resumeDelivery'));assert.equal(s.pending.delivery.id,ticket.id);near(s.player.mana,52);s=pendingChoice(s);assert.equal(s.stats.delivered,1);assert.equal(s.player.money,120+ticket.reward);assert.equal(G.perform(s,'resumeDelivery').ok,false);});
 test('不允许一人同时执行多个耗时行动',()=>{const s=start(fresh(),'rest');for(const [a,p] of [['travel',{target:'garage'}],['sleep',{}],['cultivate',{}],['charge',{}],['rest',{}]]){const r=G.perform(s,a,p);assert.equal(r.ok,false);assert.equal(r.state,s);}});
@@ -54,9 +55,9 @@ test('耗时剧情先支付成本，结束才给收益和报酬，读档不会�
   const before=s.player.money;s=start(s,'choose',{eventId:'timed-event',index});assert.equal(s.pending,null);assert.equal(s.activity.kind,'choice');assert.equal(s.minutes,480);assert.equal(G.perform(s,'stop').ok,false);
   s=G.advance(s,choice.duration/2);const midway=s.player.money;s=roundtrip(s);assert.equal(s.player.money,midway);s=finish(s);assert.equal(s.player.money,before+(choice.effects.money||0));assert.equal(G.perform(s,'choose',{eventId:'timed-event',index}).ok,false);
 });
-test('旧 v4 住处、车辆和剧情模式迁移为当前格式，时间不被补算',()=>{const s=fresh();s.schemaVersion=4;s.mode='ai';s.residenceId='songfeng';s.vehicle.levels.speed=3;delete s.player.realmLevel;delete s.alchemy;delete s.activity;delete s.location;const a=roundtrip(s);assert.equal(a.schemaVersion,G.VERSION);assert.equal(a.player.realmLevel,1);assert.equal(a.alchemy.cauldron,0);assert.equal(a.residenceId,'songfeng');assert.equal(a.vehicle.levels.speed,3);assert.equal(a.mode,'ai');assert.equal(a.minutes,s.minutes);});
-test('旧 v5 炼药途中存档补基础药鼎、丹方并保持投入',()=>{let s=fresh();s.position='market';s.player.money=1000;s=start(s,'cauldron');const recipe=G.alchemyRecipe('heal');ownFormula(s,recipe);stockRecipe(s,recipe);s=start(s,'alchemy',{recipe:'heal'});s=G.advance(s,5);s.schemaVersion=5;delete s.alchemy;const a=roundtrip(s);assert.equal(a.schemaVersion,G.VERSION);assert.equal(a.alchemy.cauldron,1);assert.deepEqual(a.alchemy.cauldrons,[1]);assert.ok(a.alchemy.formulas.includes('heal'));assert.equal(a.activity.kind,'alchemy');assert.equal(a.activity.params.recipe,'heal');});
-test('旧 v5 进行中的大境突破迁移后仍指向下一大境界',()=>{let s=fresh();s.player.qi=G.REALMS[0].need;s=start(s,'breakthrough');s.player.qi=0;s.schemaVersion=5;delete s.player.realmLevel;delete s.activity.params.realmLevel;delete s.activity.params.need;const a=roundtrip(s);assert.equal(a.player.realmLevel,1);assert.equal(a.player.mortalProgress,0);assert.equal(a.player.qi,0);assert.equal(a.activity.params.need,G.REALMS[0].need);assert.deepEqual(roundtrip(a).activity,a.activity);});
+
+
+
 test('途中多次读档保留小数位置、消耗和完整路线',()=>{let s=start(fresh(),'travel',{target:'temple'});s=G.advance(s,.123456);const before=G.clone(s);for(let i=0;i<5;i++)s=roundtrip(s);near(s.minutes,before.minutes);near(s.player.stamina,before.player.stamina);near(s.activity.travelled,before.activity.travelled);assert.deepEqual(s.location,before.location);const end=finish(s),expected=finish(before);near(end.stats.distance,expected.stats.distance);near(end.player.stamina,expected.player.stamina);});
 test('损坏路段、目的地和行动类型拒绝载入，不静默瞬移',()=>{const s=G.advance(start(fresh(),'travel',{target:'temple'}),.1);for(const mutate of [x=>x.location.x+=100,x=>x.activity.target='invalid',x=>x.activity.kind='eval',x=>x.activity.route=null]){const a=G.clone(s);mutate(a);assert.throws(()=>roundtrip(a));}});
 test('等量游戏时间以不同帧率切片，路程、消耗和随机状态相同',()=>{const base=start(fresh(),'travel',{target:'temple'});const run=steps=>{let s=G.clone(base);for(let i=0;i<steps;i++)s=G.advance(s,3/steps);return s;};const a=run(90),b=run(432);near(a.minutes,b.minutes);near(a.stats.distance,b.stats.distance);near(a.player.stamina,b.player.stamina);near(a.vehicle.battery,b.vehicle.battery);assert.equal(a.seed,b.seed);});
@@ -68,6 +69,6 @@ test('独立暂停理由全部解除前不运行',()=>{let total=0;const clock=n
 test('三种倍率同步推进整个模拟，不只改变动画速度',()=>{for(const speed of [1,3,10]){let total=0;const c=new G.GameClock(t=>total+=t);c.release('manual');c.setSpeed(speed);c.frame(0);c.frame(500);near(total,.5*speed);}});
 test('暂停和恢复丢弃墙钟间隔，不累计离线时间',()=>{let total=0;const c=new G.GameClock(t=>total+=t);c.release('manual');c.frame(0);c.frame(200);c.pause();c.frame(500000);c.release('manual');c.frame(600000);c.frame(600100);near(total,.3);});
 test('页面可见性边界只重置墙钟基准，不新增手动暂停',()=>{let total=0;const c=new G.GameClock(t=>total+=t);c.release('manual');c.frame(0);c.frame(200);c.reset();assert.equal(c.reasons.has('manual'),false);c.frame(500000);c.frame(500100);near(total,.3);assert.equal(c.paused,false);});
-test('新存储键的空列表不从旧键复活已经删除的存档',()=>{const map=new Map([[G.STORAGE_KEY,JSON.stringify({saves:[]})],[G.LEGACY_STORAGE_KEY,JSON.stringify({saves:[fresh()]})]]);const store=G.createStore({getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v)});assert.equal(store.load().length,0);});
+
 
 test('长帧间隔不再自动暂停，按经过时间推进',()=>{let total=0;const c=new G.GameClock(t=>total+=t);c.release('manual');c.frame(0);c.frame(5000);assert.equal(c.paused,false);near(total,5);});

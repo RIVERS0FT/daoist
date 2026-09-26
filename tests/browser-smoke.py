@@ -7,13 +7,14 @@ requestAnimationFrame. HTTP allowlist/CSP/AI proxy have independent Node tests.
 """
 import json
 import os
+import mimetypes
+from urllib.parse import urlparse, unquote
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Error as BrowserError
+from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'artifacts'
 OUT.mkdir(exist_ok=True)
-HTML = (ROOT / 'dist/index.html').read_text()
 BOOT = r'''
 window.__memory = new Map();
 window.__storyRequests = [];
@@ -76,15 +77,26 @@ def new_game(page, name='云行', mode='classic'):
     page.click('#new-game-form button[type="submit"]')
     page.wait_for_selector('#game-screen:not([hidden])')
 
+def route_bundle(page):
+    def serve(route):
+        relative = unquote(urlparse(route.request.url).path).removeprefix('/daoist/') or 'index.html'
+        target = (ROOT / 'dist' / relative).resolve()
+        if not target.is_relative_to((ROOT / 'dist').resolve()) or not target.is_file():
+            route.fulfill(status=404, body='Not found')
+            return
+        route.fulfill(status=200, body=target.read_bytes(), content_type=mimetypes.guess_type(target.name)[0] or 'application/octet-stream')
+    page.route('https://daoist.test/daoist/**', serve)
+
+
 def setup(browser, width=1440, height=1000, ai=False, controlled=True):
     ctx = browser.new_context(viewport={'width': width, 'height': height}, has_touch=width<600, device_scale_factor=1)
     page = ctx.new_page()
     page.set_default_timeout(7000)
     errors = []
     page.on('pageerror', lambda err: errors.append(str(err)))
-    page.evaluate('() => {' + BOOT + '}')
-    page.evaluate('(ai)=>window.__aiConfigured=ai', ai)
-    page.set_content(HTML, wait_until='domcontentloaded')
+    page.add_init_script(BOOT + '\nwindow.__aiConfigured=' + json.dumps(ai) + ';')
+    route_bundle(page)
+    page.goto('https://daoist.test/daoist/', wait_until='load')
     if controlled:
         page.evaluate('() => {' + CONTROL + '}')
         page.wait_for_function('window.__clock != null')
@@ -370,7 +382,7 @@ def progressive_browser_checks(browser):
             assert current(page) == before
             assert not page.evaluate("window.__clock.reasons.has('panel')")
         # Previously discovered location fixture: no feature or inventory grants.
-        fixture(page, {'position':'market','location':None,'unlockedPlaces':['home','market']}, unlock_gameplay=False)
+        fixture(page, {'position':'market','location':None,'unlockedPlaces':['home','garage','market']}, unlock_gameplay=False)
         page.locator('[data-place="market"]').focus();page.keyboard.press('Enter')
         assert page.locator('[data-act="panel-alchemy"]').count() == 0
         assert page.locator('[data-act="meal"]').count() == 1
@@ -538,7 +550,7 @@ def auction_browser_checks(browser):
         # Isolate the unlock threshold and route without replaying nine unrelated deliveries.
         edits = current(page)
         edits['unlockedFeatures'] = ['system', 'cultivation', 'alchemy']
-        edits['unlockedPlaces'] = ['home', 'market']
+        edits['unlockedPlaces'] = ['home', 'garage', 'market']
         edits['stats']['delivered'] = 9
         edits['player']['money'] = 10000
         edits['flags'].update({'firstOrder':True, 'storyStreetVein':True})
@@ -660,39 +672,20 @@ def auction_browser_checks(browser):
         ctx.close()
 
 def result_browser_checks(browser):
-    # Load the shipped offline file with real browser localStorage. Unlike the
-    # isolated UI fixtures, page.reload re-reads the bundle and saved receipt.
+    # Load all shipped files under a subpath with real browser localStorage.
+    # page.reload re-reads the multi-file bundle and saved receipt.
     for width, height in [(1440, 1000), (390, 844), (320, 740)]:
         ctx = browser.new_context(viewport={'width':width,'height':height}, has_touch=width<600)
         page = ctx.new_page();page.set_default_timeout(7000)
         errors=[];page.on('pageerror', lambda err: errors.append(str(err)))
-        native_reload=True
+        route_bundle(page)
         def boot(reload=False):
-            nonlocal page,native_reload
-            if native_reload:
-                try:
-                    if reload: page.reload(wait_until='domcontentloaded')
-                    else: page.goto((ROOT/'dist/index.html').as_uri(), wait_until='domcontentloaded')
-                except BrowserError as error:
-                    if reload or 'ERR_BLOCKED_BY_ADMINISTRATOR' not in str(error): raise
-                    # Some sandboxes disable *all* navigations, including file://.
-                    # Keep restoration covered without pretending this is a native reload.
-                    native_reload=False;page.close();page=ctx.new_page()
-            if not native_reload:
-                memory=[]
-                if reload:
-                    page.evaluate("window.dispatchEvent(new Event('pagehide'))")
-                    memory=page.evaluate('Array.from(window.__memory.entries())')
-                    page.close();page=ctx.new_page()
-                page.set_default_timeout(7000)
-                page.on('pageerror',lambda err:errors.append(str(err)))
-                page.evaluate('() => {'+BOOT+'}')
-                page.evaluate('(entries)=>window.__memory=new Map(entries)',memory)
-                page.set_content(HTML,wait_until='domcontentloaded')
+            if reload: page.reload(wait_until='load')
+            else: page.goto('https://daoist.test/daoist/', wait_until='load')
             page.evaluate('() => {'+CONTROL+'}')
             page.wait_for_function('window.__clock != null')
             page.evaluate('() => {'+CAPTURE+'}')
-        boot();reload_modes.append({'width':width,'mode':'native-file-reload' if native_reload else 'fresh-page-storage-fixture'})
+        boot();reload_modes.append({'width':width,'mode':'native-reload-local-assets-real-storage'})
         print('Reload mode:',reload_modes[-1],flush=True)
         new_game(page, '结果阅读')
         nearest_ui_delivery(page)
@@ -851,18 +844,17 @@ def realm_browser_checks(browser):
                 page.screenshot(path=str(OUT/f'realm-max-{width}.png'))
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
         record(f'{width}px 化神后四境、跨境下一阶与渡劫九重封顶显示正确，无横向溢出')
-        old = current(page)['player']
-        old.update(realm=0, realmLevel=9, mortalProgress=0, qi=12, stamina=100)
-        fixture(page, {'schemaVersion': 12, 'player': old})
-        assert current(page)['schemaVersion'] == page.evaluate('NightCourier.VERSION')
-        assert current(page)['player']['mortalProgress'] == 68
-        assert current(page)['player']['qi'] == 12
+        assert page.evaluate('''()=>{const G=NightCourier,s=G.clone(window.__live);s.schemaVersion=12;
+          try{G.sanitizeSave(s);return false;}catch(e){return e.message.includes('不支持此存档版本');}}''')
+        player = current(page)['player']
+        player.update(realm=0, realmLevel=1, qi=80, stamina=100)
+        fixture(page, {'player': player})
         page.click('.game-nav [data-panel="cultivation"]')
         text = page.locator('#panel').inner_text()
         assert '凡人九重' not in text and '凡人一重' not in text
-        assert '下一境：炼气一重 · 需要 12 修为' in text
-        page.screenshot(path=str(OUT/f'realm-migration-{width}.png'))
-        record(f'{width}px 旧凡人九重读档为凡人，保留68修为抵扣，余额与门槛均为12')
+        assert '下一境：炼气一重 · 需要 80 修为' in text
+        page.screenshot(path=str(OUT/f'realm-current-{width}.png'))
+        record(f'{width}px v12旧档明确拒绝，新版凡人需要80修为直接进入炼气')
         player = current(page)['player']
         player.update(realm=5, realmLevel=9, mortalProgress=0, qi=999, stamina=100)
         fixture(page, {'player': player})
@@ -1032,7 +1024,7 @@ def unlock_notice_browser_checks(browser):
         # not stop, charge, restart or move the current action.
         busy=page.evaluate('''()=>{const G=NightCourier;let s=G.newGame('在途提示','classic',4567);
           s.stats.delivered=1;s.unlockedFeatures=['system'];G.syncFeatureUnlocks(s,true);s=G.perform(s,'travel',{target:'garage'}).state;
-          s=G.advance(s,1);s=G.perform(s,'claim',{id:'q1'}).state;
+          s=G.advance(s,G.activityRemaining(s)*.25);s=G.perform(s,'claim',{id:'q1'}).state;
           return {minutes:s.minutes,position:s.position,location:s.location,activity:s.activity,player:s.player,
             stats:s.stats,claimed:s.claimed,unlockedFeatures:s.unlockedFeatures,unlockedPlaces:s.unlockedPlaces,
             unlockNotices:s.unlockNotices,pending:null,eventResult:null,placeUnlock:null,bonds:s.bonds};}''')
@@ -1047,7 +1039,8 @@ def unlock_notice_browser_checks(browser):
         assert after['activity']==before['activity'] and after['location']==before['location']
         assert after['player']==before['player'] and after['minutes']==before['minutes']
         assert page.evaluate("window.__clock.reasons.has('manual')")
-        toggle(page);pump(page,1000)
+        remaining = page.evaluate('NightCourier.activityRemaining(window.__live)')
+        toggle(page);pump(page,remaining*250)
         assert current(page)['minutes']>after['minutes']
         assert current(page)['activity']['travelled']>after['activity']['travelled']
         record(f'{width}px 行动途中功能解锁暂停阅读，确认保留手动暂停及原路线进度，继续后真实移动')
@@ -1614,16 +1607,17 @@ def male_npc_browser_checks(browser):
         assert len(ids) == 9
         assert page.evaluate("NightCourier.NPCS.filter(n=>n.gender==='male').length") == 12
         assert page.evaluate("NightCourier.NPCS.filter(n=>n.romantic).length") == 9
-        # Restore a genuine legacy-shaped roster through the UI load path.
+        # Removed schemas are rejected; current rosters remain hidden until meeting.
         legacy = page.evaluate('''()=>{const G=NightCourier,s=G.clone(window.__live);
           s.schemaVersion=19;for(const id of G.NEW_MALE_NPC_IDS)delete s.bonds[id];return s;}''')
-        fixture(page, legacy, unlock_gameplay=False)
-        assert current(page)['schemaVersion'] == 22
+        assert page.evaluate('''s=>{try{NightCourier.sanitizeSave(s);return false;}catch(e){return e.message.includes('不支持此存档版本');}}''', legacy)
+        fixture(page, current(page), unlock_gameplay=False)
+        assert current(page)['schemaVersion'] == 23
         assert len(current(page)['bonds']) == 21
         assert all(not b['met'] for b in current(page)['bonds'].values())
         assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
         assert page.evaluate("window.__clock.reasons.has('manual')")
-        record(f'{width}px v19旧人物名单加载后补九位隐藏男性、保留暂停，不自动显示羁绊入口')
+        record(f'{width}px v19旧名单拒绝；当前21位人物保持隐藏，加载默认暂停')
         for npc_id in ids:
             # Seeded post-tutorial offers, without fabricating NPC recipients or granting resources.
             data = page.evaluate('''id=>{const G=NightCourier;
@@ -1871,12 +1865,64 @@ def five_sects_browser_checks(browser):
             record(f'{width}px {sect_id} 地点引荐、五宗选择、入宗执事、剧情中途读档、专属功法和十组关系可用且无AI请求')
             ctx.close()
 
+def leaflet_browser_checks(browser):
+    for width, height in [(1440,1000),(375,812),(320,740),(812,375)]:
+        ctx, page, errors = setup(browser,width,height)
+        new_game(page,'地图校验')
+        before = current(page)
+        assert page.evaluate('window.__map.map instanceof L.Map && L.version === "1.9.4" && window.__map.map.options.crs === L.CRS.Simple')
+        assert page.evaluate("performance.getEntriesByType('resource').every(r=>r.name.startsWith('https://daoist.test/daoist/'))")
+        page.evaluate('window.__base=document.querySelector(".base-layer");window.__map.fit()')
+        page.wait_for_timeout(100)
+        assert page.evaluate('''()=>{const G=NightCourier,m=window.__map;return G.PLACES.every(q=>{const at=m.map.latLngToContainerPoint([-q.y,q.x]),back=m.map.containerPointToLatLng(at);return Math.abs(back.lng-q.x)*m.scale<=.51&&Math.abs(back.lat+q.y)*m.scale<=.51;});}''')
+        ruler = page.evaluate('''()=>{const el=document.querySelector('.map-scale'),text=el.querySelector('.scale-distance').textContent;return {pixels:parseFloat(getComputedStyle(el).getPropertyValue('--scale-width')),meters:parseFloat(text)*(text.includes('千米')?1000:1),scale:window.__map.scale,local:1,unit:NightCourier.WORLD.metersPerUnit};}''')
+        assert abs(ruler['pixels']/ruler['scale']/ruler['local']*ruler['unit']-ruler['meters']) < 1e-6
+        page.screenshot(path=str(OUT/f'leaflet-overview-{width}.png'))
+        page.evaluate('window.__map.center();window.__map.zoom(1.2)')
+        assert page.locator('.point-hit').first.bounding_box()['width'] >= 47
+        assert page.evaluate('window.__base===document.querySelector(".base-layer")')
+        assert current(page)==before
+        # Position the actual home marker in the usable center, then use real input.
+        page.evaluate('(()=>{const q=NightCourier.place("home");window.__map.map.panTo([-q.y,q.x],{animate:false});})()')
+        if height<500:
+            page.evaluate('window.__map.map.panBy([-150,60],{animate:false})')
+        target=page.locator('.map-point[data-place="home"] .point-core')
+        if width<600:
+            target.tap()
+        else:
+            target.click()
+        assert page.locator('#panel[open]').count()==1
+        page.click('[data-ui="close"]')
+        box=target.bounding_box()
+        x,y=box['x']+box['width']/2,box['y']+box['height']/2
+        if width<600:
+            cdp=ctx.new_cdp_session(page)
+            cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
+            cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x+65,'y':y+8}]})
+            cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+        else:
+            page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+65,y+8,steps=8);page.mouse.up()
+        assert not page.locator('#panel[open]').count(), 'Dragging a marker must not select it'
+        page.locator('#city-map').focus()
+        page.keyboard.press('ArrowRight')
+        assert not page.locator('#panel[open]').count()
+        assert current(page)['player']==before['player'] and current(page)['minutes']==before['minutes']
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.emulate_media(reduced_motion='reduce')
+        assert page.locator('.player-pulse').evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+        page.screenshot(path=str(OUT/f'leaflet-map-{width}.png'))
+        assert not errors,errors
+        record(f'{width}px Leaflet本地资源、坐标往返、比例尺、点选、缩放不改状态及减少动态效果通过')
+        ctx.close()
+
+
 with sync_playwright() as p:
     executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
     kwargs = {'headless': True}
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    leaflet_browser_checks(browser)
     five_sects_browser_checks(browser)
     zhou_story_browser_checks(browser)
     male_npc_browser_checks(browser)
@@ -1921,7 +1967,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT/'game-desktop.png'))
     assert page.evaluate('NightCourier.PLACES.length') == 110
     assert page.locator('.map-point').count() <= 15
-    assert page.evaluate("document.querySelector('.base-layer').textContent.includes('南岸新街')")
+    assert page.evaluate("document.querySelector('.base-layer').textContent.includes('月 渡 湾')")
     page.evaluate('window.__map.fit()')
     page.screenshot(path=str(OUT/'expanded-map-desktop.png'))
     page.evaluate('window.__map.center()')
@@ -2195,12 +2241,12 @@ with sync_playwright() as p:
         pump(mobile, 100)
         mobile.screenshot(path=str(OUT/f'game-{width}.png'))
         mobile.click('[data-ui="fit-map"]')
-        bounds = mobile.locator('.road-network').bounding_box()
+        bounds = mobile.locator('.osm-roads').bounding_box()
         viewport = mobile.locator('#city-map').bounding_box()
         assert bounds['x'] >= viewport['x'] and bounds['x']+bounds['width'] <= viewport['x']+viewport['width']+.5
         assert bounds['y'] >= viewport['y'] and bounds['y']+bounds['height'] <= viewport['y']+viewport['height']+.5
-        assert mobile.locator('.bridge-rails').count() == 4
-        assert mobile.locator('.district-label').all_text_contents() == ['云港新区','东湖新城','南郊生活区','灵溪山麓','南岸新街']
+        assert mobile.locator('.osm-building path').count() > 2500
+        assert mobile.locator('.osm-area-labels text').all_text_contents() == ['听 雨 园','长 乐 里','青 藤 坊','月 渡 湾']
         mobile.screenshot(path=str(OUT/f'map-overview-{width}.png'))
         before_position = current(mobile)['position']
         mobile.click('[data-ui="locate"]')
@@ -2237,7 +2283,9 @@ with sync_playwright() as p:
     ctx, expanded, xerrors = setup(browser)
     new_game(expanded, '新城骑手')
     assert expanded.evaluate('NightCourier.PLACES.length') == 110
-    assert expanded.evaluate('document.querySelector(".road-network").getAttribute("d")===NightCourier.ROAD_EDGES.map(({from,to})=>{const a=NightCourier.ROAD_NODES[from],b=NightCourier.ROAD_NODES[to];return `M${a.x} ${a.y}L${b.x} ${b.y}`;}).join("")')
+    assert expanded.evaluate('''()=>{const G=NightCourier;return [...document.querySelectorAll('.osm-road')].every(el=>el.getAttribute('d')===G.MapArtwork.edgePath(G.ROAD_EDGES.filter(e=>e.kind===el.dataset.roadKind)));}''')
+    assert expanded.locator('.city-name').inner_text() == '青岚城'
+    assert not any(name in expanded.locator('.base-layer').text_content() for name in ['上海','黄浦江','人民路','中华路','豫园'])
     expanded.screenshot(path=str(OUT/'map-overview-1440.png'))
     vehicle = current(expanded)['vehicle']; vehicle['battery'] = 0
     fixture(expanded, {'vehicle': vehicle})
@@ -2294,11 +2342,12 @@ with sync_playwright() as p:
     expanded.click('[data-ui="fit-map"]')
     expanded.locator('[data-place="lingxi-20"]').focus();expanded.keyboard.press('Enter')
     assert expanded.locator('#panel-title').inner_text() == '问山茶坊'
-    assert '山脚' in expanded.locator('.panel-body').inner_text()
+    assert '老城厢街巷' in expanded.locator('.panel-body').inner_text()
     expanded.screenshot(path=str(OUT/'new-district-order.png'))
     expanded.click('[data-act="deliver"]')
     money = stored(expanded)['player']['money']
-    toggle(expanded);pump(expanded, 500);toggle(expanded)
+    remaining = expanded.evaluate('NightCourier.activityRemaining(window.__live)')
+    toggle(expanded);pump(expanded, remaining*350);toggle(expanded)
     assert stored(expanded)['position'] is None and stored(expanded)['activity']['travelled'] > 0
     assert stored(expanded)['player']['money'] == money
     expanded.click('[data-ui="home"]');expanded.locator('[data-ui="load"]').first.click()
@@ -2391,5 +2440,5 @@ with sync_playwright() as p:
 (OUT/'browser-tests.json').write_text(json.dumps({
     'mode':'offline Chromium bundle; controlled GameClock timestamps plus real-rAF and background-heartbeat probes; mocked storage and AI',
     'tests':results, 'passed':len(results), 'failed':0, 'receipt_reload_modes':reload_modes,
-}, ensure_ascii=False, indent=2))
+}, ensure_ascii=False, indent=2), encoding='utf-8')
 print(f'{len(results)} browser checks passed.')

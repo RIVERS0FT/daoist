@@ -1,15 +1,20 @@
-import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import {writeFile,mkdir,rm,lstat,realpath} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {dirname,join} from 'node:path';
-const root=dirname(dirname(fileURLToPath(import.meta.url))),out=join(root,'dist');
+import {dirname,join,resolve} from 'node:path';
+import {collect} from '../tools/riversoft.mjs';
+
+const root=dirname(dirname(fileURLToPath(import.meta.url))),out=resolve(root,'dist');
+// Only validated public assets enter the bundle; no environment files or saves.
+const bundle=await collect(join(root,'public'));
+const info=await lstat(out).catch(e=>{if(e.code!=='ENOENT')throw e;return null;});
+if(info&&(info.isSymbolicLink()||await realpath(out)!==out))throw Error('Refusing to clean redirected dist directory.');
+if(out!==join(root,'dist'))throw Error('Build output must be the project dist directory.');
+await rm(out,{recursive:true,force:true});
 await mkdir(out,{recursive:true});
-let html=await readFile(join(root,'public/index.html'),'utf8');
-const css=await readFile(join(root,'public/styles.css'),'utf8');
-html=html.replace('<link rel="stylesheet" href="styles.css">',`<style>\n${css}\n</style>`);
-for(const file of ['data','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map','app']){
- const js=await readFile(join(root,`public/js/${file}.js`),'utf8');
- html=html.replace(`<script src="js/${file}.js" defer></script>`,'');
- html=html.replace('</body>',`<script>\n${js.replace(/<\/script/gi,'<\\/script')}\n</script>\n</body>`);
+for(const file of bundle.files){
+  const dest=join(out,file.path);
+  await mkdir(dirname(dest),{recursive:true});
+  await writeFile(dest,file.data);
 }
-await writeFile(join(out,'index.html'),html);
-console.log('已生成 dist/index.html：单文件经典版可直接打开；AI 模式请用 npm start。');
+await writeFile(join(out,'asset-manifest.json'),JSON.stringify({files:bundle.files.map(({path,size,sha256})=>({path,size,sha256}))},null,2)+'\n');
+console.log(`已生成 dist/：${bundle.files.length} 个本地静态资源及校验清单。请完整发布目录；本机使用 npm start。`);

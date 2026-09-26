@@ -2,6 +2,7 @@ import {throughNine, afterAwakening} from './helpers/opening.mjs';
 import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -76,7 +77,7 @@ test('首次吐纳途中、中断和途中读档不开放进阶；完成才开�
   assert.equal(s.stats.trained,1);assert.ok(s.unlockedFeatures.includes('practice'));
   assert.ok(G.perform(s,'cultivate',{kind:'meditate'}).ok);assert.equal(G.featureBlock(s,'breakthrough'),'');
   s.player.qi=G.realmNeed(s);assert.ok(G.perform(s,'breakthrough').ok);
-  s.position='park';assert.equal(G.perform(s,'explore').ok,false);s.unlockedPlaces.push('park');assert.ok(G.perform(s,'explore').ok);
+  s.position='park';s.unlockedPlaces=s.unlockedPlaces.filter(id=>id!=='park');assert.equal(G.perform(s,'explore').ok,false);s.unlockedPlaces.push('park');assert.ok(G.perform(s,'explore').ok);
 });
 test('解锁后路线主线待选时不开放炼药，真实新档可连续解锁到炼药',()=>{
   let s=afterClaim();
@@ -167,35 +168,18 @@ test('已开启功能永久保存；花光钱、用完物品和信任下降不�
   s.player.coins=0;s.player.money=0;s.inventory={};s.bonds.lin.trust=0;
   s=reread(s);for(const id of known)assert.ok(G.featureUnlocked(s,id));
 });
-test('v9无经历新档不全开；旧修行、药鼎丹方与改装按证据恢复',()=>{
-  let s=fresh();s.schemaVersion=9;delete s.unlockedFeatures;assert.deepEqual(reread(s).unlockedFeatures,[]);
+test('v9即使有修行、药鼎丹方与改装也明确拒绝',()=>{
+  let s=fresh();s.schemaVersion=9;delete s.unlockedFeatures;assert.throws(()=>reread(s),/不支持此存档版本/);
   s.alchemy.formulas=['heal'];s.alchemy.cauldron=1;s.alchemy.cauldrons=[1];s.vehicle.levels.speed=2;s.stats.trained=1;
-  const before=JSON.stringify(s),a=reread(s);assert.equal(JSON.stringify(s),before);
-  for(const id of ['system','cultivation','practice','alchemy','upgrades'])assert.ok(a.unlockedFeatures.includes(id),id);
-  assert.equal(a.minutes,s.minutes);assert.deepEqual(a.alchemy.formulas,['heal']);assert.equal(a.vehicle.levels.speed,2);
-  assert.ok(!a.unlockedFeatures.includes('endings'));assert.ok(!a.unlockedFeatures.includes('bonds'));
+  const before=JSON.stringify(s);assert.throws(()=>reread(s),/不支持此存档版本/);assert.equal(JSON.stringify(s),before);
 });
-test('v9炼药途中迁移保持已付材料与进度，恢复相关入口不重复结算',()=>{
-  let s=fresh();s.unlockedFeatures=['alchemy'];G.syncFeatureUnlocks(s,true);s.unlockedPlaces.push('market');s.position='market';s.player.money=1000;
-  s=act(s,'cauldron',{id:1});s.alchemy.formulas=['heal'];const recipe=G.alchemyRecipe('heal');
-  for(const [id,n] of Object.entries(recipe.materials))s.inventory[id]=n;
-  s=G.advance(act(s,'alchemy',{recipe:'heal'}),5);s.schemaVersion=9;delete s.unlockedFeatures;
-  const a=reread(s);assert.ok(a.unlockedFeatures.includes('alchemy'));assert.equal(a.activity.elapsed,s.activity.elapsed);
-  assert.deepEqual(a.inventory,s.inventory);assert.equal(a.player.money,s.player.money);assert.equal(a.alchemy.brews,s.alchemy.brews);
-});
+
 test('新格式所有权严格白名单去重，前置入口补齐，不因未知键崩溃',()=>{
   const s=fresh();s.unlockedFeatures=['alchemy','alchemy','__proto__',123,null];const a=reread(s);
   assert.deepEqual(new Set(a.unlockedFeatures),new Set(['alchemy','cultivation','system']));
   for(const raw of [null,{},'system']){s.unlockedFeatures=raw;assert.deepEqual(reread(s).unlockedFeatures,[]);}
 });
-test('v9存储键显式迁移；新键空列表不会复活旧档；多存档所有权隔离',()=>{
-  const mem={data:new Map(),getItem(k){return this.data.get(k)??null;},setItem(k,v){this.data.set(k,v);}};
-  const a=afterClaim(),b=fresh();a.schemaVersion=9;delete a.unlockedFeatures;
-  mem.setItem('night-courier:saves:v9',JSON.stringify({schemaVersion:9,saves:[a,b]}));const store=G.createStore(mem);store.load();
-  assert.equal(store.saves.length,2);assert.ok(store.saves[0].unlockedFeatures.includes('cultivation'));
-  assert.deepEqual(store.saves[1].unlockedFeatures,[]);assert.ok(mem.getItem(G.STORAGE_KEY));
-  mem.setItem(G.STORAGE_KEY,JSON.stringify({schemaVersion:10,saves:[]}));assert.deepEqual(G.createStore(mem).load(),[]);
-});
+
 test('三种丹方渠道和获得条件不受入口解锁影响，隐藏方仍不能直接开炉',()=>{
   const s=ackUnlocks(afterClaim());s.unlockedFeatures.push('alchemy');s.unlockedPlaces.push('market');s.position='market';
   const candidates=G.formulaMarketCandidates(s);assert.ok(candidates.every(r=>r.acquisition.type==='shop'));

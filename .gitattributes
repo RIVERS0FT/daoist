@@ -1,0 +1,3 @@
+# Preserve upstream bytes so Leaflet SHA-256 checks match on Windows and Linux.
+/public/vendor/leaflet/leaflet.js -text
+/public/vendor/leaflet/leaflet.css -text

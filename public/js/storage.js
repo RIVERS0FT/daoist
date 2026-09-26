@@ -2,10 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v22';
-  G.LEGACY_STORAGE_KEY = 'night-courier:saves:v21';
-  G.LEGACY_STORAGE_KEYS = [G.LEGACY_STORAGE_KEY,'night-courier:saves:v20','night-courier:saves:v19','night-courier:saves:v18','night-courier:saves:v17','night-courier:saves:v16','night-courier:saves:v15','night-courier:saves:v14','night-courier:saves:v13','night-courier:saves:v12','night-courier:saves:v11','night-courier:saves:v10','night-courier:saves:v9','night-courier:saves:v8','night-courier:saves:v7','night-courier:saves:v6','night-courier:saves:v5','night-courier:saves:v4','night-courier:saves:v3'];
-  G.BACKUP_KEY = 'night-courier:saves:backup';
+  G.STORAGE_KEY = 'night-courier:saves:v23';
+  G.BACKUP_KEY = 'night-courier:saves:v23:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
   const num = (v, fallback, min=0, max=999999, integer=true) => Number.isFinite(v) ? G.clamp(integer?Math.floor(v):v,min,max) : fallback;
@@ -19,7 +17,7 @@
       expiresAt:num(raw.expiresAt,s.minutes+20,0,1e8,false),reward:num(raw.reward,20,0,1000),coins:num(raw.coins,2,0,20),
       npc:G.NPCS.some(n=>n.id===raw.npc)?raw.npc:null};
   }
-  function cleanPending(p,s,version=G.VERSION){
+  function cleanPending(p,s){
     if(!obj(p))throw new Error('待处理事件已损坏。');
     if(p.kind==='auction'||p.templateId==='auction-bid'){
       const lot=G.auctionLot(s,p.auction?.lotId);
@@ -32,9 +30,8 @@
     let deliveryFace=G.EVENTS.find(e=>e.id===p.templateId&&e.deliveryNpc);
     if(deliveryFace?.deliveryNpc==='zhou'&&!deliveryFace.deliveryMeeting){
       const expected=G.zhouDeliveryTemplate(s.bonds.zhou.stage);
-      const carried=s.bonds.zhou.stage===4&&p.templateId==='delivery-npc-zhou-again'&&(version<21||p.legacyZhouDelivery===true);
-      if(version>=21&&p.templateId!==expected&&!carried)throw new Error('周野配送对白与关系阶段不一致。');
-      if(!carried)deliveryFace=G.EVENTS.find(e=>e.id===expected);
+      if(p.templateId!==expected)throw new Error('周野配送对白与关系阶段不一致。');
+      deliveryFace=G.EVENTS.find(e=>e.id===expected);
     }
     if(deliveryFace){
       const ticket=cleanTicket(p.delivery,s),id=deliveryFace.deliveryNpc;
@@ -43,8 +40,7 @@
         throw new Error('配送相逢与人物、地点或票据不一致。');
       // Restore authored identity and effects, never saved AI text or social chapter advancement.
       return {...G.clone(deliveryFace),id:cleanId(p.id),templateId:deliveryFace.id,
-        npcId:id,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:ticket,
-        ...(id==='zhou'&&s.bonds.zhou.stage===4&&deliveryFace.id==='delivery-npc-zhou-again'?{legacyZhouDelivery:true}:{})};
+        npcId:id,npcAdvance:false,source:'classic',aiStatus:'skip',delivery:ticket};
     }
     // New male stories and revised female stories always restore trusted authored text.
     const fixedRomance=G.NPCS.some(n=>n.id===p.npcId&&(n.id==='zhou'||n.romantic||G.NEW_MALE_NPC_IDS.includes(n.id)));
@@ -53,7 +49,7 @@
       const npc=G.NPCS.find(n=>n.id===p.npcId),bond=s.bonds[npc.id],arc=npc.arc[bond.stage];
       if(!arc||!bond.met||p.kind!=='social'||p.delivery||s.position!==npc.place)
         throw new Error('人物章节与羁绊或拜访地点不一致。');
-      if(npc.id==='zhou'&&version>=21&&p.templateId!==`zhou-arc-${bond.stage}`)throw new Error('周野剧情编号与进度不一致。');
+      if(npc.id==='zhou'&&p.templateId!==`zhou-arc-${bond.stage}`)throw new Error('周野剧情编号与进度不一致。');
       const [title,text,...choices]=arc;
       return {id:cleanId(p.id),...(npc.id==='zhou'?{templateId:`zhou-arc-${bond.stage}`} : {}),kind:'social',title,text,choices:G.clone(choices),
         npcId:npc.id,npcAdvance:true,source:'classic',aiStatus:'skip'};
@@ -144,7 +140,7 @@
     return result;
   }
 
-  function cleanActivity(raw,s,version=G.VERSION){
+  function cleanActivity(raw,s){
     const kinds=['travel','deliver','moveHome','sleep','visit','rest','cultivate','breakthrough','alchemy','explore','charge','repair','upgrade','heal','meal','choice','rescue','auction','sectJoin','sectTask','sectPromote'];
     if(!obj(raw)||!kinds.includes(raw.kind)||!['travel','work'].includes(raw.phase))throw new Error('进行中的行动格式无效。');
     const kind=raw.kind,p=obj(raw.params)?raw.params:{},params={};
@@ -167,24 +163,8 @@
       if(!['speed','battery','durability'].includes(p.kind)||s.vehicle.levels[p.kind]>=5)throw new Error('升级行动无效。');params.kind=p.kind;
     }
     if(kind==='breakthrough'){
-      const mortal=s.player.realm===0,oldMortal=version>=7&&version<13&&mortal;
-      const oldLevel=G.LEGACY_MORTAL_PROGRESS.indexOf(s.player.mortalProgress)+1;
-      const savedLevel=p.realmLevel??(oldMortal?oldLevel:s.player.realmLevel);
-      const level=version<13&&mortal?1:savedLevel;
-      if(p.realm!==s.player.realm||level!==s.player.realmLevel||G.realmAtMax(s)||
-         (oldMortal&&savedLevel!==oldLevel))throw new Error('突破境界与存档不一致。');
-      let expected=G.realmNeed(s);
-      const legacyMortalLevel=oldMortal&&oldLevel<9?oldLevel:version>=13?p.legacyMortalLevel:undefined;
-      const legacyMajorBudget=(version<7&&!mortal)||(version>=13&&p.legacyMajorBudget===true);
-      if(legacyMortalLevel!==undefined){
-        if(!mortal||!Number.isInteger(legacyMortalLevel)||legacyMortalLevel<1||legacyMortalLevel>8||
-           G.LEGACY_MORTAL_PROGRESS[legacyMortalLevel-1]!==s.player.mortalProgress||legacyMajorBudget)throw new Error('旧版凡人突破衔接无效。');
-        params.legacyMortalLevel=legacyMortalLevel;
-        expected=G.LEGACY_MORTAL_PROGRESS[legacyMortalLevel]-s.player.mortalProgress;
-      }else if(legacyMajorBudget){
-        if(mortal||s.player.realm>5||level!==9)throw new Error('旧版大境突破衔接无效。');
-        params.legacyMajorBudget=true;expected=G.REALMS[p.realm].need;
-      }
+      const level=p.realmLevel,expected=G.realmNeed(s);
+      if(p.realm!==s.player.realm||level!==s.player.realmLevel||G.realmAtMax(s))throw new Error('突破境界与存档不一致。');
       const need=p.need??expected;
       if(!Number.isFinite(need)||Math.abs(need-expected)>1e-8)throw new Error('突破投入与当前境界不一致。');
       params.realm=p.realm;params.realmLevel=level;params.need=need;params.chance=num(p.chance,53,35,95,false);
@@ -199,7 +179,7 @@
     }
     if(['sectJoin','sectTask','sectPromote'].includes(kind)){
       const sectId=p.sectId||'tingyu';
-      if(!G.sectDefinition(sectId)||(version<22&&sectId!=='tingyu'))throw new Error('宗门行动身份无效。');
+      if(!G.sectDefinition(sectId))throw new Error('宗门行动身份无效。');
       if(p.sectId!==undefined)params.sectId=sectId;
       if(raw.phase!=='work'||raw.target||raw.route||raw.travelled||Object.keys(raw.recovery||{}).length||raw.gainedQi)throw new Error('宗门行动不能携带路线或额外收益。');
       if(kind==='sectTask'){
@@ -214,7 +194,7 @@
     }
     if(kind==='choice'){
       if(p.event?.kind==='auction')throw new Error('拍卖必须使用独立竞价行动。');
-      params.event=cleanPending(p.event,s,version);
+      params.event=cleanPending(p.event,s);
       if(!Number.isInteger(p.index)||!params.event.choices[p.index])throw new Error('正在执行的事件选项无效。');
       params.index=p.index;duration=params.event.choices[p.index].duration||0;params.duration=duration;
       if(!duration)throw new Error('即时选项不应保存为持续行动。');
@@ -226,9 +206,7 @@
       if(!G.place(target)||target!==raw.target)throw new Error('行动目的地与存档不一致。');
     }
     const a={kind,params,target,phase:raw.phase,duration,elapsed:num(raw.elapsed,0,0,duration,false),startedAt:num(raw.startedAt,s.minutes,0,s.minutes,false),route:null,travelled:0,recovery:{},gainedQi:num(raw.gainedQi,0,0,999999,false)};
-    // v5 旧版充电为 30 分钟：按完成比例缩短余程，保留现有电量与已付费用。
-    // 写回后 duration=10，重复读档不会再次缩短或重复补电。
-    if(kind==='charge'&&raw.duration===30)a.elapsed=num(raw.elapsed,0,0,30,false)/30*duration;
+    if(kind==='charge'&&raw.duration!==duration)throw new Error('充电时长与当前规则不一致。');
     if(raw.route){
       if(!target||!Array.isArray(raw.route.points)||!G.roadAnchors(raw.route.points[0]).length)throw new Error('进行中的道路路线无效。');
       a.route=G.route(raw.route.points[0],target);a.travelled=num(raw.travelled,0,0,a.route.meters,false);
@@ -255,15 +233,17 @@
 
   G.sanitizeSave = raw => {
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
-    const version=raw.schemaVersion??raw.version;
-    if(![1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].includes(version))throw new Error('存档版本未知或高于本程序。原仓库未知格式不能保证兼容。');
-    const name=str(raw.name??raw.player.name,'无名行者',64).trim();
+    const version=raw.schemaVersion;
+    if(version!==G.VERSION)throw new Error(`不支持此存档版本：本程序仅支持 v${G.VERSION} 城市存档，请重新开局。`);
+    const name=str(raw.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
     const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
     s.id=cleanId(raw.id);s.createdAt=num(raw.createdAt,Date.now(),0,1e15);s.updatedAt=num(raw.updatedAt,Date.now(),0,1e15);
     s.minutes=num(raw.minutes,480,0,1e8,false);s.turn=num(raw.turn,0,0,1e8);s.seed=num(raw.seed,1,1,4294967295);
-    s.position=G.place(raw.position)?raw.position:'home';
-    if(version>=5 && raw.position===null){
+    if(raw.position!==null&&!G.place(raw.position))throw new Error('角色地点无效。');
+    s.position=raw.position;
+    if(s.position&&raw.location){const p=G.place(s.position);if(!Number.isFinite(raw.location.x)||!Number.isFinite(raw.location.y)||Math.hypot(raw.location.x-p.x,raw.location.y-p.y)>1e-7)throw new Error('角色地点与坐标不一致。');s.location={x:p.x,y:p.y};}
+    if(raw.position===null){
       if(!G.roadAnchors(raw.location).length)throw new Error('途中位置不在有效道路上。');
       s.position=null;s.location={x:raw.location.x,y:raw.location.y};
     }
@@ -277,20 +257,11 @@
     }else s.gameOver=null;
     s.weather=G.WEATHER.some(w=>w.id===raw.weather)?raw.weather:'clear';
     s.learned=Array.isArray(raw.learned)?[...new Set(raw.learned.filter(id=>G.ITEMS.some(i=>i.id===id&&i.type==='technique'&&i.source==='system')))]:[];
-    if(version>=22&&(!Array.isArray(raw.learned)||new Set(raw.learned).size!==raw.learned.length||raw.learned.some(id=>!G.technique(id)||G.technique(id).source!=='system')))throw new Error('已学通用功法记录损坏。');
+    if((!Array.isArray(raw.learned)||new Set(raw.learned).size!==raw.learned.length||raw.learned.some(id=>!G.technique(id)||G.technique(id).source!=='system')))throw new Error('已学通用功法记录损坏。');
     s.equipment=Array.isArray(raw.equipment)?[...new Set(raw.equipment.filter(id=>G.ITEMS.some(i=>i.id===id&&i.type==='equipment')))]:[];
-    const legacyLevel=num(raw.player.realmLevel,version<7&&raw.activity?.kind==='breakthrough'?9:1,1,9);
-    s.player.realm=num(raw.player.realm,0,0,version<13?5:G.REALMS.length-1);
-    s.player.realmLevel=s.player.realm===0?1:legacyLevel;
-    if(version<13){
-      s.player.mortalProgress=s.player.realm===0&&version>=7?G.LEGACY_MORTAL_PROGRESS[legacyLevel-1]:0;
-    }else{
-      if(!Number.isInteger(raw.player.realm)||raw.player.realm!==s.player.realm||
-         !Number.isInteger(raw.player.realmLevel)||raw.player.realmLevel!==s.player.realmLevel)throw new Error('修为境界或重数无效。');
-      const progress=raw.player.mortalProgress;
-      if(!G.LEGACY_MORTAL_PROGRESS.includes(progress)||(s.player.realm!==0&&progress!==0))throw new Error('凡人旧修为抵扣记录无效。');
-      s.player.mortalProgress=progress;
-    }
+    s.player.realm=num(raw.player.realm,0,0,G.REALMS.length-1);
+    s.player.realmLevel=s.player.realm===0?1:num(raw.player.realmLevel,1,1,9);
+    if(!Number.isInteger(raw.player.realm)||raw.player.realm!==s.player.realm||!Number.isInteger(raw.player.realmLevel)||raw.player.realmLevel!==s.player.realmLevel)throw new Error('修为境界或重数无效。');
     for(const k of ['money','coins','qi'])s.player[k]=num(raw.player[k],s.player[k],0,k==='money'?9999999:999999,k!=='qi');
     for(const k of ['insight','constitution','agility','luck'])s.player[k]=num(raw.player[k],5,1,99);
     for(const k of ['rep','karma'])s.player[k]=num(raw.player[k],0,-50,100);
@@ -300,24 +271,18 @@
     for(const k of ['health','stamina','mana'])s.player[k]=num(raw.player[k],cap[k],0,cap[k],false);
     s.vehicle.battery=num(v.battery,cap.battery,0,cap.battery,false);s.vehicle.durability=num(v.durability,cap.durability,0,cap.durability,false);
     const ar=obj(raw.alchemy)?raw.alchemy:{};
-    const oldCauldron=num(ar.cauldron,version<=5&&raw.activity?.kind==='alchemy'?1:0,0,version<8?3:G.CAULDRONS.length-1),cauldron=version<8?(G.LEGACY_CAULDRON_MAP[oldCauldron]??0):oldCauldron;
-    const ownedCauldrons=version<8?(cauldron?[cauldron]:[]):Array.isArray(ar.cauldrons)?[...new Set(ar.cauldrons.map(x=>num(x,0,0,G.CAULDRONS.length-1)).filter(Boolean))].sort((a,b)=>a-b):[];
-    if(cauldron&&!ownedCauldrons.includes(cauldron))ownedCauldrons.push(cauldron);
+    const cauldron=num(ar.cauldron,0,0,G.CAULDRONS.length-1);
+    const ownedCauldrons=Array.isArray(ar.cauldrons)?[...new Set(ar.cauldrons.map(x=>num(x,0,0,G.CAULDRONS.length-1)).filter(Boolean))]:[];
+    if(cauldron&&!ownedCauldrons.includes(cauldron))throw new Error('已装备药鼎缺少所有权。');
     const xp=num(ar.xp,0,0,999999);
-    const formulas=version<9
-      ? G.ALCHEMY_RECIPES.filter(r=>s.player.realm>=r.realm&&xp>=r.need).map(r=>r.id)
-      : Array.isArray(ar.formulas)?[...new Set(ar.formulas.filter(id=>G.alchemyRecipe(id)))]:[];
-    const activeFormula=raw.activity?.kind==='alchemy'&&G.alchemyRecipe(raw.activity?.params?.recipe)?.id;
-    if(activeFormula&&!formulas.includes(activeFormula))formulas.push(activeFormula);
+    const formulas=Array.isArray(ar.formulas)?[...new Set(ar.formulas.filter(id=>G.alchemyRecipe(id)))]:[];
     s.alchemy={cauldron,cauldrons:ownedCauldrons.sort((a,b)=>a-b),formulas,xp,brews:num(ar.brews,0,0,999999),successes:num(ar.successes,0,0,999999)};
     if(s.alchemy.successes>s.alchemy.brews)s.alchemy.successes=s.alchemy.brews;
     for(const item of G.ITEMS.filter(i=>!i.unique))s.inventory[item.id]=num(raw.inventory?.[item.id],0,0,9999);
     for(const k of Object.keys(s.stats))s.stats[k]=num(raw.stats?.[k],0,0,k==='distance'?1e10:1e7,k!=='distance');
-    // Each expansion has its own introduction version; missing old-save entries stay hidden.
-    const introduced=[...G.NEW_NPC_IDS.map(id=>[id,19]),...G.NEW_MALE_NPC_IDS.map(id=>[id,20])];
-    for(const [id,since] of introduced){
+    const introduced=[...G.NEW_NPC_IDS,...G.NEW_MALE_NPC_IDS];
+    for(const id of introduced){
       const b=raw.bonds?.[id];
-      if(version<since&&b===undefined)continue;
       if(!obj(b)||typeof b.met!=='boolean'||!['none','friend','romance'].includes(b.path)||
          !Number.isInteger(b.stage)||b.stage<0||b.stage>4||
          !['affinity','trust'].every(k=>Number.isInteger(b[k])&&b[k]>=0&&b[k]<=100)||
@@ -327,21 +292,18 @@
          (!b.met&&(b.affinity||b.trust||b.stage||b.path!=='none'||b.lastTalkDay)))
         throw new Error('新增人物羁绊记录损坏。');
     }
-    for(const npc of G.NPCS){const b=raw.bonds?.[npc.id];if(obj(b)){const affinity=num(b.affinity,0,0,100),trust=num(b.trust,0,0,100),stage=num(b.stage,0,0,npc.id==='zhou'&&version>=21?npc.arc.length:4),path=['friend','romance',...(npc.id==='zhou'&&version>=21?['brother','enemy']:[])].includes(b.path)&& (b.path!=='romance'||npc.romantic)?b.path:'none';s.bonds[npc.id]={met:b.met===true||affinity>0||trust>0||stage>0||path!=='none',affinity,trust,stage,path,lastTalkDay:num(b.lastTalkDay,0,0,G.day(s))};}}
-    // v21 is a new relationship schema for Zhou only. Old progress is a completed prefix.
+    for(const npc of G.NPCS){const b=raw.bonds?.[npc.id];if(obj(b)){const affinity=num(b.affinity,0,0,100),trust=num(b.trust,0,0,100),stage=num(b.stage,0,0,npc.id==='zhou'?npc.arc.length:4),path=['friend','romance',...(npc.id==='zhou'?['brother','enemy']:[])].includes(b.path)&& (b.path!=='romance'||npc.romantic)?b.path:'none';s.bonds[npc.id]={met:b.met===true||affinity>0||trust>0||stage>0||path!=='none',affinity,trust,stage,path,lastTalkDay:num(b.lastTalkDay,0,0,G.day(s))};}}
     const zb=raw.bonds?.zhou;
-    if(version>=21){
       if(!obj(zb)||typeof zb.met!=='boolean'||!Number.isInteger(zb.stage)||zb.stage<0||zb.stage>10||
          zb.path!==G.zhouPath(zb.stage)||!['affinity','trust'].every(k=>Number.isInteger(zb[k])&&zb[k]>=0&&zb[k]<=100)||
          !Number.isInteger(zb.lastTalkDay)||zb.lastTalkDay<0||zb.lastTalkDay>G.day(s)||
          (!zb.met&&(zb.stage||zb.affinity||zb.trust||zb.path!=='none'||zb.lastTalkDay))||
          (zb.path==='enemy'&&(zb.affinity!==0||zb.trust!==0)))throw new Error('周野关系或剧情进度损坏。');
-    }else s.bonds.zhou.path=G.zhouPath(s.bonds.zhou.stage);
     const d=obj(raw.daily)?raw.daily:{},day=G.day(s);
     s.daily={day,delivered:d.day===day?num(d.delivered,0):0,claimed:d.day===day&&d.claimed===true,signedDay:num(d.signedDay,0,0,day),streak:num(d.streak,0,0,day)};
     s.claimed=Array.isArray(raw.claimed)?[...new Set(raw.claimed.filter(id=>G.QUESTS.some(q=>q.id===id)))]:[];
-    if(version>=18&&typeof raw.flags?.systemAwakened!=='boolean')throw new Error('存档缺少有效的外卖系统剧情状态。');
-    s.flags={firstOrder:raw.flags?.firstOrder===true,systemAwakened:version>=18&&raw.flags.systemAwakened===true};
+    if(typeof raw.flags?.systemAwakened!=='boolean')throw new Error('存档缺少有效的外卖系统剧情状态。');
+    s.flags={firstOrder:raw.flags?.firstOrder===true,systemAwakened:raw.flags.systemAwakened===true};
     if(s.flags.systemAwakened&&s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES)throw new Error('外卖系统剧情完成记录与送达数量不一致。');
     s.recentEvents=Array.isArray(raw.recentEvents)?raw.recentEvents.filter(id=>G.EVENTS.some(e=>e.id===id)).slice(-4):[];
     s.unlockedEndings=Array.isArray(raw.unlockedEndings)?[...new Set(raw.unlockedEndings.filter(id=>Object.hasOwn(G.ENDINGS,id)))]:[];
@@ -349,35 +311,24 @@
     s.logs=Array.isArray(raw.logs)?raw.logs.filter(obj).slice(-180).map((l,i)=>({id:`restored-${s.turn}-${i}`,at:num(l.at,s.minutes,0,s.minutes,false),tag:str(l.tag,'日常',12),text:str(l.text,'',600)})):s.logs;
     s.orders=[];
     if(Array.isArray(raw.orders))for(const t of raw.orders.slice(0,6)){try {const clean=cleanTicket(t,s);if(!s.orders.some(o=>o.id===clean.id||o.target===clean.target))s.orders.push(clean);}catch{}}
-    if(!s.orders.length&&version<5)G.refreshOrders(s);
     s.lastRoute=null;
     if(obj(raw.lastRoute)&&G.place(raw.lastRoute.from)&&G.place(raw.lastRoute.to))s.lastRoute=G.route(raw.lastRoute.from,raw.lastRoute.to);
-    s.auction=version>=11?G.cleanAuction(raw.auction,s):G.emptyAuction();
-    s.pending=raw.pending?cleanPending(raw.pending,s,version):null;
-    s.activeOrder=version>=5&&raw.activeOrder?cleanTicket(raw.activeOrder,s):null;
+    s.auction=G.cleanAuction(raw.auction,s);
+    s.pending=raw.pending?cleanPending(raw.pending,s):null;
+    s.activeOrder=raw.activeOrder?cleanTicket(raw.activeOrder,s):null;
     if(s.activeOrder){
       if(s.pending?.delivery)throw new Error('存档包含重复待结算订单。');
       s.orders=s.orders.filter(o=>o.id!==s.activeOrder.id&&o.target!==s.activeOrder.target);
     }
-    if(version<12){
-      // 旧版固定地点原本已经开放，迁移不回收；保留旧非配送行程，不把未结算订单当发现。
-      const unsettled=s.activeOrder?.target||s.pending?.delivery?.target||raw.activity?.params?.event?.delivery?.target;
-      const oldTarget=raw.activity&&!['deliver','choice'].includes(raw.activity.kind)?raw.activity.target:null;
-      s.unlockedPlaces=[...new Set([...G.PLACES.filter(p=>p.permanent).map(p=>p.id),
-        ...(s.position&&s.position!==unsettled?[s.position]:[]),...(G.place(oldTarget)&&oldTarget!==unsettled?[oldTarget]:[])])];
-    }else{
-      if(!Array.isArray(raw.unlockedPlaces)||raw.unlockedPlaces.length>G.PLACES.length||raw.unlockedPlaces.some(id=>typeof id!=='string'||!G.place(id)))throw new Error('地点解锁记录损坏。');
-      s.unlockedPlaces=[...new Set(raw.unlockedPlaces)];
-      if(!s.unlockedPlaces.includes('home')||!G.placeUnlocked(s,G.currentResidence(s).place))throw new Error('当前住处缺少地点解锁记录。');
-      // 1.7.1 将修车点改为初始地点；旧 v12 补齐例外，不发发现奖励或开放其他地点。
-      for(const id of G.STARTING_PLACES)if(!s.unlockedPlaces.includes(id))s.unlockedPlaces.push(id);
-    }
-    s.sect=version>=17?G.cleanSect(raw.sect,s):G.emptySect();
-    s.sectWorld=version>=22?G.cleanSectWorld(raw.sectWorld,s):G.emptySectWorld();
+    if(!Array.isArray(raw.unlockedPlaces)||raw.unlockedPlaces.length>G.PLACES.length||raw.unlockedPlaces.some(id=>typeof id!=='string'||!G.place(id)))throw new Error('地点解锁记录损坏。');
+    s.unlockedPlaces=[...new Set(raw.unlockedPlaces)];
+    if(!G.STARTING_PLACES.every(id=>s.unlockedPlaces.includes(id))||!G.placeUnlocked(s,G.currentResidence(s).place))throw new Error('当前住处或初始地点缺少解锁记录。');
+    s.sect=G.cleanSect(raw.sect,s);
+    s.sectWorld=G.cleanSectWorld(raw.sectWorld,s);
     // 宗门功法所有权恢复后再恢复资源，避免旧上限截断新上限下的余额。
     const techniqueCap=G.limits(s);
     for(const k of ['health','stamina','mana'])s.player[k]=num(raw.player[k],techniqueCap[k],0,techniqueCap[k],false);
-    s.activity=version>=5&&raw.activity?cleanActivity(raw.activity,s,version):null;
+    s.activity=raw.activity?cleanActivity(raw.activity,s):null;
     if(s.activity){
       const a=s.activity,params=a.kind==='travel'?{target:a.target}:a.params;
       const blocked=G.locationBlock(s,a.kind,params);
@@ -385,22 +336,22 @@
     }
     if((s.auction.activeId||s.auction.lots.length)&&!G.placeUnlocked(s,'market'))throw new Error('拍卖记录缺少长乐集地点权限。');
     if(s.pending&&s.activity)throw new Error('待选事件与进行中行动不能同时存在。');
-    if(version>=14&&!Object.hasOwn(raw,'eventResult'))throw new Error('存档缺少事件结果状态。');
-    s.eventResult=version>=14?cleanEventResult(raw.eventResult,s):null;
+    if(!Object.hasOwn(raw,'eventResult'))throw new Error('存档缺少事件结果状态。');
+    s.eventResult=cleanEventResult(raw.eventResult,s);
     if(s.eventResult&&(s.activeOrder||(s.activity&&s.activity.kind!=='rescue')))throw new Error('事件结果与未完成行动冲突。');
-    if(version>=15&&!Object.hasOwn(raw,'placeUnlock'))throw new Error('存档缺少地点解锁提示状态。');
-    s.placeUnlock=version>=15?cleanPlaceUnlock(raw.placeUnlock,s):null;
+    if(!Object.hasOwn(raw,'placeUnlock'))throw new Error('存档缺少地点解锁提示状态。');
+    s.placeUnlock=cleanPlaceUnlock(raw.placeUnlock,s);
     G.validateAuctionLinks(s);
-    G.restoreFeatureUnlocks(s,raw,version);
+    G.restoreFeatureUnlocks(s,raw);
     const binding=s.pending?.templateId==='system-awakening'||s.activity?.params?.event?.templateId==='system-awakening';
     if(binding&&!G.systemAwakeningDue(s))throw new Error('已开放的外卖系统不能重复绑定。');
     const meeting=s.pending||s.activity?.params?.event;
     if(meeting?.deliveryNpc&&G.systemAwakeningDue(s)&&!G.place(meeting.delivery.target).permanent)
       throw new Error('第十单固定剧情不能被人物相逢替换。');
-    // Do not draw RNG or refill offers while loading. Accepted legacy routes stay untouched.
+    // Do not draw RNG or refill offers while loading. Accepted routes stay untouched.
     if(G.systemAwakeningDue(s))s.orders=s.orders.filter(o=>!G.place(o.target).permanent);
     G.validateSectLinks(s);
-    s.unlockNotices=version>=16?cleanUnlockNotices(raw.unlockNotices,s):[];
+    s.unlockNotices=cleanUnlockNotices(raw.unlockNotices,s);
     if(s.bonds.zhou.stage>=5){
       const gate=G.ZHOU_STORY_GATES[s.bonds.zhou.stage-1];
       if(s.player.realm<gate.realm||s.stats.delivered<gate.delivered||!G.featureUnlocked(s,'system'))throw new Error('周野已完成剧情缺少境界或配送经历。');
@@ -409,7 +360,6 @@
     if(ze?.npcId==='zhou'&&ze.npcAdvance&&G.npcStoryBlock(s,'zhou'))throw new Error('周野待选剧情缺少前置经历。');
     if(s.activity?.kind==='visit'&&s.activity.params.id==='zhou'&&G.npcVisitBlock(s,'zhou'))throw new Error('仇人不能恢复友好拜访。');
     s.schemaVersion=G.VERSION;
-    if(version<G.VERSION)G.log(s,`存档已从重建版 v${version} 结构升级至 v${G.VERSION}：凡人合为单一境界，旧版已投入修为抵扣进入炼气的门槛；炼气及以上境界与重数保留，新增炼虚、合体、大乘、渡劫；既有地图、连续时间与丹方所有权继续保留；玩法入口按已完成经历、已有物品与在途行动恢复，不重复扣费或结算；拍卖冻结款与轮次成对恢复；旧版已开放的固定地点继续保留，新地点通过外卖送达解锁；新增空白结果状态，之后的选择实际结算后展示结果，确认不再次发奖；旧档不补播历史解锁弹窗，保留已有未确认地点提示；新结识人物与新开放功能保存独立待确认队列；宗门记录按原版本恢复；第十单解锁剧情新增独立完成标记，旧档已开放的外卖系统不收回；v19补六位女性、v20补九位男性的隐藏初始记录；原人物关系和配送票据保持不变；v21保留周野旧故事前缀，不自动成仇；v22保留听雨观全部记录及在途行为，新增四宗与宗际剧情空白进度，不补发功法、贡献或奖励。`,'存档');
     return s;
   };
   G.parseImport = text => {
@@ -428,12 +378,7 @@
       if(!storage){warning='浏览器不允许本地存储。当前进度只保留在本页，请及时导出存档。';return cache;}
       try{
         cache=readKey(G.STORAGE_KEY);
-        const legacy=G.LEGACY_STORAGE_KEYS.find(k=>storage.getItem(k));
-        if(storage.getItem(G.STORAGE_KEY)===null&&legacy){
-          cache=readKey(legacy);
-          const migrated=persist(cache);
-          if(migrated.ok)warning=`已将旧存档升级到 v${G.VERSION}，角色、住处、药鼎与既有进度保留。`;
-        }
+
       }
       catch(e){try{const backup=storage.getItem(G.BACKUP_KEY);if(!backup)throw new Error('没有备份');cache=readKey(G.BACKUP_KEY);warning='主存档损坏，已读取上一次自动备份。请先导出保存。';}catch{warning='本地存档无法读取；没有覆盖原始数据。可以导入外部备份。';}}
       return cache;

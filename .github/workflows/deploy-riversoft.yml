@@ -118,26 +118,9 @@ jobs:
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "Published URL: $url"
 
-      - name: Verify the public game or compatibility route
+      - name: Verify every public asset or compatibility route
         env:
           PUBLISHED_URL: ${{ steps.publish.outputs.url }}
           DEPLOYMENT_ID: ${{ steps.publish.outputs.deployment_id }}
         run: |
-          set -euo pipefail
-          expected="$(sha256sum dist/index.html | cut -d ' ' -f1)"
-          if curl --fail --silent --show-error --retry 5 --retry-delay 3 \
-            "$PUBLISHED_URL" --output "$RUNNER_TEMP/riversoft-public.html"; then
-            actual="$(sha256sum "$RUNNER_TEMP/riversoft-public.html" | cut -d ' ' -f1)"
-            test "$actual" = "$expected"
-            echo "Canonical public page matches the built game: $PUBLISHED_URL"
-          else
-            echo "::warning::The account subdomain was published, but its DNS/TLS endpoint is not currently valid. Checking the HTTPS compatibility route instead."
-            fallback="https://riversoft.top/api/hosting/content/daoist/$DEPLOYMENT_ID/index.html"
-            curl --fail --silent --show-error --retry 5 --retry-delay 3 \
-              "$fallback" --output "$RUNNER_TEMP/riversoft-compat.html"
-            actual="$(sha256sum "$RUNNER_TEMP/riversoft-compat.html" | cut -d ' ' -f1)"
-            test "$actual" = "$expected"
-            curl --fail --silent --show-error --retry 5 --retry-delay 3 \
-              "https://riversoft.top/p/daoist" --output /dev/null
-            echo "Published content matches the build through https://riversoft.top/p/daoist"
-          fi
+          node scripts/verify-public.mjs ./dist "$PUBLISHED_URL" "$DEPLOYMENT_ID"

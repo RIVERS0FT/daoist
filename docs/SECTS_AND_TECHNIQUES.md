@@ -1,6 +1,6 @@
 # 五宗与三十六法 · 当前内容表
 
-应用版本：1.19.0。本文由可信配置生成，修改源文件后运行 `npm run sects:export`。完整玩法规则见 [GAME_DESIGN.md](GAME_DESIGN.md)。
+应用版本：1.20.0。本文由可信配置生成，修改源文件后运行 `npm run sects:export`。完整玩法规则见 [GAME_DESIGN.md](GAME_DESIGN.md)。
 
 ## 计数与结算规则
 

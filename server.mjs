@@ -2,7 +2,8 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, extname } from 'node:path';
+import './public/js/city-data.js';
 import './public/js/data.js';
 import './public/js/sects.js';
 import './public/js/npc-profiles.js';
@@ -14,7 +15,8 @@ const ROOT=dirname(fileURLToPath(import.meta.url));
 const PUBLIC=join(ROOT,'public');
 const FILES=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],
-  ...['data','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`])
+  ...['city-data','data','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map-art','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`]),
+  ...['leaflet.js','leaflet.css','LICENSE.txt','README.txt','images/layers.png','images/layers-2x.png','images/marker-icon.png','images/marker-icon-2x.png','images/marker-shadow.png'].map(x=>[`/vendor/leaflet/${x}`,`vendor/leaflet/${x}`])
 ]);
 class HttpError extends Error{constructor(status,message){super(message);this.status=status;}}
 const check=(ok,status,message)=>{if(!ok)throw new HttpError(status,message);};
@@ -102,7 +104,8 @@ export function createApp(options={}){
       check(req.method==='GET'||req.method==='HEAD',405,'不支持此方法。');
       const file=FILES.get(path);check(file,404,'页面不存在。');
       const content=await readFile(join(PUBLIC,file));
-      res.writeHead(200,{'Content-Type':file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8','Content-Length':content.length});
+      const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.png':'image/png','.txt':'text/plain; charset=utf-8'};
+      res.writeHead(200,{'Content-Type':mime[extname(file)],'Content-Length':content.length});
       res.end(req.method==='HEAD'?undefined:content);
     }catch(error){
       if(res.headersSent){res.end();return;}

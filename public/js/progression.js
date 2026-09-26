@@ -330,8 +330,8 @@
   if (originalSanitize) {
     G.sanitizeSave = raw => {
       const s = originalSanitize(raw);
-      for (const key of G.STORY_FLAG_KEYS) s.flags[key] = key==='storySectInvitation'&&(raw.schemaVersion??raw.version)<17?false:raw?.flags?.[key] === true;
-      // v18 的开放式 flags 白名单扩充：旧档缺失新键视为未触发，不补播、不补奖。
+      for (const key of G.STORY_FLAG_KEYS) s.flags[key] = raw?.flags?.[key] === true;
+      // 可选标记缺失视为未触发，不补播、不补奖。
       for(const event of higherEvents){
         const value=raw.flags?.[event.flag];
         if(value!==undefined&&typeof value!=='boolean')throw new Error('高境界主线标记损坏。');

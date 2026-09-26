@@ -1,6 +1,7 @@
 import {afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -116,7 +117,7 @@ test('首次完整吐纳才弹进阶修行，中断不提示',()=>{
 });
 test('进行中领取委托出现功能提示，读档保存原路径及进度，确认不停止或瞬移',()=>{
   let s=G.newGame('在途');s.stats.delivered=1;s.unlockedFeatures=['system'];G.syncFeatureUnlocks(s,true);s=act(s,'travel',{target:'garage'});
-  s=G.advance(s,1);s=act(s,'claim',{id:'q1'});const mid=G.clone(s.activity),loc=G.clone(s.location),minutes=s.minutes;
+  s=G.advance(s,G.activityRemaining(s)*.37);s=act(s,'claim',{id:'q1'});const mid=G.clone(s.activity),loc=G.clone(s.location),minutes=s.minutes;
   assert.equal(key(G.nextUnlockNotice(s)),'feature:cultivation');assert.equal(G.advance(s,100),s);s=read(s);
   assert.deepEqual(s.activity,mid);s=ack(s);assert.deepEqual(s.activity,mid);assert.deepEqual(s.location,loc);assert.equal(s.minutes,minutes);
   assert.ok(G.advance(s,1).minutes>minutes);
@@ -130,21 +131,8 @@ test('v16 读档保留队列顺序；确认的项不会重新出现',()=>{
   let s=notified();const names=s.unlockNotices.map(key);s=read(s);assert.deepEqual(s.unlockNotices.map(key),names);
   s=ack(s);s=read(s);assert.deepEqual(s.unlockNotices.map(key),names.slice(1));s=rest(s);assert.deepEqual(read(s).unlockNotices,[]);
 });
-test('v15 迁移保留未读结果和地点，不给历史人物或功能补弹',()=>{
-  const s=choose(delivery());s.schemaVersion=15;delete s.unlockNotices;const a=read(s);
-  assert.equal(a.schemaVersion,G.VERSION);assert.deepEqual(a.unlockNotices,[]);assert.deepEqual(a.eventResult,s.eventResult);
-  assert.deepEqual(a.placeUnlock,s.placeUnlock);assert.deepEqual(a.bonds,s.bonds);assert.deepEqual(a.player,s.player);
-  assert.deepEqual(read(a).unlockNotices,[]);
-});
-test('v15本地键只迁移一次且原文保留，多档提示独立，新键空列表不复活旧档',()=>{
-  const a=notified(),old=G.clone(a),b=G.newGame('另一旅程');old.schemaVersion=15;delete old.unlockNotices;
-  const text=JSON.stringify({saves:[old]}),values=new Map([['night-courier:saves:v15',text]]);
-  const memory={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
-  const store=G.createStore(memory);store.load();assert.deepEqual(store.saves[0].unlockNotices,[]);
-  assert.equal(values.get('night-courier:saves:v15'),text);store.upsert(a);store.upsert(b);
-  const saves=G.createStore(memory).load();assert.deepEqual(saves.find(s=>s.id===a.id).unlockNotices,a.unlockNotices);
-  assert.deepEqual(saves.find(s=>s.id===b.id).unlockNotices,[]);values.set(G.STORAGE_KEY,JSON.stringify({saves:[]}));assert.deepEqual(G.createStore(memory).load(),[]);
-});
+
+
 test('提示只保留白名单字段，不接收显示文本、脚本或奖励注入',()=>{
   const s=notified();Object.assign(s.unlockNotices[0],{effects:{money:99999},name:'<script>alert(1)</script>',feature:'auction'});
   const a=read(s);assert.deepEqual(a.unlockNotices[0],{kind:'bond',id:'lin',at:s.minutes});assert.deepEqual(a.player,s.player);assert.equal(G.featureUnlocked(a,'auction'),false);

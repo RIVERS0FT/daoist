@@ -1,5 +1,24 @@
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+for(const mode of ['classic','ai'])test(`${mode} 满级当前档仍依次经历十场，不因境界或计数跳过章节`,()=>{
+  let s=veteran(0,mode);s.player.realm=9;s.player.realmLevel=9;s.stats.delivered=150;
+  const ids=[];
+  for(const e of events){s=prompt(s,e.id);ids.push(s.pending.templateId);
+    assert.equal(G.storyStage(s).id,e.higherChapter);s=finish(choose(read(s)));assert.equal(s.pending,null);s=ack(read(s));}
+  assert.deepEqual(ids,events.map(e=>e.id));assert.equal(G.storyStageLabel(s),'第十二章 · 劫尽见人间');
+  const qi=s.player.qi;s=finish(act(s,'rest'));assert.equal(s.pending,null);assert.equal(s.player.qi,qi);
+  assert.equal(G.realmLabel(s),'渡劫九重');assert.equal(G.realmNeed(s),0);assert.equal(s.ending,null);assert.equal(s.gameOver,null);
+});
+
+test('当前存档缺失新键显式补false，不发奖、不抽随机数、不自动播放；待选缺标记仍可恢复',()=>{
+  const s=veteran();for(const e of events)delete s.flags[e.flag];const p=G.clone(s.player),seed=s.seed,at=s.minutes;
+  const restored=read(s);assert.ok(events.every(e=>restored.flags[e.flag]===false));assert.deepEqual(restored.player,p);
+  assert.equal(restored.seed,seed);assert.equal(restored.minutes,at);assert.equal(restored.pending,null);assert.equal(restored.eventResult,null);
+  const pending=prompt(restored,events[0].id);delete pending.flags[events[0].flag];
+  const recovered=read(pending);assert.ok(recovered.flags[events[0].flag]);assert.equal(G.storyEventComplete(recovered,events[0].id),false);
+});
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -40,7 +59,7 @@ const invalid=(s,action,p)=>{const before=G.clone(s),r=G.perform(s,action,p);ass
 const ai={title:'不应替换的内容',text:'这是模拟AI文本。',choices:[0,1,2].map(i=>({label:`选择${i}`,result:'虚构的变化',effects:{qi:20}}))};
 
 test('十二章保留原ID顺序，新增五境十场与三十个不同回应，全部有无成本选项',()=>{
-  assert.equal(G.APP_VERSION,'1.19.0');assert.equal(G.VERSION,22);assert.equal(G.STORY_STAGES.length,12);
+  assert.equal(G.APP_VERSION,'1.20.0');assert.equal(G.VERSION,23);assert.equal(G.STORY_STAGES.length,12);
   assert.deepEqual(G.STORY_STAGES.slice(7).map(c=>[c.id,c.realm,c.deliveries]),[
     ['divine',5,54],['void',6,68],['unity',7,84],['mahayana',8,102],['tribulation',9,122]]);
   assert.equal(events.length,10);assert.equal(new Set(events.map(e=>e.id)).size,10);
@@ -95,15 +114,7 @@ for(const [i,chapter] of chapters.entries())for(const mode of ['classic','ai'])f
   assert.equal(s.ending,null);assert.equal(s.gameOver,null);assert.equal(s.position,wait.position);
 });
 
-for(const mode of ['classic','ai'])test(`${mode} 满级旧档仍依次经历十场，不因境界或计数跳过章节`,()=>{
-  let s=veteran(0,mode);s.player.realm=9;s.player.realmLevel=9;s.stats.delivered=150;
-  const ids=[];
-  for(const e of events){s=prompt(s,e.id);ids.push(s.pending.templateId);
-    assert.equal(G.storyStage(s).id,e.higherChapter);s=finish(choose(read(s)));assert.equal(s.pending,null);s=ack(read(s));}
-  assert.deepEqual(ids,events.map(e=>e.id));assert.equal(G.storyStageLabel(s),'第十二章 · 劫尽见人间');
-  const qi=s.player.qi;s=finish(act(s,'rest'));assert.equal(s.pending,null);assert.equal(s.player.qi,qi);
-  assert.equal(G.realmLabel(s),'渡劫九重');assert.equal(G.realmNeed(s),0);assert.equal(s.ending,null);assert.equal(s.gameOver,null);
-});
+
 
 test('第七章待选和耗时途中均不放行第八章；选择完成后下个世界行动才触发',()=>{
   let s=veteran(),truth=G.EVENTS.find(e=>e.id==='story-system-truth');
@@ -137,13 +148,7 @@ test('新待选从经典模板恢复，AI文本、虚构奖励和NPC/配送票�
     x=>x.flags.storySystemTruth=false,x=>x.player.realm=4,x=>x.stats.delivered=53]){const x=G.clone(s);mutation(x);assert.throws(()=>read(x));}
 });
 
-test('v18旧档缺失新键显式补false，不发奖、不抽随机数、不自动播放；待选缺标记仍可恢复',()=>{
-  const s=veteran();for(const e of events)delete s.flags[e.flag];const p=G.clone(s.player),seed=s.seed,at=s.minutes;
-  const restored=read(s);assert.ok(events.every(e=>restored.flags[e.flag]===false));assert.deepEqual(restored.player,p);
-  assert.equal(restored.seed,seed);assert.equal(restored.minutes,at);assert.equal(restored.pending,null);assert.equal(restored.eventResult,null);
-  const pending=prompt(restored,events[0].id);delete pending.flags[events[0].flag];
-  const recovered=read(pending);assert.ok(recovered.flags[events[0].flag]);assert.equal(G.storyEventComplete(recovered,events[0].id),false);
-});
+
 
 test('新标记类型错误、越章记录拒绝读取；历史回执文本仍保留且确认不重发',()=>{
   for(const value of [null,1,'true',[],{}]){const s=veteran();s.flags[events[0].flag]=value;assert.throws(()=>read(s),/标记/);}

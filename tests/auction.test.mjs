@@ -1,6 +1,7 @@
 import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -199,17 +200,12 @@ test('待选轮次或当前指针丢失不允许继续读取',()=>{
     const raw=G.clone(s);corrupt(raw);assert.throws(()=>read(raw));
   }
 });
-test('v10迁移初始化拍卖但不赠送拍品或预扣费用，原解锁和在途行动保留',()=>{
-  let s=eligible();s=act(s,'rest');s=G.advance(s,5);s.schemaVersion=10;delete s.auction;
-  const before=G.clone(s),a=read(s);assert.equal(a.schemaVersion,G.VERSION);assert.deepEqual(a.auction,G.emptyAuction());
-  assert.deepEqual(a.inventory,before.inventory);assert.equal(a.player.money,before.player.money);assert.equal(a.activity.elapsed,before.activity.elapsed);
-  assert.ok(a.unlockedFeatures.includes('alchemy'));
-});
-test('新存储键显式兼容v10；损坏拍卖档保留原文且不覆盖，档间拍品独立',()=>{
+
+test('旧v10存储不读取；损坏拍卖档保留原文且不覆盖，档间拍品独立',()=>{
   const mem={data:new Map(),getItem(k){return this.data.get(k)??null;},setItem(k,v){this.data.set(k,v);}};
   const s=catalog(),old=eligible();old.schemaVersion=10;delete old.auction;
   mem.setItem('night-courier:saves:v10',JSON.stringify({schemaVersion:10,saves:[old]}));const store=G.createStore(mem);store.load();
-  assert.equal(store.saves.length,1);assert.ok(mem.getItem(G.STORAGE_KEY));assert.deepEqual(store.saves[0].auction,G.emptyAuction());
+  assert.equal(store.saves.length,0);assert.equal(mem.getItem(G.STORAGE_KEY),null);assert.throws(()=>read(old),/不支持此存档版本/);
   const second=read(G.newGame('旁观客'));assert.deepEqual(second.auction,G.emptyAuction());const got=win(budgets(s,0,0));assert.equal(second.auction.wins,0);assert.equal(got.auction.wins,1);
   const damaged=G.clone(got);delete damaged.auction;const text=JSON.stringify({schemaVersion:11,saves:[damaged]});mem.setItem(G.STORAGE_KEY,text);mem.data.delete(G.BACKUP_KEY);
   const broken=G.createStore(mem);assert.deepEqual(broken.load(),[]);assert.match(broken.warning,/没有覆盖/);assert.equal(mem.getItem(G.STORAGE_KEY),text);

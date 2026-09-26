@@ -1,4 +1,4 @@
-/* 确定性规则引擎：不访问 DOM / 网络 / localStorage，便于测试与迁移。 */
+/* 确定性规则引擎：不访问 DOM / 网络 / localStorage。 */
 (function (root) {
   'use strict';
   const G = root.NightCourier;
@@ -26,7 +26,7 @@
   G.realmNeed = s => {
     if(G.realmAtMax(s))return 0;
     const total=G.REALMS[s.player.realm]?.need||0,level=G.realmLevel(s);
-    return s.player.realm===0?Math.max(1,total-(s.player.mortalProgress||0)):Math.max(1,Math.round(total*(5+level)/90));
+    return s.player.realm===0?total:Math.max(1,Math.round(total*(5+level)/90));
   };
   G.nextRealmLabel = s => {
     if(G.realmAtMax(s))return null;
@@ -88,7 +88,7 @@
     const s = {
       schemaVersion: G.VERSION, id, name, mode, createdAt: Date.now(), updatedAt: Date.now(), seed: (Number(seed) >>> 0) || 1,
       turn: 0, minutes: 480, position: 'home', residenceId: 'qingteng', gameOver: null, transport: 'bike', weather: 'clear',
-      player: { money: 120, coins: 0, health: 100, stamina: 100, mana: 60, qi: 0, realm: 0, realmLevel: 1, mortalProgress: 0, insight: 5, constitution: 5, agility: 5, luck: 5, karma: 0, rep: 0 },
+      player: { money: 120, coins: 0, health: 100, stamina: 100, mana: 60, qi: 0, realm: 0, realmLevel: 1, insight: 5, constitution: 5, agility: 5, luck: 5, karma: 0, rep: 0 },
       vehicle: { battery: 80, durability: 100, levels: {speed:0,battery:0,durability:0} },
       alchemy: {cauldron:0,cauldrons:[],formulas:[],xp:0,brews:0,successes:0},
       auction:G.emptyAuction(),sect:G.emptySect(),sectWorld:G.emptySectWorld(),
@@ -105,37 +105,37 @@
   };
   const EPS = 1e-8;
   const point = p => ({x:p.x,y:p.y});
-  const distance = (a,b) => (Math.abs(a.x-b.x)+Math.abs(a.y-b.y))*G.WORLD.metersPerUnit;
+  const distance = G.roadDistance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y)*G.WORLD.metersPerUnit;
   const nodes = G.ROAD_NODES;
+  const coordinateIndex=new Map(nodes.map((p,i)=>[`${p.x}:${p.y}`,i]));
   const links = nodes.map(()=>[]);
   for (const {from,to} of G.ROAD_EDGES) { links[from].push(to); links[to].push(from); }
-  // 节点缓存上限就是地图节点数；途中仅缓存一个起点，避免按帧积累坐标。
+  // 节点搜索保留最多 128 份；途中仅缓存一个起点，避免按帧积累坐标。
   const nodeSearches=new Map();let roadSearch=null;
   function searchRoads(from,anchors){
     const exact=anchors.length===1&&from.x===nodes[anchors[0]].x&&from.y===nodes[anchors[0]].y;
     const key=`${from.x}:${from.y}`,cached=exact?nodeSearches.get(anchors[0]):roadSearch?.key===key?roadSearch.value:null;
     if(cached)return cached;
-    const dist=Array(nodes.length).fill(Infinity),prev=Array(nodes.length).fill(-1),visited=new Set();
-    for(const i of anchors)dist[i]=distance(from,nodes[i]);
-    while(visited.size<nodes.length){
-      let u=-1;
-      for(let i=0;i<nodes.length;i++)if(!visited.has(i)&&(u<0||dist[i]<dist[u]))u=i;
-      if(u<0||!Number.isFinite(dist[u]))break;visited.add(u);
-      for(const v of links[u]){const d=dist[u]+distance(nodes[u],nodes[v]);if(d<dist[v]){dist[v]=d;prev[v]=u;}}
+    const dist=Array(nodes.length).fill(Infinity),prev=Array(nodes.length).fill(-1),heap=[];
+    const push=(id,d)=>{let i=heap.length;heap.push([id,d]);while(i){const p=(i-1)>>1;if(heap[p][1]<=d)break;heap[i]=heap[p];i=p;}heap[i]=[id,d];};
+    const pop=()=>{const first=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let c=i*2+1;if(c+1<heap.length&&heap[c+1][1]<heap[c][1])c++;if(heap[c][1]>=last[1])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
+    for(const i of anchors){dist[i]=distance(from,nodes[i]);push(i,dist[i]);}
+    while(heap.length){
+      const [u,cost]=pop();if(cost>dist[u])continue;
+      for(const v of links[u]){const d=cost+distance(nodes[u],nodes[v]);if(d<dist[v]){dist[v]=d;prev[v]=u;push(v,d);}}
     }
     const value={dist,prev};
-    if(exact)nodeSearches.set(anchors[0],value);else roadSearch={key,value};
+    if(exact){nodeSearches.set(anchors[0],value);if(nodeSearches.size>128)nodeSearches.delete(nodeSearches.keys().next().value);}else roadSearch={key,value};
     return value;
   }
   // 途中坐标必须位于真实路段；虚拟起点连接该路段两端，不能吸附或穿江。
   G.roadAnchors = p => {
     if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y))return [];
-    const exact=nodes.findIndex(n=>Math.abs(n.x-p.x)<EPS&&Math.abs(n.y-p.y)<EPS);
+    const exact=coordinateIndex.get(`${p.x}:${p.y}`)??nodes.findIndex(n=>Math.abs(n.x-p.x)<EPS&&Math.abs(n.y-p.y)<EPS);
     if(exact>=0)return [exact];
-    for(let i=0;i<nodes.length;i++)for(const j of links[i]){
-      if(j<i)continue;const a=nodes[i],b=nodes[j];
-      if(Math.abs(distance(a,p)+distance(p,b)-distance(a,b))<EPS &&
-         ((a.x===b.x&&Math.abs(p.x-a.x)<EPS)||(a.y===b.y&&Math.abs(p.y-a.y)<EPS)))return [i,j];
+    for(const {from:i,to:j} of G.ROAD_EDGES){
+      const a=nodes[i],b=nodes[j],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),t=((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len);
+      if(t>=0&&t<=1&&Math.abs((p.x-a.x)*dy-(p.y-a.y)*dx)/len<1e-7)return [i,j];
     }
     return [];
   };
@@ -144,7 +144,7 @@
   G.route = (fromId, toId) => {
     const from=typeof fromId==='string'?G.place(fromId):fromId,to=G.place(toId);
     const anchors=G.roadAnchors(from);must(anchors.length&&to,'找不到合法的道路位置。');
-    const end=nodes.findIndex(n=>n.x===to.x&&n.y===to.y);
+    const end=G.CITY_DATA.places[toId];
     const {dist,prev}=searchRoads(from,anchors);
     must(end>=0&&Number.isFinite(dist[end]),'目的地没有连通道路。');
     const points=[];for(let cur=end;cur>=0;cur=prev[cur])points.unshift(point(nodes[cur]));
@@ -202,7 +202,7 @@
     ? s.claimed.includes(source.quest)
     : s.flags[source.flag]===true && s.pending?.templateId!==source.event
       && !(s.activity?.kind==='choice'&&s.activity.params.event?.templateId===source.event);
-  // 查询是纯函数，渲染不能授予功能；所有权由事务/行动完成/显式迁移保存。
+  // 查询是纯函数，渲染不能授予功能；所有权由事务或行动完成保存。
   G.featureUnlocked = (s,id) => {
     const feature=G.FEATURE_UNLOCKS.find(f=>f.id===id);
     if(!s||!feature)return false;
@@ -227,7 +227,7 @@
   G.syncFeatureUnlocks = (s,silent=false) => {
     if(s.gameOver)return;
     const before=new Set(s.unlockedFeatures||[]),known=new Set([...before].filter(id=>G.FEATURE_UNLOCKS.some(f=>f.id===id)));
-    // 补全旧档/显式所有权的前置入口，避免有炼药资格却打不开修行入口。
+    // 补全显式所有权的前置入口，避免有炼药资格却打不开修行入口。
     const add=id=>{if(known.has(id))return;known.add(id);for(const parent of G.FEATURE_UNLOCKS.find(f=>f.id===id)?.requires||[])add(parent);};
     for(const id of [...known])for(const parent of G.FEATURE_UNLOCKS.find(f=>f.id===id).requires||[])add(parent);
     s.unlockedFeatures=[...known];
@@ -239,22 +239,8 @@
       G.log(s,`玩法开启：${f.name}。${f.notice}`,'解锁');
     }
   };
-  G.restoreFeatureUnlocks = (s,raw,version) => {
-    s.unlockedFeatures=version>=10&&Array.isArray(raw.unlockedFeatures)
-      ? [...new Set(raw.unlockedFeatures.filter(id=>G.FEATURE_UNLOCKS.some(f=>f.id===id)))]:[];
-    const grant=id=>{if(!s.unlockedFeatures.includes(id))s.unlockedFeatures.push(id);};
-    // Old releases granted the system after the first settled delivery. Never revoke that ownership.
-    if(version<18&&s.stats.delivered>=1)grant('system');
-    if(version<10){
-      if(s.player.coins>0||s.daily.signedDay>0||s.claimed.length||s.learned.length||s.equipment.length)grant('system');
-      if(s.player.qi>0||s.player.mortalProgress>0||G.realmRank(s)>0||s.stats.trained>0)grant('cultivation');
-      if(s.stats.trained>0||s.player.mortalProgress>0||G.realmRank(s)>0||s.stats.explored>0)grant('practice');
-      if(s.alchemy.cauldrons.length||s.alchemy.formulas.length||s.alchemy.xp>0||s.alchemy.brews>0||G.ALCHEMY_MATERIALS.some(m=>s.inventory[m.id]>0))grant('alchemy');
-      if(Object.values(s.vehicle.levels).some(n=>n>0))grant('upgrades');
-      if(s.ending||s.unlockedEndings.length)grant('endings');
-    }
-    // 已经合法保存的在途付费行动继续恢复，不重复扣款、不回收能力。
-    if(s.activity){const id=G.featureForAction(s.activity.kind,s.activity.params);if(id)grant(id);}
+  G.restoreFeatureUnlocks = (s,raw) => {
+    s.unlockedFeatures=Array.isArray(raw.unlockedFeatures)?[...new Set(raw.unlockedFeatures.filter(id=>G.FEATURE_UNLOCKS.some(f=>f.id===id)))]:[];
     G.syncFeatureUnlocks(s,true);
   };
   // 拍品与对手预算只在首次查看当日图录时生成；渲染和每帧推进均不抽奖。
@@ -412,7 +398,7 @@
     }
     return false;
   };
-  // 只在已经复制的事务/完成结算/读档迁移状态上调用，不在 UI 或每帧抽取奖励。
+  // 只在已经复制的事务/完成结算/读档状态上调用，不在 UI 或每帧抽取奖励。
   G.syncFormulaRewards = s => {
     if(s.gameOver)return;
     const rewards=G.ALCHEMY_RECIPES.filter(r=>!G.alchemyHasFormula(s,r)&&G.formulaRewardReady(s,r));
@@ -719,11 +705,7 @@
         const need=a.params.need;
         if(G.rand(s)*100<a.params.chance){
           const major=G.realmLevel(s)===G.realmLevelCount(s.player.realm);
-          if(a.params.legacyMortalLevel){
-            // 旧版未完成的小重突破只结清原投入，不凭一次小额投入自动跨入炼气。
-            s.player.mortalProgress+=need;effects(s,{health:2,stamina:1,mana:2});
-            G.log(s,`旧版凡人突破完成，已投入修为累计 ${s.player.mortalProgress}，抵扣进入炼气的门槛；下次需 ${G.realmNeed(s)} 修为。`,'破境');
-          }else if(major){s.player.realm++;s.player.realmLevel=1;s.player.mortalProgress=0;effects(s,{health:12,stamina:8,mana:16,insight:1,constitution:1,agility:1});G.log(s,`大境突破成功，踏入${G.realmLabel(s)}。`,'破境');}
+          if(major){s.player.realm++;s.player.realmLevel=1;effects(s,{health:12,stamina:8,mana:16,insight:1,constitution:1,agility:1});G.log(s,`大境突破成功，踏入${G.realmLabel(s)}。`,'破境');}
           else{s.player.realmLevel++;effects(s,{health:2,stamina:1,mana:2});G.log(s,`突破成功，修为稳固至${G.realmLabel(s)}。`,'破境');}
         }else{s.player.qi+=need-Math.floor(need*.25);const protectedByCharm=(s.inventory.charm||0)>0;if(protectedByCharm)s.inventory.charm--;else s.player.health-=18;G.log(s,`突破未成，退回 75% 左右修为。${protectedByCharm?'护身符消散，护住经脉。':'气血 -18。'}`,'破境');}break;
       }

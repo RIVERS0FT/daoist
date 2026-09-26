@@ -1,66 +1,34 @@
-/* 原生 SVG 城市地图，滚轮缩放、单指平移、双指缩放，不载入在线地图。 */
+/* Leaflet renders local OSM geometry in metre coordinates. */
 (function(root){
   'use strict';const G=root.NightCourier;
   const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const shape={home:'M-8 0 0-7 8 0M-5-1V8H5V-1M-1 8V3H2V8',garage:'M-6-7a5 5 0 0 0 6 6L7 6 4 9-3 2a5 5 0 0 0-6-6l4 1 2-2z',clinic:'M-2-8H2V-2H8V2H2V8H-2V2H-8V-2H-2Z',book:'M0-5Q-4-9-9-6V7Q-4 4 0 8Q4 4 9 7V-6Q4-9 0-5V8',temple:'M-10 0H10M-7-4H7M-3-8H3M0-11V-8M-7 0V8M7 0V8M-10 8H10M-2 8V3H2V8',leaf:'M-7 8Q-9-8 9-8Q9 7-7 8M-7 8 5-4',market:'M-8-2H8L6-7H-6ZM-7-2V8H7V-2M-2 8V2H3V8',delivery:'M-7-5H7V7H-7ZM-7-5-3-8H3L7-5M0-5V1'};
   G.CityMap=class{
     constructor(el,onSelect){
-      this.el=el;this.onSelect=onSelect;this.s=null;this.scale=.7;this.tx=0;this.ty=0;this.selected=null;this.pointers=new Map();this.multi=false;this.dragged=false;
-      el.innerHTML=`<svg class="city-svg" xmlns="http://www.w3.org/2000/svg" aria-label="青岚城交互地图，使用方向键平移，加减号缩放" role="group"><defs><pattern id="water-lines" width="50" height="36" patternUnits="userSpaceOnUse"><path d="M0 18Q12 10 25 18T50 18" fill="none" stroke="#40716b" stroke-width="1" opacity=".24"/></pattern><pattern id="park-lines" width="15" height="15" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="1" fill="#698070" opacity=".22"/></pattern><filter id="point-shadow" x="-70%" y="-70%" width="240%" height="240%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#041516" flood-opacity=".5"/></filter></defs><g class="world-layer"><g class="base-layer"></g><g class="trail-layer"></g><g class="points-layer"></g><g class="discovery-layer" aria-hidden="true"></g><g class="player-layer"></g></g></svg>`;
-      this.svg=el.querySelector('svg');this.layer=el.querySelector('.world-layer');this.buildBase();this.bind();
-      this.observer=new ResizeObserver(()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;if(!this.width){this.width=w;this.height=h;if(this.s)this.center();else this.fit();}else{this.tx+=(w-this.width)/2;this.ty+=(h-this.height)/2;this.width=w;this.height=h;this.transform();}});this.observer.observe(el);
+      this.el=el;this.onSelect=onSelect;this.s=null;this.scale=.7;this.tx=0;this.ty=0;this.selected=null;
+      el.innerHTML=`<svg class="city-svg" xmlns="http://www.w3.org/2000/svg" aria-label="青岚城交互地图，使用方向键平移，加减号缩放" role="group"><defs><pattern id="paper-grain" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="3" r=".45" fill="var(--map-ink)" opacity=".08"/></pattern><pattern id="water-lines" width="40" height="28" patternUnits="userSpaceOnUse"><path d="M3 14h13m8 0h5" stroke="var(--map-water-line)" stroke-width=".8" opacity=".55"/></pattern><pattern id="park-lines" width="16" height="16" patternUnits="userSpaceOnUse"><path d="m4 8 2-3 2 3m-2-3v6" fill="none" stroke="var(--map-tree)" stroke-width=".7" opacity=".5"/></pattern><filter id="point-shadow" x="-70%" y="-70%" width="240%" height="240%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#343f38" flood-opacity=".14"/></filter></defs><g class="world-layer"><g class="base-layer" aria-hidden="true"></g><g class="trail-layer" aria-hidden="true"></g><g class="points-layer"></g><g class="discovery-layer" aria-hidden="true"></g><g class="player-layer"></g></g></svg><div class="map-scale" aria-label="地图比例尺"><span class="map-north" aria-hidden="true">↑ 北</span><span class="scale-distance"></span><i></i></div>`;
+      this.svg=el.querySelector('svg');this.layer=el.querySelector('.world-layer');this.buildBase();
+      this.svg.setAttribute('viewBox',`0 0 ${G.WORLD.width} ${G.WORLD.height}`);
+      this.map=root.L.map(el,{crs:root.L.CRS.Simple,zoomControl:false,attributionControl:false,keyboard:false,
+        minZoom:-7,maxZoom:Math.log2(2.8),zoomSnap:0,zoomDelta:.5,zoomAnimation:false,fadeAnimation:false,
+        inertia:!root.matchMedia?.('(prefers-reduced-motion: reduce)').matches,bounceAtZoomLimits:false,
+        maxBounds:[[-G.WORLD.height-600,-600],[600,G.WORLD.width+600]],maxBoundsViscosity:.8});
+      this.map.setView([-G.WORLD.height/2,G.WORLD.width/2],Math.log2(.7),{animate:false});
+      this.overlay=root.L.svgOverlay(this.svg,[[-G.WORLD.height,0],[0,G.WORLD.width]],{interactive:true}).addTo(this.map);
+      this.bind();this.map.on('move zoom resize',()=>this.transform());
+      this.observer=new ResizeObserver(()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;const initial=!this.width;this.width=w;this.height=h;this.map.invalidateSize({pan:true,animate:false});this.map.setMinZoom(Math.log2(this.minScale()));if(initial){if(this.s)this.center();else this.fit();}else this.transform();});this.observer.observe(el);
     }
     buildBase(){
-      const {width,height}=G.WORLD,river=G.ROAD_LAYOUT.riverColumn;
-      let h=`<rect x="-2000" y="-2000" width="${width+4000}" height="${height+4000}" fill="#122727"/><rect x="30" y="30" width="${width-60}" height="${height-60}" rx="95" fill="#193130"/>`;
-      // 新区底色与山林始终可见；普通地址仍只随订单显示。
-      for(const district of G.DISTRICTS){
-        const x=G.GRID_X[district.cols[0]]-65,y=G.GRID_Y[district.rows[0]]-65;
-        const w=G.GRID_X[district.cols.at(-1)]-x+65,hh=G.GRID_Y[district.rows.at(-1)]-y+65;
-        h+=`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="55" fill="${district.id==='lingxi'?'#243f32':district.id==='eastlake'?'#1e3837':'#203833'}" opacity=".8"/>`;
-      }
-      h+='<path d="M1220 20Q1460-30 1690 200L1650 550 1450 465 1190 305Z" fill="#233e32"/><path d="M1220 20Q1460-30 1690 200L1650 550 1450 465 1190 305Z" fill="url(#park-lines)"/>';
-      const middle=(G.GRID_X[river]+G.GRID_X[river+1])/2;
-      const bank=(side,reverse=false)=>{
-        const ys=[-90,...G.GRID_Y,height+90];if(reverse)ys.reverse();
-        const ps=ys.map(y=>({x:middle+Math.sin(y/230)*16+side*55,y}));
-        let d=`${reverse?'L':'M'}${ps[0].x} ${ps[0].y}`;
-        for(let i=1;i<ps.length;i++){const a=ps[i-1],b=ps[i],ym=(a.y+b.y)/2;d+=`C${a.x} ${ym} ${b.x} ${ym} ${b.x} ${b.y}`;}
-        return d;
-      };
-      const water=bank(-1)+bank(1,true)+'Z';
-      h+=`<path d="${water}" fill="#143b3e"/><path d="${water}" fill="url(#water-lines)"/>`;
-      const roads=G.ROAD_EDGES.map(({from,to})=>{const a=G.ROAD_NODES[from],b=G.ROAD_NODES[to];return `M${a.x} ${a.y}L${b.x} ${b.y}`;}).join('');
-      h+=`<path d="${roads}" fill="none" stroke="#102222" stroke-width="43" stroke-linecap="round"/><path class="road-network" d="${roads}" fill="none" stroke="#304644" stroke-width="30" stroke-linecap="round"/><path d="${roads}" fill="none" stroke="#a1b2a0" stroke-opacity=".15" stroke-width="1.2" stroke-dasharray="8 12"/>`;
-      for(const r of G.ROAD_LAYOUT.bridgeRows){const y=G.GRID_Y[r];h+=`<path class="bridge-rails" data-row="${r}" d="M${middle-78} ${y-18}H${middle+78}M${middle-78} ${y+18}H${middle+78}" stroke="#839185" stroke-opacity=".7" stroke-width="3"/>`;}
-      for(let r=0;r<G.GRID_Y.length-1;r++)for(let c=0;c<G.GRID_X.length-1;c++){
-        if(c===river)continue;
-        const x=G.GRID_X[c]+30,y=G.GRID_Y[r]+30,w=G.GRID_X[c+1]-G.GRID_X[c]-60,hh=G.GRID_Y[r+1]-G.GRID_Y[r]-60;
-        const lake=c>=7&&r>=3&&r<=4&&(r+c)%3===1;
-        if(lake){
-          h+=`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="38" fill="#284838"/><ellipse cx="${x+w/2}" cy="${y+hh/2}" rx="${w*.4}" ry="${hh*.36}" fill="#1c4648"/><ellipse cx="${x+w/2}" cy="${y+hh/2}" rx="${w*.4}" ry="${hh*.36}" fill="url(#water-lines)"/>`;
-        }else if((c===4&&r===3)||(c===5&&r===0)||(r>=6&&c>=4&&(r+c)%2===0)){
-          h+=`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="25" fill="#284838"/><rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="25" fill="url(#park-lines)"/>`;
-          for(let j=0;j<6;j++)h+=`<circle cx="${x+20+j*28}" cy="${y+40+(j%2)*37}" r="${11+j%3*3}" fill="#42634d" opacity=".7"/>`;
-        }else{
-          const cols=['#2a4240','#2d4542','#30473f','#263f40'];
-          for(let j=0;j<4;j++){const bx=x+(j%2)*91,by=y+Math.floor(j/2)*61;h+=`<rect x="${bx+3}" y="${by+4}" width="76" height="46" rx="5" fill="#0e2425" opacity=".4"/><rect x="${bx}" y="${by}" width="76" height="46" rx="5" fill="${cols[(r+c+j)%4]}" stroke="#789084" stroke-opacity=".15"/><path d="M${bx+12} ${by+14}H${bx+64}M${bx+12} ${by+29}H${bx+64}" stroke="#8ba397" stroke-opacity=".1" stroke-width="2"/>`;}
-        }
-      }
-      h+='<g fill="#a9bbad" font-family="system-ui, sans-serif" font-size="17" letter-spacing="7" opacity=".42"><text x="198" y="245">旧 城 里</text><text x="652" y="440">长 乐 坊</text><text x="1260" y="425">临 江 新 城</text><text x="180" y="968">南 市</text><text x="1220" y="915">月 渡</text></g>';
-      h+=`<g fill="#b5c6b5" font-family="system-ui, sans-serif" font-size="23" letter-spacing="7" opacity=".65">${G.DISTRICTS.map(d=>`<text class="district-label" x="${d.label.x}" y="${d.label.y}" text-anchor="middle">${escape(d.name)}</text>`).join('')}</g>`;
-      h+=`<text x="${middle}" y="563" text-anchor="middle" fill="#759996" opacity=".6" font-size="16" letter-spacing="7" transform="rotate(90 ${middle} 563)">青 岚 江</text>`;
-      h+=`<g transform="translate(${width-85} 70)" fill="none" stroke="#869d8f" opacity=".65"><path d="M0 38V-8M-8 12 0-8 8 12"/><text y="-19" text-anchor="middle" fill="#a0b0a3" stroke="none" font-size="12">北</text></g>`;
-      this.el.querySelector('.base-layer').innerHTML=h;
+      this.el.querySelector('.base-layer').innerHTML=G.MapArtwork.render();
     }
     offerProgress(s,order){return G.clamp(G.orderOfferRemaining(s,order)/G.orderOfferLifetime(order),0,1);}
     point(p,order,status='service',enter=false){
-      const task=status!=='service',offer=status==='offer',fill=task?'#e3bd75':'#d2dfc8',glyph=task?'delivery':p.kind,w=p.name.length*13+22,circ=150.8;
+      const at=p,task=status!=='service',offer=status==='offer',glyph=task?'delivery':p.kind,w=p.name.length*12+20,circ=150.8;
       const ratio=offer?this.offerProgress(this.s,order):1,dash=(circ*(1-ratio)).toFixed(2);
       const discovery=G.placeUnlocked(this.s,p.id)?'':'，首次送达后解锁地点';
       const aria=offer?`${p.name}，可接配送任务，${G.durationText(G.orderOfferRemaining(this.s,order))}后消失${discovery}`:status==='active'?`${p.name}，已接配送订单，无送达时限${discovery}`:p.name;
       const ring=offer?`<circle class="order-expiry-track" cx="0" cy="0" r="24"/><circle class="order-expiry-ring" cx="0" cy="0" r="24" transform="rotate(-90 0 0)" stroke-dasharray="${circ}" stroke-dashoffset="${dash}"/>`:'';
-      return `<g class="map-point ${offer?'order-point':status==='active'?'active-order-point':'service-point'} ${this.selected===p.id?'selected':''}" transform="translate(${p.x} ${p.y})" data-key="${escape(p.id)}" data-status="${status}" data-discovered="${G.placeUnlocked(this.s,p.id)}" data-order-id="${order?escape(order.id):''}" data-place="${escape(p.id)}" role="button" tabindex="0" aria-label="${escape(aria)}"><g class="point-visual ${offer&&enter?'order-entering':''}"><circle class="point-halo" r="29" fill="${fill}" opacity=".10"/>${ring}<circle class="point-core" r="19" fill="#182e2c" stroke="${fill}" stroke-width="1.8" filter="url(#point-shadow)"/><path d="${shape[glyph]||shape.delivery}" fill="none" stroke="${fill}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="${-w/2}" y="27" width="${w}" height="24" rx="7" fill="#132a28" fill-opacity=".94"/><text y="43" text-anchor="middle" fill="${fill}" font-size="12.5" font-family="system-ui,sans-serif">${escape(p.name)}</text>${task?`<circle cx="16" cy="-16" r="7" fill="#e3bd75"/><text x="16" y="-13" text-anchor="middle" fill="#273b33" font-size="9" font-weight="700">${order.coins}</text>`:''}</g></g>`;
+      return `<g class="map-point ${offer?'order-point':status==='active'?'active-order-point':'service-point'} ${this.selected===p.id?'selected':''}" transform="translate(${at.x} ${at.y})" data-key="${escape(p.id)}" data-status="${status}" data-discovered="${G.placeUnlocked(this.s,p.id)}" data-order-id="${order?escape(order.id):''}" data-place="${escape(p.id)}" role="button" tabindex="0" aria-label="${escape(aria)}"><g class="point-screen" transform="scale(${1/this.scale})"><circle class="point-hit" r="24" fill="transparent"/><g class="point-visual ${offer&&enter?'order-entering':''}"><circle class="point-halo" r="29" opacity=".12"/>${ring}<circle class="point-core" r="18" stroke-width="1.5" filter="url(#point-shadow)"/><path class="point-glyph" d="${shape[glyph]||shape.delivery}" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><g class="point-label" data-width="${w}"><rect x="${-w/2}" y="29" width="${w}" height="24" rx="3"/><text y="45" text-anchor="middle">${escape(p.name)}</text></g>${task?`<circle class="point-badge" cx="16" cy="-16" r="8"/><text class="point-badge-text" x="16" y="-13" text-anchor="middle">${status==='active'?'✓':order.coins}</text>`:''}</g></g></g>`;
     }
     removePoint(node){
       if(node.classList.contains('order-leaving'))return;
@@ -98,8 +66,8 @@
       for(const [id,d] of desired)if(!seen.has(id)&&!layer.querySelector(`.map-point:not(.order-leaving)[data-key="${id}"]`))layer.insertAdjacentHTML('beforeend',this.point(d.p,d.order,d.status,d.status==='offer'));
       this.updateOrders(s);
       const player=G.playerPoint(s);
-      this.el.querySelector('.player-layer').innerHTML=`<g class="player-marker" transform="translate(${player.x} ${player.y-39})" role="img" aria-label="玩家${escape(s.name)}位于${escape(G.locationName(s))}"><circle class="player-pulse" r="20" fill="#8cd6c4" opacity=".16"/><path d="M-8 9 0 18 8 9" fill="#8ad1bd"/><circle r="12" fill="#a6e5cd" stroke="#133c34" stroke-width="3"/><circle cy="-3" r="3" fill="#244a3f"/><path d="M-5 6Q0-2 5 6" fill="#244a3f"/></g>`;
-      this.renderTrail();
+      this.el.querySelector('.player-layer').innerHTML=`<g class="player-marker" transform="translate(${player.x} ${player.y})" role="img" aria-label="玩家${escape(s.name)}位于${escape(G.locationName(s))}"><g class="player-screen" transform="scale(${1/this.scale})"><circle class="player-ground" r="5"/><path class="player-stem" d="M0-26V-6"/><g transform="translate(0 -40)"><circle class="player-pulse" r="22"/><circle class="player-core" r="15"/><path class="player-heading" d="m0-8 7 14-7-3-7 3Z"/></g></g></g>`;
+      this.renderTrail();this.layoutLabels();
     }
     celebrateUnlock(id){
       if(!this.s||!G.placeUnlocked(this.s,id))return;
@@ -118,38 +86,60 @@
       if(!this.selected&&a?.phase==='travel'){
         let length=0;const points=[G.playerPoint(this.s)];
         for(let i=1;i<a.route.points.length;i++){
-          const p=a.route.points[i-1],q=a.route.points[i];length+=(Math.abs(p.x-q.x)+Math.abs(p.y-q.y))*G.WORLD.metersPerUnit;
+          const p=a.route.points[i-1],q=a.route.points[i];length+=G.roadDistance(p,q);
           if(length>a.travelled+1e-8)points.push(q);
         }
         route={points};
       }
-      if(route?.points.length>1){const d=route.points.map((p,i)=>`${i?'L':'M'}${p.x} ${p.y}`).join(' ');trail=`<path d="${d}" fill="none" stroke="${this.selected?'#e4c489':'#81b8a5'}" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 8" opacity="${this.selected?'.85':'.4'}"/>`;}
+      if(route?.points.length>1){const d=G.MapArtwork.line(route.points),status=this.selected?'preview':'active';trail=`<path class="route-casing ${status}" d="${d}"/><path class="route-line ${status}" d="${d}"/>`;}
       this.el.querySelector('.trail-layer').innerHTML=trail;
     }
     updatePosition(s){
       this.s=s;const marker=this.el.querySelector('.player-marker');if(!marker)return this.render(s);
-      const p=G.playerPoint(s);marker.setAttribute('transform',`translate(${p.x} ${p.y-39})`);
+      const p=G.playerPoint(s);marker.setAttribute('transform',`translate(${p.x} ${p.y})`);
       marker.setAttribute('aria-label',`玩家${s.name}位于${G.locationName(s)}`);
-      this.el.dataset.night=String(G.isNight(s));this.updateOrders(s);this.renderTrail();
+      this.el.dataset.night=String(G.isNight(s));this.updateOrders(s);this.renderTrail();this.updateScale();
     }
     select(id){this.selected=id;this.render(this.s);}
     fitScale(){return Math.max(.01,Math.min(this.el.clientWidth/G.WORLD.width,Math.max(1,this.el.clientHeight-95)/G.WORLD.height)*.97);}
     minScale(){return Math.min(.2,this.fitScale());}
-    transform(){const w=this.el.clientWidth,h=this.el.clientHeight;this.scale=G.clamp(this.scale,this.minScale(),2.8);this.tx=G.clamp(this.tx,-G.WORLD.width*this.scale+80,w-80);this.ty=G.clamp(this.ty,-G.WORLD.height*this.scale+80,h-80);this.layer.setAttribute('transform',`translate(${this.tx} ${this.ty}) scale(${this.scale})`);this.el.dataset.zoom=this.scale.toFixed(2);}
-    fit(){const w=this.el.clientWidth,h=this.el.clientHeight;if(!w||!h)return;this.scale=Math.min(2.8,this.fitScale());this.tx=(w-G.WORLD.width*this.scale)/2;this.ty=(h-95-G.WORLD.height*this.scale)/2;this.transform();}
-    center(){if(!this.s)return;const p=G.playerPoint(this.s);this.scale=Math.max(this.el.clientWidth<800?.95:.7,this.scale);this.tx=this.el.clientWidth*.48-p.x*this.scale;this.ty=this.el.clientHeight*.52-p.y*this.scale;this.transform();}
-    zoom(mult,x=this.el.clientWidth/2,y=this.el.clientHeight/2){const prev=this.scale,next=G.clamp(prev*mult,this.minScale(),2.8);this.tx=x-(x-this.tx)*next/prev;this.ty=y-(y-this.ty)*next/prev;this.scale=next;this.transform();}
-    local(e){const b=this.el.getBoundingClientRect();return{x:e.clientX-b.left,y:e.clientY-b.top};}
-    resetPinch(){const a=[...this.pointers.values()];if(a.length<2)return;const mid={x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2};this.pinch={distance:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1,scale:this.scale,wx:(mid.x-this.tx)/this.scale,wy:(mid.y-this.ty)/this.scale};}
+    layoutLabels(){
+      const nodes=[...this.el.querySelectorAll('.map-point:not(.order-leaving)')],w=this.el.clientWidth,h=this.el.clientHeight;
+      const screen=nodes.map(node=>{const p=G.place(node.dataset.key);return {node,x:p.x*this.scale+this.tx,y:p.y*this.scale+this.ty};});
+      const overlap=(a,b)=>a.x<b.x+b.w+5&&a.x+a.w+5>b.x&&a.y<b.y+b.h+4&&a.y+a.h+4>b.y;
+      const occupied=screen.map(p=>({x:p.x-25,y:p.y-25,w:50,h:50}));
+      if(this.s){const p=G.playerPoint(this.s);occupied.push({x:p.x*this.scale+this.tx-20,y:p.y*this.scale+this.ty-62,w:40,h:42});}
+      const rank=p=>p.node.classList.contains('selected')?0:p.node.dataset.status==='active'?1:p.node.dataset.status==='service'?2:3;
+      screen.sort((a,b)=>rank(a)-rank(b));
+      for(const p of screen){
+        p.node.querySelector('.point-screen').setAttribute('transform',`scale(${1/this.scale})`);
+        const label=p.node.querySelector('.point-label'),lw=Number(label.dataset.width);
+        const candidate=[{dx:0,dy:0},{dx:0,dy:-82},{dx:lw/2+31,dy:-41},{dx:-lw/2-31,dy:-41}].find(({dx,dy})=>{
+          const box={x:p.x-lw/2+dx,y:p.y+29+dy,w:lw,h:24};
+          return box.x>=4&&box.y>=4&&box.x+lw<=w-4&&box.y+24<=h-4&&!occupied.some(o=>overlap(box,o));
+        });
+        label.classList.toggle('label-hidden',!candidate);
+        const {dx,dy}=candidate||{dx:0,dy:0};label.setAttribute('transform',`translate(${dx} ${dy})`);
+        if(candidate)occupied.push({x:p.x-lw/2+dx,y:p.y+29+dy,w:lw,h:24});
+      }
+      this.el.querySelector('.player-screen')?.setAttribute('transform',`scale(${1/this.scale})`);
+    }
+    transform(){
+      this.scale=2**this.map.getZoom();const origin=this.map.latLngToContainerPoint([0,0]);this.tx=origin.x;this.ty=origin.y;this.el.dataset.zoom=this.scale.toFixed(2);
+      this.el.dataset.detail=this.scale<.5?'overview':this.scale<.8?'city':'street';
+      this.el.style.setProperty('--map-label-size',`${Math.max(16,13/this.scale)}px`);
+      this.updateScale();this.layoutLabels();
+    }
+    updateScale(){
+      const target=90*G.WORLD.metersPerUnit/this.scale,power=10**Math.floor(Math.log10(target)),meters=[1,2,5,10].map(v=>v*power).filter(v=>v<=target).at(-1);
+      const ruler=this.el.querySelector('.map-scale');ruler.querySelector('.scale-distance').textContent=meters>=1000?`${meters/1000} 千米`:`${meters} 米`;ruler.setAttribute('aria-label','地图比例尺，一地图单位为一米');ruler.style.setProperty('--scale-width',`${meters/G.WORLD.metersPerUnit*this.scale}px`);
+    }
+    fit(){const w=this.el.clientWidth,h=this.el.clientHeight;if(!w||!h)return;this.map.invalidateSize({pan:false});this.map.setView([-G.WORLD.height/2-47.5/this.fitScale(),G.WORLD.width/2],Math.log2(this.fitScale()),{animate:false});this.transform();}
+    center(){if(!this.s||!this.el.clientWidth||!this.el.clientHeight)return;const p=G.playerPoint(this.s),scale=Math.max(this.el.clientWidth<800?.95:.7,this.scale);this.map.invalidateSize({pan:false});this.map.setView([-p.y+this.el.clientHeight*.02/scale,p.x+this.el.clientWidth*.02/scale],Math.log2(scale),{animate:false});this.transform();}
+    zoom(mult,x=this.el.clientWidth/2,y=this.el.clientHeight/2){this.map.setZoomAround([x,y],Math.log2(G.clamp(this.scale*mult,this.minScale(),2.8)),{animate:false});this.transform();}
     bind(){
-      this.el.addEventListener('wheel',e=>{e.preventDefault();const p=this.local(e);this.zoom(Math.exp(-e.deltaY*.0015),p.x,p.y);},{passive:false});
-      this.el.addEventListener('pointerdown',e=>{if(e.button!==0&&e.pointerType==='mouse')return;const p=this.local(e);this.pointers.set(e.pointerId,p);this.el.setPointerCapture(e.pointerId);if(this.pointers.size===1){this.start=p;this.last=p;this.dragged=false;this.multi=false;this.downTarget=e.target.closest('[data-place]')?.dataset.place;}else{this.multi=true;this.dragged=true;this.resetPinch();}this.el.classList.add('dragging');});
-      this.el.addEventListener('pointermove',e=>{if(!this.pointers.has(e.pointerId))return;const p=this.local(e);this.pointers.set(e.pointerId,p);
-        if(this.pointers.size>=2){const a=[...this.pointers.values()];if(!this.pinch)this.resetPinch();const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),mid={x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2};this.scale=G.clamp(this.pinch.scale*d/this.pinch.distance,this.minScale(),2.8);this.tx=mid.x-this.pinch.wx*this.scale;this.ty=mid.y-this.pinch.wy*this.scale;}
-        else{this.tx+=p.x-this.last.x;this.ty+=p.y-this.last.y;this.last=p;if(Math.hypot(p.x-this.start.x,p.y-this.start.y)>6)this.dragged=true;}this.transform();});
-      const finish=(e,cancel=false)=>{if(!this.pointers.has(e.pointerId))return;this.pointers.delete(e.pointerId);if(!this.pointers.size){this.el.classList.remove('dragging');if(!cancel&&!this.dragged&&!this.multi&&this.downTarget)this.onSelect(this.downTarget);this.pinch=null;}else if(this.pointers.size===1){this.last=[...this.pointers.values()][0];this.start=this.last;this.pinch=null;}else this.resetPinch();};
-      this.el.addEventListener('pointerup',e=>finish(e));this.el.addEventListener('pointercancel',e=>finish(e,true));this.el.addEventListener('lostpointercapture',e=>finish(e,true));
-      this.el.addEventListener('keydown',e=>{const p=e.target.closest('[data-place]');if(p&&['Enter',' '].includes(e.key)){e.preventDefault();this.onSelect(p.dataset.place);return;}const d=70;if(e.key==='ArrowLeft')this.tx+=d;else if(e.key==='ArrowRight')this.tx-=d;else if(e.key==='ArrowUp')this.ty+=d;else if(e.key==='ArrowDown')this.ty-=d;else if(e.key==='+'||e.key==='=')this.zoom(1.2);else if(e.key==='-')this.zoom(1/1.2);else if(e.key==='Home')this.fit();else return;e.preventDefault();this.transform();});
+      this.map.on('click',e=>{const point=e.originalEvent.target.closest?.('[data-place]');if(point)this.onSelect(point.dataset.place);});
+      this.el.addEventListener('keydown',e=>{const p=e.target.closest('[data-place]');if(p&&['Enter',' '].includes(e.key)){e.preventDefault();this.onSelect(p.dataset.place);return;}const pans={ArrowLeft:[-70,0],ArrowRight:[70,0],ArrowUp:[0,-70],ArrowDown:[0,70]};if(pans[e.key])this.map.panBy(pans[e.key],{animate:false});else if(e.key==='+'||e.key==='=')this.zoom(1.2);else if(e.key==='-')this.zoom(1/1.2);else if(e.key==='Home')this.fit();else return;e.preventDefault();});
     }
   };
 })(globalThis);

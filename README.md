@@ -2,8 +2,8 @@
 
 白天送外卖，夜里修仙的单机 Web RPG。项目基于此前对话中的玩法需求重新实现，不是被封禁旧仓库的逐文件恢复。
 
-当前应用版本：**1.19.0**
-当前存档 schema：**v22**
+当前应用版本：**1.20.0**
+当前存档 schema：**v23**
 线上静态版：<https://mevius.riversoft.top/daoist/>
 
 ## 开始运行
@@ -13,6 +13,8 @@
 ```sh
 npm start
 ```
+
+也可使用 `npm run dev`，它复用同一启动入口并读取可选的 `.env`。修改前端源码后手动刷新浏览器；修改服务端代码或环境配置后重新启动服务。
 
 浏览器打开：
 
@@ -24,13 +26,15 @@ Windows 也可双击根目录的 `开始游戏.bat`。
 
 经典模式不需要网络或 AI 密钥。AI 模式需要在本机配置兼容 Chat Completions JSON 接口，配置示例见 `.env.example`。密钥只由本机 Node 服务读取，不应写进浏览器代码、存档或仓库。
 
-如需生成单文件静态版：
+如需生成静态发布目录：
 
 ```sh
 npm run build
 ```
 
-生成结果位于 `dist/index.html`。不要直接修改 `dist`；源码以 `public/` 为准。
+生成结果位于 `dist/`，入口为 `index.html`，包含独立脚本、样式、本地 Leaflet 1.9.4 资源及 `asset-manifest.json` 校验清单。请完整复制或发布整个目录。不要直接修改 `dist`；源码以 `public/` 为准。
+
+地图使用 Leaflet 加载上海老城厢真实街道与建筑形状，全部游戏地名虚构；数据随站点发布，无在线瓦片、地图 API 密钥或 CDN 依赖。来源、ODbL 许可及导入方式见 [地图数据说明](docs/MAP_DATA.md)。仅支持新版 v23 存档，旧版需要重新开局，原数据不会自动删除。
 
 ## 文档入口
 
@@ -72,12 +76,15 @@ public/styles.css         响应式界面与地图样式
 public/js/data.js         世界、物品、事件、人物与静态配置
 public/js/engine.js       行动校验、规则与结算
 public/js/clock.js        连续时钟与暂停
-public/js/storage.js      存档、迁移、导入导出
+public/js/storage.js      当前存档校验、导入导出
 public/js/progression.js  解锁、主线与成长扩展
-public/js/map.js          地图绘制、寻路表现与手势
+public/js/map-art.js      街道、街区建筑与滨河景观的静态矢量制图
+public/js/city-data.js    本地 OSM 道路、建筑、水系与来源信息
+public/js/map.js          Leaflet 地图交互、路线与地点投影
+public/vendor/leaflet/    固定版本地图库、样式、图片与许可证
 public/js/app.js          UI 渲染与行动编排
 server.mjs               本机静态服务与 AI 代理
-scripts/build.mjs        单文件构建
+scripts/build.mjs        多文件静态构建与资源校验清单
 tests/                   Node 与浏览器回归
 docs/                    设计、版本、架构、角色与验证文档
 ```
@@ -86,9 +93,9 @@ docs/                    设计、版本、架构、角色与验证文档
 
 仓库不再使用 GitHub Pages。
 
-`main` 推送后由 `.github/workflows/deploy-riversoft.yml` 执行完整验证、构建并发布到 RIVERSOFT。工作流会重新下载公开页面并与本次构建的 `dist/index.html` 做 SHA-256 比对。
+`main` 推送后由 `.github/workflows/deploy-riversoft.yml` 执行完整验证、构建并发布到 RIVERSOFT。工作流通过 `scripts/verify-public.mjs` 逐个下载页面、脚本、样式和地图资源，与本次 `dist/` 构建做 SHA-256 比对。
 
-RIVERSOFT 是受限静态沙箱，适合经典单文件体验；真实 AI 代理、稳定 localStorage 和完整本机能力仍应通过 `npm start` 运行。
+RIVERSOFT 是受限静态沙箱，适合经典静态版体验；真实 AI 代理、稳定 localStorage 和完整本机能力仍应通过 `npm start` 运行。
 
 ## 项目边界
 

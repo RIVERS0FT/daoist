@@ -1,7 +1,27 @@
 import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+test('当前档已经完成的解锁单回执和历史日志不重写、不回退绑定、不追溯补币',()=>{
+  let s=unlockPending();s=act(s,'choose',{eventId:s.pending.id,index:0});
+  s.eventResult.title='第一声「叮」';s.eventResult.text='万家灯火系统，已绑定。';
+  s.logs.push({id:'saved-binding',at:s.minutes,tag:'奇遇',text:'万家灯火系统，已绑定。'});
+  const result=G.clone(s.eventResult),player=G.clone(s.player);
+  const restored=read(s);assert.deepEqual(restored.eventResult,result);assert.deepEqual(restored.player,player);
+  assert.equal(restored.logs.at(-1).text,'万家灯火系统，已绑定。');
+  assert.equal(G.storyStage(restored).id,'bound');assert.equal(G.storyStage(ack(restored)).id,'bound');
+});
+
+test('当前档永久权限保持有效，新档独立保留第一章，取消首次配送不能完成绑定',()=>{
+  const legacy=fresh();legacy.unlockedFeatures=['system'];
+  assert.equal(G.storyStage(read(legacy)).id,'bound');
+  let s=fresh();s=act(s,'deliver',{id:s.orders[0].id});s=G.advance(s,.2);
+  s=act(s,'stop');assert.equal(G.storyStage(s).id,'mortal');
+  s=act(s,'cancelDelivery',{confirm:true});assert.equal(G.storyStage(read(s)).id,'mortal');
+  assert.equal(s.player.coins,0);assert.equal(s.stats.delivered,0);assert.deepEqual(s.unlockedFeatures,[]);
+});
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -71,38 +91,11 @@ for(const mode of ['classic','ai'])for(const index of [0,1,2])test(`${mode} 第�
   assert.equal(G.perform(s,'choose',{eventId:before.pending.id,index}).ok,false);
 });
 
-test('旧版待选解锁单重建为新剧情名称，不改变订单、选择效果或提前完成第一章',()=>{
-  const seed=fresh();const old=ack(finish(act(seed,'deliver',{id:seed.orders[0].id}))),ticket=G.clone(old.pending.delivery),effects=old.pending.choices.map(c=>c.effects);
-  old.pending.title='第一声「叮」';old.pending.text='万家灯火系统，已绑定。';
-  for(const version of [14,15,16,17]){
-    const raw=G.clone(old);raw.schemaVersion=version;
-    const a=read(raw),b=read(a);
-    assert.equal(a.pending.title,'第一份热饭');assert.doesNotMatch(a.pending.text,/系统|绑定/);
-    assert.equal(a.pending.id,old.pending.id);assert.deepEqual(a.pending.delivery,ticket);
-    assert.deepEqual(a.pending.choices.map(c=>c.effects),effects);assert.deepEqual(a.player,old.player);
-    assert.equal(G.storyStage(a).id,'mortal');assert.equal(G.storyStage(b).id,'mortal');
-    assert.deepEqual(a.unlockedFeatures,[]);assert.deepEqual(b.unlockNotices,[]);
-  }
-});
 
-test('旧档已经完成的解锁单回执和历史日志不重写、不回退绑定、不追溯补币',()=>{
-  let s=unlockPending();s=act(s,'choose',{eventId:s.pending.id,index:0});
-  s.eventResult.title='第一声「叮」';s.eventResult.text='万家灯火系统，已绑定。';
-  s.logs.push({id:'legacy-binding',at:s.minutes,tag:'奇遇',text:'万家灯火系统，已绑定。'});
-  const result=G.clone(s.eventResult),player=G.clone(s.player);
-  const restored=read(s);assert.deepEqual(restored.eventResult,result);assert.deepEqual(restored.player,player);
-  assert.equal(restored.logs.at(-1).text,'万家灯火系统，已绑定。');
-  assert.equal(G.storyStage(restored).id,'bound');assert.equal(G.storyStage(ack(restored)).id,'bound');
-});
 
-test('旧档永久权限保持有效，新档独立保留第一章，取消首次配送不能完成绑定',()=>{
-  const legacy=fresh();legacy.unlockedFeatures=['system'];
-  assert.equal(G.storyStage(read(legacy)).id,'bound');
-  let s=fresh();s=act(s,'deliver',{id:s.orders[0].id});s=G.advance(s,.2);
-  s=act(s,'stop');assert.equal(G.storyStage(s).id,'mortal');
-  s=act(s,'cancelDelivery',{confirm:true});assert.equal(G.storyStage(read(s)).id,'mortal');
-  assert.equal(s.player.coins,0);assert.equal(s.stats.delivered,0);assert.deepEqual(s.unlockedFeatures,[]);
-});
+
+
+
 
 test('正式名称替换不误改万家灯火任务与结局，主线丹方来源仍与事件名称一致',()=>{
   assert.equal(G.QUESTS.find(q=>q.id==='q2').title,'万家灯火');

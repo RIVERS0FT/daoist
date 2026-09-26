@@ -1,5 +1,22 @@
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+test('年龄为固定人物配置，新建和当前档恢复不重抽年龄或自动认识原三位女性',()=>{
+  const before=G.clone(G.NPCS.filter(n=>n.romantic).map(({id,age})=>({id,age})));
+  for(const mode of ['classic','ai'])for(const seed of [1,97,13579]){
+    const fresh=G.newGame('年龄不重抽',mode,seed),s=read(fresh);
+    assert.deepEqual(G.visibleNPCs(s),[]);
+    const bonds=G.clone(s.bonds),player=G.clone(s.player);
+    // Foreign save metadata cannot override authored ages or grant a bond.
+    for(const {id} of before)s.bonds[id].age=99;
+    s.npcAges={lin:1,shen:99,su:0};
+    const restored=read(s);
+    assert.deepEqual(restored.bonds,bonds);assert.deepEqual(restored.player,player);
+    assert.equal(restored.seed,s.seed);assert.equal(restored.minutes,s.minutes);
+    assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(({id,age})=>({id,age})),before);
+  }
+});
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -121,15 +138,12 @@ for(const mutate of [p=>p.npcId='tang',p=>p.delivery.npc='ye',p=>p.npcAdvance=tr
   const {s}=arrive('xu');mutate(s.pending);assert.throws(()=>read(s));
 });
 
-test('v18及更早的六人存档补六个隐藏羁绊，不改原人物和在途票据或资产',()=>{
+test('v18及更早人物名单拒绝读取，原票据与资产不被改写',()=>{
   const {s:source,ticket}=offerFor('lin');
   let state=G.advance(act(source,'deliver',{id:ticket.id}),.2);
   for(const version of [16,17,18]){
     const raw=G.clone(state);raw.schemaVersion=version;for(const id of G.NEW_NPC_IDS)delete raw.bonds[id];
-    const out=read(raw);assert.equal(out.schemaVersion,22);assert.deepEqual(out.player,state.player);assert.deepEqual(out.activeOrder,state.activeOrder);assert.deepEqual(out.location,state.location);
-    for(const n of G.NPCS.slice(0,6))assert.deepEqual(out.bonds[n.id],state.bonds[n.id]);
-    for(const id of G.NEW_NPC_IDS)assert.deepEqual(out.bonds[id],{met:false,affinity:0,trust:0,stage:0,path:'none',lastTalkDay:0});
-    assert.deepEqual(read(out).bonds,out.bonds);
+    const before=G.clone(raw);assert.throws(()=>read(raw),/不支持此存档版本/);assert.deepEqual(raw,before);
   }
 });
 
@@ -206,8 +220,8 @@ test('全部九位可攻略女性年龄限定18至27岁，补齐原三位女性�
     assert.equal(n.age,age);assert.ok(Number.isInteger(n.age)&&n.age>=18&&n.age<=27);
     assert.equal(n.gender,'female');assert.equal(n.romantic,true);
   }
-  assert.equal(G.APP_VERSION,'1.19.0');assert.equal(G.VERSION,22);
-  assert.equal(G.STORAGE_KEY,'night-courier:saves:v22');
+  assert.equal(G.APP_VERSION,'1.20.0');assert.equal(G.VERSION,23);
+  assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
 });
 
 test('罗映秋现为活动策划师，简介、个人故事和配送初遇职业一致',()=>{
@@ -220,11 +234,11 @@ test('罗映秋现为活动策划师，简介、个人故事和配送初遇职�
   assert.equal(npc.arc[3][3].minTrust,12);
 });
 
-test('v19旧待选恢复策划职业文案，配送票据和个人选项效果、进度均保留',()=>{
+test('当前待选恢复可信职业文案，配送票据和个人选项效果、进度均保留',()=>{
   const {s}=arrive('luo');const ticket=G.clone(s.pending.delivery),effects=s.pending.choices.map(c=>G.clone(c.effects));
   s.pending.text='罗映秋刚结束社区夜路走访，在约定位置等饭。她介绍自己已经退休，今天只是把旧经验讲给接班的人。';
   const before=G.clone(s),loaded=read(s);
-  assert.equal(loaded.schemaVersion,22);assert.match(loaded.pending.text,/活动策划师/);
+  assert.equal(loaded.schemaVersion,G.VERSION);assert.match(loaded.pending.text,/活动策划师/);
   assert.equal(loaded.pending.id,s.pending.id);assert.deepEqual(loaded.pending.delivery,ticket);
   assert.deepEqual(loaded.pending.choices.map(c=>c.effects),effects);assert.deepEqual(loaded.player,before.player);
   assert.deepEqual(loaded.bonds,before.bonds);assert.equal(loaded.minutes,before.minutes);assert.equal(loaded.seed,before.seed);
@@ -259,21 +273,5 @@ test('全部九位及新增六位的年龄均为右偏分布，而非向高龄�
     assert.equal(ages[0],18);assert.equal(ages.at(-1),27);
     assert.ok(ages.filter(x=>x<=21).length>n/2);
     assert.ok(mean>median);assert.ok(m3/m2**1.5>0,'Age skew must be positive');
-  }
-});
-
-test('年龄为固定人物配置，新建和旧档恢复不重抽年龄或自动认识原三位女性',()=>{
-  const before=G.clone(G.NPCS.filter(n=>n.romantic).map(({id,age})=>({id,age})));
-  for(const mode of ['classic','ai'])for(const seed of [1,97,13579]){
-    const fresh=G.newGame('年龄不重抽',mode,seed),s=read(fresh);
-    assert.deepEqual(G.visibleNPCs(s),[]);
-    const bonds=G.clone(s.bonds),player=G.clone(s.player);
-    // Foreign save metadata cannot override authored ages or grant a bond.
-    for(const {id} of before)s.bonds[id].age=99;
-    s.npcAges={lin:1,shen:99,su:0};
-    const restored=read(s);
-    assert.deepEqual(restored.bonds,bonds);assert.deepEqual(restored.player,player);
-    assert.equal(restored.seed,s.seed);assert.equal(restored.minutes,s.minutes);
-    assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(({id,age})=>({id,age})),before);
   }
 });

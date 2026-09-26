@@ -43,6 +43,7 @@ jobs:
             public/
             tests/
             scripts/
+            tools/
             docs/*.md
             README.md
             PROJECT_MEMORY.md

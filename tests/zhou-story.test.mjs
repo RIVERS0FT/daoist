@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
@@ -40,7 +41,7 @@ test('周野职业统一骑手、25岁、十段三选项，其他二十人仍四
  assert.equal(new Set(npc.arc.map(a=>a[0])).size,10);
  for(const a of npc.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(G.newGame('可选'),c.effects,c.itemCost)));}
  assert.equal(G.getNPCProfile('zhou').role,'骑手');assert.doesNotMatch(JSON.stringify(G.getNPCProfile('zhou')),/夜班骑手/);
- assert.equal(G.VERSION,22);
+ assert.equal(G.VERSION,23);
 });
 for(const mode of ['classic','ai'])for(let stage=0;stage<10;stage++)test(`${mode} 周野第${stage+1}段：三个选项实际结算、读档和顺序关系`,()=>{
  for(let index=0;index<3;index++){
@@ -135,20 +136,8 @@ test('周野六张旧丹方在修为揭露后仍可获得，揭露前不借传�
  const before=s.alchemy.formulas.length;G.syncFormulaRewards(s);for(const r of recipes)assert.ok(s.alchemy.formulas.includes(r.id));
  assert.equal(new Set(s.alchemy.formulas).size,s.alchemy.formulas.length);const got=[...s.alchemy.formulas];G.syncFormulaRewards(s);assert.deepEqual(s.alchemy.formulas,got);
 });
-for(const stage of [0,1,2,3,4])test(`旧v20第${stage}段衔接：资产和已结算历史保留，不重播、不提前反目`,()=>{
- const raw=state(stage);raw.schemaVersion=20;raw.bonds.zhou.path=stage===4?'friend':'none';
- raw.logs.push({id:'history',at:raw.minutes,tag:'羁绊',text:'周野：夜班这行，大家都得互相看一眼。'});
- const loaded=read(raw);assert.equal(loaded.bonds.zhou.path,G.zhouPath(stage));assert.equal(loaded.bonds.zhou.stage,stage);
- assert.deepEqual(loaded.player,raw.player);assert.equal(loaded.pending,null);assert.equal(loaded.eventResult,null);
- assert.ok(loaded.logs.some(l=>l.text===raw.logs.at(-1).text));assert.deepEqual(read(loaded).bonds,loaded.bonds);
-});
-test('旧已完成友情后的3分钟配送交谈，在迁移及再次读档后保留耗时和奖励',()=>{
- let raw=state(4);raw.schemaVersion=20;raw.bonds.zhou.path='friend';raw.position='stop-0';
- const base=G.EVENTS.find(e=>e.id==='delivery-npc-zhou-again');
- raw.pending={...G.clone(base),id:'old-zhou-reunion',templateId:base.id,npcId:'zhou',npcAdvance:false,source:'classic',aiStatus:'skip',delivery:{id:'old-zhou-order',target:'stop-0',title:'旧单',desc:'原票据',reward:20,coins:2,npc:'zhou',condition:'ordinary',expiresAt:raw.minutes+30}};
- const loaded=read(raw);assert.equal(loaded.pending.legacyZhouDelivery,true);let s=choose(loaded,1);assert.equal(s.activity.duration,3);
- s=read(G.advance(s,1));assert.equal(s.activity.elapsed,1);s=read(s);s=finish(s);assert.equal(s.bonds.zhou.stage,4);assert.equal(s.bonds.zhou.path,'brother');assert.equal(s.stats.delivered,45);
-});
+
+
 test('v21损坏阶段、伪造关系、缺少已完成前置、错配剧情编号均拒绝',()=>{
  const mutations=[s=>delete s.bonds.zhou,s=>s.bonds.zhou.stage=11,s=>s.bonds.zhou.path='enemy',s=>s.bonds.zhou.met='true',s=>s.bonds.zhou.affinity=Infinity];
  for(const mutate of mutations){const s=state(4);mutate(s);assert.throws(()=>read(s));}

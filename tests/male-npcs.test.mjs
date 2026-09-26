@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
@@ -51,13 +52,12 @@ test('男性总数12、女性9、总数21，追加九人有明确年龄、独立
     for(const a of n.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(s,c.effects,c.itemCost)));}
     assert.deepEqual(n.arc[3].slice(2).map(c=>c.path),['friend','friend','friend']);
   }
-  assert.equal(G.VERSION,22);assert.equal(G.STORAGE_KEY,'night-courier:saves:v22');
+  assert.equal(G.VERSION,23);assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
 });
 
-test('除周野新故事外原十一人文字数值、画像AI与地图保持指纹一致',()=>{
+test('除周野新故事外原十一人文字数值、画像AI保持指纹一致',()=>{
   assert.equal(hash(G.NPCS.slice(0,12).filter(n=>n.id!=='zhou').map(({gender,...n})=>n)),'bddd20c6c18b8dc78034e2670d3606e97f58d859ea7b6246066621c8ac386945');
   assert.equal(hash(G.npcPromptCatalog().slice(0,12).filter(c=>c.profile.id!=='zhou')),'ddc4524ae7071b0de05477eeb31f0d10de765a61cfcb94f9c6a6a84aa976b080');
-  assert.equal(hash(G.PLACES),'3772f185dc32cff4ec75996533f4dfe075e418c066f8cab0dd444a6f93fc1429');
   assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,12);
 });
 
@@ -111,24 +111,16 @@ for(const id of ids)test(`${id}：人物画像与AI日常使用同一年龄职�
   assert.throws(()=>{p.personality.traits[0]='覆盖';},TypeError);
 });
 
-test('v19旧在途档保留票据、路线、旧十二人和资产，新九人仅补隐藏记录',()=>{
+test('v19旧在途档拒绝读取，当前人物在途票据与资产仍可往返',()=>{
   const s=G.newGame('旧十二人','ai',81);s.bonds.chen.met=true;s.bonds.chen.affinity=18;s.bonds.chen.stage=1;
-  const inFlight=G.advance(act(s,'deliver',{id:s.orders[0].id}),.2),raw=old19(inFlight),out=read(raw);
+  const inFlight=G.advance(act(s,'deliver',{id:s.orders[0].id}),.2),raw=old19(inFlight);assert.throws(()=>read(raw),/不支持此存档版本/);const out=read(inFlight);
   for(const k of ['player','stats','activeOrder','location','activity','minutes','seed','claimed','inventory','alchemy'])assert.deepEqual(out[k],inFlight[k],k);
   for(const n of G.NPCS.slice(0,12))assert.deepEqual(out.bonds[n.id],inFlight.bonds[n.id]);
   for(const id of ids)assert.deepEqual(out.bonds[id],blank);
-  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,22);assert.deepEqual(read(out).bonds,out.bonds);
+  assert.deepEqual(out.unlockNotices,inFlight.unlockNotices);assert.equal(out.schemaVersion,G.VERSION);assert.deepEqual(read(out).bonds,out.bonds);
 });
 
-test('v19存储自动迁移到v20保留原文；损坏v20不回退覆盖；导入生成独立副本',()=>{
-  const raw=old19(G.newGame('旧键迁移','classic',91)),text=JSON.stringify({schemaVersion:19,saves:[raw]});
-  const map=new Map([[G.LEGACY_STORAGE_KEY,text]]),storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)};
-  const store=G.createStore(storage),out=store.load();assert.equal(out.length,1);assert.equal(out[0].schemaVersion,22);assert.equal(map.get(G.LEGACY_STORAGE_KEY),text);
-  assert.ok(map.has(G.STORAGE_KEY));for(const id of ids)assert.deepEqual(out[0].bonds[id],blank);
-  const original=out[0].id;store.import(text);assert.equal(store.saves.length,2);assert.equal(new Set(store.saves.map(s=>s.id)).size,2);assert.ok(store.saves.some(s=>s.id===original));
-  const corrupt=G.clone(out[0]);delete corrupt.bonds.han;const broken=JSON.stringify({schemaVersion:20,saves:[corrupt]});map.set(G.STORAGE_KEY,broken);map.delete(G.BACKUP_KEY);
-  const badStore=G.createStore(storage);assert.deepEqual(badStore.load(),[]);assert.equal(map.get(G.STORAGE_KEY),broken);assert.match(badStore.warning,/没有覆盖/);
-});
+
 
 for(const id of ids)test(`${id}：损坏记录、未识社交或伪造感情拒绝，不因读档授予角色`,()=>{
   const mutations=[s=>delete s.bonds[id],s=>s.bonds[id].met='true',s=>s.bonds[id].stage=5,s=>s.bonds[id].age=99,s=>Object.assign(s.bonds[id],{met:true,stage:4,path:'romance',trust:100})];
@@ -158,5 +150,5 @@ test('追加男性不能挤占旧六人丹方、固定地点首位收餐人或�
 
 test('新男性职业重复或缺失在资料初始化时拒绝',()=>{
   const data=readFileSync(new URL('../public/js/data.js',import.meta.url),'utf8'),profile=readFileSync(new URL('../public/js/npc-profiles.js',import.meta.url),'utf8');
-  for(const role of ['',null,' 修车铺老板 ']){const context=vm.createContext({});vm.runInContext(data,context);context.NightCourier.NPCS.find(n=>n.id==='han').role=role;assert.throws(()=>vm.runInContext(profile,context),/All NPC occupations must be distinct/);}
+  for(const role of ['',null,' 修车铺老板 ']){const context=vm.createContext({NightCourier:{CITY_DATA:structuredClone(G.CITY_DATA)}});vm.runInContext(data,context);context.NightCourier.NPCS.find(n=>n.id==='han').role=role;assert.throws(()=>vm.runInContext(profile,context),/All NPC occupations must be distinct/);}
 });

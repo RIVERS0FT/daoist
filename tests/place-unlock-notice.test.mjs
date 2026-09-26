@@ -1,6 +1,7 @@
 import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -88,16 +89,3 @@ for(const [name,mutate] of [
   ['no-ownership',s=>s.unlockedPlaces=['home','garage']],['no-delivery',s=>s.stats.delivered=0],
   ['pending-delivery',s=>s.pending=fixture().pending],['active-order',s=>s.activeOrder=fixture().pending.delivery],
 ])test(`拒绝损坏或冲突的解锁提示：${name}`,()=>{const s=choose(fixture());mutate(s);assert.throws(()=>G.sanitizeSave(s));});
-test('v14迁移保留既有结果、地点与资产，不为历史地点补播通知',()=>{
-  const s=choose(fixture());s.schemaVersion=14;delete s.placeUnlock;const clean=read(s);
-  assert.equal(clean.schemaVersion,G.VERSION);assert.equal(clean.placeUnlock,null);assert.deepEqual(clean.eventResult,s.eventResult);assert.deepEqual(clean.player,s.player);
-  assert.equal(read(clean).placeUnlock,null);
-});
-test('旧键迁移保留原文，v15空索引不复活旧档；各存档提示独立',()=>{
-  const a=choose(fixture()),b=G.newGame('另一旅程');const legacy=G.clone(a);legacy.schemaVersion=14;delete legacy.placeUnlock;
-  const text=JSON.stringify({saves:[legacy]}),values=new Map([['night-courier:saves:v14',text]]);
-  const storage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
-  const store=G.createStore(storage);store.load();assert.equal(store.saves[0].placeUnlock,null);assert.equal(values.get('night-courier:saves:v14'),text);
-  store.upsert(a);store.upsert(b);const saves=G.createStore(storage).load();assert.equal(saves.find(s=>s.id===a.id).placeUnlock.place,'clinic');assert.equal(saves.find(s=>s.id===b.id).placeUnlock,null);
-  values.set(G.STORAGE_KEY,JSON.stringify({saves:[]}));assert.deepEqual(G.createStore(storage).load(),[]);
-});

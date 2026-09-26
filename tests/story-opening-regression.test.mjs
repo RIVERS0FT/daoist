@@ -1,6 +1,13 @@
 import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+test('绑定门槛复用实际系统所有权，不改变当前档已经拥有的系统',()=>{
+  const s=fresh();s.unlockedFeatures=['system'];s.player.coins=27;
+  const restored=read(s);assertBound(restored);assert.equal(restored.player.coins,27);assert.equal(restored.stats.delivered,0);
+  const before=G.clone(restored);G.storyStage(restored);assert.deepEqual(restored,before);
+});
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -58,17 +65,9 @@ test('解锁单触发标记不会冒充第一章已完成，章节查询不写�
   assert.deepEqual(s,before);assert.equal(G.featureUnlocked(s,'cultivation'),false);
 });
 
-test('绑定门槛复用实际系统所有权，不改变旧档已经拥有的系统',()=>{
-  const s=fresh();s.unlockedFeatures=['system'];s.player.coins=27;
-  const restored=read(s);assertBound(restored);assert.equal(restored.player.coins,27);assert.equal(restored.stats.delivered,0);
-  const before=G.clone(restored);G.storyStage(restored);assert.deepEqual(restored,before);
-});
 
-test('v16 已完成解锁单旧档直接衔接第二章，不重播解锁单或补币',()=>{
-  const s=fresh();s.schemaVersion=16;delete s.sect;s.flags.firstOrder=true;s.stats.delivered=1;s.player.coins=37;
-  const restored=read(s);assert.equal(restored.schemaVersion,G.VERSION);assertBound(restored);assert.equal(restored.player.coins,37);
-  assert.equal(restored.pending,null);assert.equal(restored.eventResult,null);assert.deepEqual(restored.unlockNotices,[]);
-});
+
+
 
 test('旧解锁单待选按固定模板更新文案，保留票据与未结算进度，不提前跨章',()=>{
   let s=awakeningPending();
@@ -95,7 +94,7 @@ test('解锁单叙述与章名一致，绑定不添加新奖励或系统提前�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'story');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.19.0');assert.equal(G.VERSION,22);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.20.0');assert.equal(G.VERSION,23);
 });
 
 

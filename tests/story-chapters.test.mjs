@@ -1,6 +1,7 @@
 import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -88,22 +89,16 @@ test('解锁单选项与房租破产同刻时仍停在第一章，不生成绑�
   }finally{if(duration===undefined)delete choice.duration;else choice.duration=duration;}
 });
 
-for(const version of [16,17])test(`v${version} 旧首单待选与已解锁存档按真实资格显示章节，保留余额、旧回执和日志`,()=>{
+for(const version of [16,17])test(`v${version} 旧首单待选与已解锁存档拒绝读取，不修改历史`,()=>{
   const initial=fresh();const pending=ack(finish(act(initial,'deliver',{id:initial.orders[0].id})));pending.schemaVersion=version;
   pending.pending.text='万家灯火系统，已绑定。';
-  const waiting=read(pending);label(waiting,'第一章 · 解锁外卖系统');assert.doesNotMatch(waiting.pending.text,/万家灯火系统|已绑定/);
+  assert.throws(()=>read(pending),/不支持此存档版本/);
   let completed=choose(unlockPending());completed.schemaVersion=version;completed.player.coins=27;
   completed.eventResult.text='历史结果：万家灯火系统，已绑定。';
-  const restored=read(completed);label(restored,'第二章 · 初入仙途');
-  assert.equal(restored.player.coins,27);assert.deepEqual(restored.eventResult,completed.eventResult);assert.deepEqual(restored.logs.slice(0,completed.logs.length).map(({at,tag,text})=>({at,tag,text})),completed.logs.map(({at,tag,text})=>({at,tag,text})));
-  assert.equal(ack(restored).player.coins,27);
+  const before=G.clone(completed);assert.throws(()=>read(completed),/不支持此存档版本/);assert.deepEqual(completed,before);
 });
 
-test('兼容旧档已拥有外卖系统但缺少解锁单标记，不收回能力或重播解锁',()=>{
-  const s=fresh();s.unlockedFeatures=['system'];s.player.coins=19;
-  const restored=read(s);label(restored,'第二章 · 初入仙途');
-  assert.equal(restored.flags.firstOrder,false);assert.equal(restored.player.coins,19);assert.deepEqual(restored.unlockNotices,[]);
-});
+
 
 test('第三至第七章的境界、送达与人物门槛不变',()=>{
   const s=fresh();s.unlockedFeatures=['system'];s.stats.delivered=8;s.player.realm=1;label(s,'第三章 · 城有第二面');

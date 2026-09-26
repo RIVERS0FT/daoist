@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -139,11 +140,11 @@ for(const [kind,id,ratio] of [['body','golden-body',1.35],['meditate','mind-calm
  const qi=base.player.qi;const a=G.advance(base,5),b=G.advance(enhanced,5);near((b.player.qi-qi)/(a.player.qi-qi),ratio);
  assert.equal(a.minutes,b.minutes);assert.equal(a.player.stamina,b.player.stamina);
 });
-test('modern saved maximum resources survive sect-manual restore; old v21 gains empty new records only',()=>{
+test('modern saved maximum resources survive sect-manual restore; v21 is explicitly rejected',()=>{
  let s=fund(join('jingang'),'jingang');s=act(s,'sectBuy',{sectId:'jingang',id:'mountain-bone'});for(const k of ['health','stamina','mana'])s.player[k]=G.limits(s)[k];
  const restored=read(s);for(const k of ['health','stamina','mana'])near(restored.player[k],s.player[k]);
  let old=fund(join('tingyu'),'tingyu');old=act(old,'sectBuy',{id:'rain-breath'});old.schemaVersion=21;delete old.sectWorld;
- const migrated=read(old);assert.equal(migrated.schemaVersion,22);assert.deepEqual(migrated.sect,old.sect);assert.deepEqual(migrated.sectWorld,G.emptySectWorld());assert.equal(migrated.player.coins,old.player.coins);
+ assert.throws(()=>read(old),/不支持此存档版本/);
 });
 for(const [name,corrupt] of [
  ['missing world',s=>delete s.sectWorld],['foreign manual',s=>s.sect.manuals.push('iron-skin')],['no contribution payment',s=>s.sect.manuals.push('rain-breath')],

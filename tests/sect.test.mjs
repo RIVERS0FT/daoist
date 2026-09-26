@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -175,24 +176,12 @@ test('现代宗门存档只保留白名单，AI和额外字段不授予宗门资
  let p=finish(act(eligible('ai'),'rest'));p.pending.source='ai';p.pending.title='恶意改写';p.pending.choices=[{effects:{money:9999}}];p=read(p);
  assert.equal(p.pending.source,'classic');assert.equal(p.pending.aiStatus,'skip');assert.equal(p.pending.title,'山门为谁而开');assert.equal(p.pending.choices.length,3);
 });
-test('v16旧档迁移为空宗门，保留余额、在途和通知；不凭旧经历补贡献',()=>{
- let s=eligible();s.schemaVersion=16;delete s.sect;s.player.coins=27;s=G.clone(s);const a=read(s);
- assert.deepEqual(a.sect,G.emptySect());assert.equal(a.player.coins,27);assert.equal(a.minutes,s.minutes);assert.equal(G.panelUnlocked(a,'sect'),false);
- let b=act(eligible(),'travel',{target:'temple'});b=G.advance(b,1);const before=G.clone(b);b.schemaVersion=16;delete b.sect;b=read(b);
- assert.deepEqual(b.activity,before.activity);assert.deepEqual(b.player,before.player);assert.deepEqual(b.unlockNotices,before.unlockNotices);
- b=finish(b);assert.equal(b.pending.templateId,'story-sect-invitation');assert.equal(b.sect.invited,false);
-});
-test('v17新存储键保留旧键，损坏宗门不覆盖原文，多存档互不串门',()=>{
- const db=new Map(),storage={getItem:k=>db.get(k)??null,setItem:(k,v)=>db.set(k,v),removeItem:k=>db.delete(k)};
- let old=eligible();old.schemaVersion=16;delete old.sect;const json=JSON.stringify({saves:[old]});db.set('night-courier:saves:v16',json);
- let store=G.createStore(storage);let saves=store.load();assert.equal(saves.length,1);assert.deepEqual(saves[0].sect,G.emptySect());assert.equal(db.get('night-courier:saves:v16'),json);
- const s=member();assert.ok(store.upsert(s).ok);assert.equal(store.saves.find(x=>x.id===old.id).sect.member,false);assert.equal(store.saves.find(x=>x.id===s.id).sect.member,true);
- const bad=G.clone(s);delete bad.sect;assert.throws(()=>G.parseImport(JSON.stringify({saves:[old,bad]})));
- db.set(G.STORAGE_KEY,JSON.stringify({saves:[]}));store=G.createStore(storage);assert.deepEqual(store.load(),[]);
-});
+
+
 test('等量不同时间切片的执事结果、资源、订单和随机源一致；纯查询无副作用',()=>{
  const initial=act(member(),'sectTask',{id:'copy'}),one=G.advance(initial,45);let split=initial;for(let i=0;i<450;i++)split=G.advance(split,.1);
- near(split.minutes,one.minutes);near(split.player.stamina,one.player.stamina);assert.deepEqual(split.sect,one.sect);assert.equal(split.seed,one.seed);assert.deepEqual(split.orders,one.orders);
+ near(split.minutes,one.minutes);near(split.player.stamina,one.player.stamina);assert.deepEqual(split.sect,one.sect);assert.equal(split.seed,one.seed);
+ for(let i=0;i<one.orders.length;i++){near(split.orders[i].expiresAt,one.orders[i].expiresAt);assert.deepEqual({...split.orders[i],expiresAt:0},{...one.orders[i],expiresAt:0});}
  const before=G.clone(one);for(let i=0;i<10;i++){G.sectBlock(one,'sectTask',{id:'copy'});G.sectDutyUsed(one,'sweep');G.sectCommissionProgress(one);G.sectTrainingBonus(one);G.sectPromotionHint(G.SECT.ranks[1]);}
  assert.deepEqual(one,before);
 });

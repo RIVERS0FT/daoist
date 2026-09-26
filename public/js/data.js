@@ -1,17 +1,14 @@
-/* 原创重建内容。这里集中维护地图、数值配置和剧情，不依赖外部素材。 */
+/* 原创游戏配置；真实地理数据来自 OpenStreetMap，见 MAP_DATA.md。 */
 (function (root) {
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
-  G.VERSION = 22;
-  G.APP_VERSION = '1.19.0';
+  G.VERSION = 23;
+  G.APP_VERSION = '1.20.0';
   G.SYSTEM_UNLOCK_DELIVERIES = 10;
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   G.SYSTEM_NAME = '外卖系统';
-  // 只向东、向南追加网格；原 7×6 城区的坐标、地点 ID 与桥梁不变。
-  G.GRID_X = [130, 370, 610, 850, 1090, 1330, 1570, 1810, 2050, 2290, 2530];
-  G.GRID_Y = [120, 300, 480, 660, 840, 1020, 1200, 1380, 1560, 1740];
-  G.WORLD = { width: 2660, height: 1860, metersPerUnit: 3.5 };
+  G.WORLD = {width:G.CITY_DATA.width,height:G.CITY_DATA.height,metersPerUnit:1};
   G.CHARGE = Object.freeze({ minutes: 10, cost: 8 });
   G.ALCHEMY_REALM_BY_TIER = Object.freeze([0,0,0,1,1,2,3,3,4,5]);
   G.AUCTION = Object.freeze({name:'万宝拍卖场',place:'market',opens:1080,roundMinutes:5,lotCount:3,
@@ -19,7 +16,7 @@
     realmByTier:G.ALCHEMY_REALM_BY_TIER});
   // 匿名席位，不作为自动结识的羁绊人物。
   G.AUCTION_BIDDERS = [{id:'herbalist',name:'青衣药商'},{id:'wanderer',name:'赤袖散修'},{id:'collector',name:'青灯藏家'}];
-  // 首个可加入宗门，沿用已发布的听雨观坐标，不新增地图捷径或丹方渠道。
+  // 首个可加入宗门。
   G.SECT = {id:'tingyu',name:'听雨观',place:'temple',joinMinutes:20,rejoinDays:1,
     motto:'不问来处，先护人间。',
     ranks:[
@@ -66,53 +63,781 @@
       notice:'导航栏已开放羁绊，只显示真正结识过的人物。'}
   ];
   G.FEATURE_PANELS = {system:'system',cultivation:'cultivation',alchemy:'alchemy',bonds:'bonds',auction:'auction',sect:'sect'};
-  G.ROAD_LAYOUT = { riverColumn: 3, bridgeRows: [1, 3, 5, 7] };
-  G.ROAD_NODES = G.GRID_Y.flatMap((y,r) => G.GRID_X.map((x,c) => ({x,y,c,r})));
-  // 绘制、寻路和途中存档校验共用同一组真实道路，不另画可穿江的假路。
-  G.ROAD_EDGES = [];
-  for (const [i,a] of G.ROAD_NODES.entries()) {
-    if (a.c+1 < G.GRID_X.length && (a.c !== G.ROAD_LAYOUT.riverColumn || G.ROAD_LAYOUT.bridgeRows.includes(a.r)))
-      G.ROAD_EDGES.push({from:i,to:i+1});
-    if (a.r+1 < G.GRID_Y.length) G.ROAD_EDGES.push({from:i,to:i+G.GRID_X.length});
+  // 游戏地点为虚构；坐标固定在真实 OSM 路网节点上。
+  G.ROAD_NODES = G.CITY_DATA.nodes.map(([osmId,x,y])=>({osmId,x,y}));
+  G.ROAD_EDGES = G.CITY_DATA.edges.map(([from,to,kind,osmId])=>({from,to,kind,osmId}));
+  G.PLACES = [
+  {
+    "id": "home",
+    "name": "青藤小屋",
+    "kind": "home",
+    "desc": "最初的住处。休息均衡，能补满体力、灵力与电量。",
+    "permanent": true
+  },
+  {
+    "id": "garage",
+    "name": "阿默修车铺",
+    "kind": "garage",
+    "desc": "修理、升级，以及一位总在等你收工的朋友。",
+    "permanent": true
+  },
+  {
+    "id": "clinic",
+    "name": "回春医馆",
+    "kind": "clinic",
+    "desc": "白灯下有人医人，灯灭后有人医心。",
+    "permanent": true
+  },
+  {
+    "id": "bookshop",
+    "name": "旧雨书店",
+    "kind": "book",
+    "desc": "一册失去封皮的旧书，记着这座城的秘密。",
+    "permanent": true
+  },
+  {
+    "id": "temple",
+    "name": "听雨观",
+    "kind": "temple",
+    "desc": "城北的灵气在入夜后苏醒，修炼收益提高。",
+    "permanent": true
+  },
+  {
+    "id": "park",
+    "name": "月渡公园",
+    "kind": "leaf",
+    "desc": "江风掠过古井。探索可能带来灵草与奇遇。",
+    "permanent": true
+  },
+  {
+    "id": "market",
+    "name": "长乐集",
+    "kind": "market",
+    "desc": "买些热饭和灵草，继续奔忙的人间生活。",
+    "permanent": true
+  },
+  {
+    "id": "stop-0",
+    "name": "杏花里",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-1",
+    "name": "松风公寓",
+    "kind": "home",
+    "permanent": true,
+    "desc": "安静宽敞，睡眠后气血、体力、灵力与电量全部恢复。"
+  },
+  {
+    "id": "stop-2",
+    "name": "青石弄",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-3",
+    "name": "栖云宿舍",
+    "kind": "home",
+    "permanent": true,
+    "desc": "合租床位便宜，但只能恢复基础体力与少量气血、灵力。"
+  },
+  {
+    "id": "stop-4",
+    "name": "银杏医院",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-5",
+    "name": "春山大厦",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-6",
+    "name": "望江台",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-7",
+    "name": "榆树巷",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-8",
+    "name": "长风客栈",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-9",
+    "name": "新桥社区",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-10",
+    "name": "向阳小学",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-11",
+    "name": "水岸茶室",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-12",
+    "name": "海棠新村",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-13",
+    "name": "北辰写字楼",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-14",
+    "name": "龙井作坊",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-15",
+    "name": "听潮楼",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-16",
+    "name": "流萤公寓",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-17",
+    "name": "南山工作室",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-18",
+    "name": "西城花房",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-19",
+    "name": "观星台",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-20",
+    "name": "锦鲤小区",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-21",
+    "name": "青禾餐厅",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-22",
+    "name": "落霞仓库",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-23",
+    "name": "雨巷照相馆",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-24",
+    "name": "望舒公馆",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-25",
+    "name": "拾光面馆",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-26",
+    "name": "归鹤庭",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-27",
+    "name": "白鹭驿",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-28",
+    "name": "雁回小筑",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-29",
+    "name": "木棉楼",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-30",
+    "name": "竹影小院",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-31",
+    "name": "鸣蝉里",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-32",
+    "name": "青瓷馆",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-33",
+    "name": "小满街",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "stop-34",
+    "name": "临江书院",
+    "kind": "delivery",
+    "permanent": false,
+    "desc": "老城厢街巷中的配送地址。"
+  },
+  {
+    "id": "yunport-0",
+    "name": "海岚广场",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-1",
+    "name": "云港公寓",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-2",
+    "name": "晨星大厦",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-3",
+    "name": "归帆客栈",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-4",
+    "name": "滨海医院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-5",
+    "name": "远航写字楼",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-6",
+    "name": "云港夜校",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-7",
+    "name": "澄光里",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-8",
+    "name": "风帆小区",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-9",
+    "name": "星洲酒店",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-10",
+    "name": "晴海书屋",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "yunport-11",
+    "name": "云港会展中心",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-0",
+    "name": "东湖庭院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-1",
+    "name": "荷风里",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-2",
+    "name": "碧波茶楼",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-3",
+    "name": "听荷公寓",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-4",
+    "name": "湖心美术馆",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-5",
+    "name": "汀兰小区",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-6",
+    "name": "东湖体育馆",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-7",
+    "name": "朝露里",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-8",
+    "name": "镜湖酒店",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-9",
+    "name": "柳汀花园",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-10",
+    "name": "水云居",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "eastlake-11",
+    "name": "望湖书院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-0",
+    "name": "南郊夜市",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-1",
+    "name": "蒲公英里",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-2",
+    "name": "榕树公寓",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-3",
+    "name": "青岚汽车站",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-4",
+    "name": "稻香社区",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-5",
+    "name": "禾下食堂",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-6",
+    "name": "晴川小学",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-7",
+    "name": "南郊物流园",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-8",
+    "name": "麦田工作室",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-9",
+    "name": "向晚小院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-10",
+    "name": "丰年里",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "south-11",
+    "name": "南桥驿居",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-0",
+    "name": "灵溪入口",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-1",
+    "name": "云栈民宿",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-2",
+    "name": "青竹工坊",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-3",
+    "name": "栖鹤村",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-4",
+    "name": "茶山书屋",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-5",
+    "name": "灵溪药圃",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-6",
+    "name": "听泉山庄",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-7",
+    "name": "清溪客舍",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-8",
+    "name": "石桥人家",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-9",
+    "name": "松间茶舍",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-10",
+    "name": "半山学堂",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-11",
+    "name": "竹海小筑",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-12",
+    "name": "望岫台",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-13",
+    "name": "雨后花房",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-14",
+    "name": "归山院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-15",
+    "name": "流泉居",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-16",
+    "name": "踏云亭",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-17",
+    "name": "山南老街",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-18",
+    "name": "听松楼",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-19",
+    "name": "白石小院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "lingxi-20",
+    "name": "问山茶坊",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-0",
+    "name": "柳岸人家",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-1",
+    "name": "南桥集市",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-2",
+    "name": "橘井巷",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-3",
+    "name": "春水茶坊",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-4",
+    "name": "湖心书屋",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-5",
+    "name": "云麓别院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-6",
+    "name": "竹溪社区",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-7",
+    "name": "青山学院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-8",
+    "name": "芳草新村",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-9",
+    "name": "朝阳厂区",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
+  },
+  {
+    "id": "southbank-10",
+    "name": "南岸书院",
+    "desc": "老城厢街巷中的配送地址。",
+    "kind": "delivery",
+    "permanent": false
   }
-  const services = [
-    ['home', '青藤小屋', 2, 3, 'home', '一间租来的小屋，也是你最初的洞府。'],
-    ['garage', '阿默修车铺', 0, 4, 'garage', '修理、升级，以及一位总在等你收工的朋友。'],
-    ['clinic', '回春医馆', 3, 1, 'clinic', '白灯下有人医人，灯灭后有人医心。'],
-    ['bookshop', '旧雨书店', 1, 1, 'book', '一册失去封皮的旧书，记着这座城的秘密。'],
-    ['temple', '听雨观', 5, 0, 'temple', '城北的灵气在入夜后苏醒，修炼收益提高。'],
-    ['park', '月渡公园', 5, 3, 'leaf', '江风掠过古井。探索可能带来灵草与奇遇。'],
-    ['market', '长乐集', 1, 5, 'market', '买些热饭和灵草，继续奔忙的人间生活。']
-  ];
-  G.PLACES = services.map(([id, name, c, r, kind, desc]) => ({ id, name, x: G.GRID_X[c], y: G.GRID_Y[r], kind, desc, permanent: true }));
-  const names = ['杏花里','松风公寓','青石弄','栖云宿舍','银杏医院','春山大厦','望江台','榆树巷','长风客栈','新桥社区','向阳小学','水岸茶室','海棠新村','北辰写字楼','龙井作坊','听潮楼','流萤公寓','南山工作室','西城花房','观星台','锦鲤小区','青禾餐厅','落霞仓库','雨巷照相馆','望舒公馆','拾光面馆','归鹤庭','白鹭驿','雁回小筑','木棉楼','竹影小院','鸣蝉里','青瓷馆','小满街','临江书院'];
-  let n = 0;
-  // 旧地点编号按原来的 7×6 顺序生成，不能使用扩展后的行列数重排。
-  for (let r = 0; r < 6; r++) for (let c = 0; c < 7; c++) {
-    const x = G.GRID_X[c], y = G.GRID_Y[r];
-    if (!G.PLACES.some(p => p.x === x && p.y === y)) G.PLACES.push({ id: `stop-${n}`, name: names[n++], x, y, kind: 'delivery', permanent: false });
-  }
-  G.DISTRICTS = [
-    {id:'yunport',name:'云港新区',cols:[7,8,9,10],rows:[0,1,2],label:{x:2180,y:415},desc:'临海的新城区，夜班写字楼与远航归来的灯火相邻。',
-      names:['海岚广场','云港公寓','晨星大厦','归帆客栈','滨海医院','远航写字楼','云港夜校','澄光里','风帆小区','星洲酒店','晴海书屋','云港会展中心']},
-    {id:'eastlake',name:'东湖新城',cols:[7,8,9,10],rows:[3,4,5],label:{x:2180,y:955},desc:'湖岸社区沿水铺开，晚归的人总在等一份热饭。',
-      names:['东湖庭院','荷风里','碧波茶楼','听荷公寓','湖心美术馆','汀兰小区','东湖体育馆','朝露里','镜湖酒店','柳汀花园','水云居','望湖书院']},
-    {id:'south',name:'南郊生活区',cols:[0,1,2,3],rows:[6,7,8],label:{x:470,y:1495},desc:'夜市、学校和物流园连着老城南面的生活。',
-      names:['南郊夜市','蒲公英里','榕树公寓','青岚汽车站','稻香社区','禾下食堂','晴川小学','南郊物流园','麦田工作室','向晚小院','丰年里','南桥驿居']},
-    {id:'lingxi',name:'灵溪山麓',cols:[4,5,6,7,8,9,10],rows:[6,7,8],label:{x:1810,y:1495},desc:'山脚的茶舍与民居逐水而建，灯火一直延伸到竹林边。',
-      names:['灵溪入口','云栈民宿','青竹工坊','栖鹤村','茶山书屋','灵溪药圃','听泉山庄','清溪客舍','石桥人家','松间茶舍','半山学堂','竹海小筑','望岫台','雨后花房','归山院','流泉居','踏云亭','山南老街','听松楼','白石小院','问山茶坊']}
-  ];
-
-  // 在已发布的 99 个地址后追加南岸，不重排任何既有 ID。
-  G.DISTRICTS.push({id:'southbank',name:'南岸新街',cols:[0,1,2,3,4,5,6,7,8,9,10],rows:[9],label:{x:1550,y:1810},desc:'沿江向南，新的归家路与夜市在这里延伸。',
-    names:['柳岸人家','南桥集市','橘井巷','春水茶坊','湖心书屋','云麓别院','竹溪社区','青山学院','芳草新村','朝阳厂区','南岸书院']});
-  for (const district of G.DISTRICTS) {
-    let index=0;
-    for (const r of district.rows) for (const c of district.cols) {
-      G.PLACES.push({id:`${district.id}-${index}`,name:district.names[index++],x:G.GRID_X[c],y:G.GRID_Y[r],
-        district:district.id,desc:district.desc,kind:'delivery',permanent:false});
-    }
-  }
+].map(p=>({...p,...G.ROAD_NODES[G.CITY_DATA.places[p.id]]}));
   G.place = id => G.PLACES.find(p => p.id === id);
   G.RESIDENCES = [
     { id:'qiyun', name:'栖云宿舍', place:'stop-3', rent:70, desc:'合租床位便宜，但只能恢复基础体力与少量气血、灵力。', recovery:{health:20,stamina:70,mana:10,battery:0}, full:[] },
@@ -135,8 +860,6 @@
     { name: '炼虚', need: 2300, levels: 9 }, { name: '合体', need: 3200, levels: 9 },
     { name: '大乘', need: 4300, levels: 9 }, { name: '渡劫', need: 5600, levels: 9, terminal: true }
   ];
-  // v7–v12 凡人各重已经成功投入的修为；仅供旧档迁移，不是新的分重玩法。
-  G.LEGACY_MORTAL_PROGRESS = Object.freeze([0,5,11,18,26,35,45,56,68]);
   G.WEATHER = [ { id: 'clear', name: '晴', speed: 1 }, { id: 'cloudy', name: '多云', speed: 1 }, { id: 'rain', name: '细雨', speed: .82 }, { id: 'mist', name: '薄雾', speed: .9 } ];
   G.ORDER_TYPES = [
     { title: '一碗热汤', desc: '不要按门铃。放在门边，轻敲两下即可。', tip: 0, condition: 'ordinary' },
@@ -787,7 +1510,6 @@
       return {level:index+1,tier,name,cost:100+index*75+tier*60,success:.015*(tier-1)+variant*.012,extra:.025*tier+(2-variant)*.012,quality:.018*tier+variant*.01,realm:ALCHEMY_REALM_BY_TIER[tier],desc:`${tier}阶药鼎。成丹稳定、成色与额外产出各有侧重。`};
     })
   ];
-  G.LEGACY_CAULDRON_MAP = Object.freeze({0:0,1:1,2:4,3:7});
   G.ALCHEMY_RANKS = [
     {name:'药童',need:0,tier:1},{name:'识药',need:4,tier:2},{name:'掌火',need:10,tier:3},
     {name:'炼药师',need:20,tier:4},{name:'丹师',need:40,tier:5},{name:'丹匠',need:70,tier:6},

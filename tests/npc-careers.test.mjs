@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
@@ -101,7 +102,7 @@ test('重复、空白或缺失的可攻略职业在设定加载时拒绝，不�
   const source=readFileSync(new URL('../public/js/data.js',import.meta.url),'utf8');
   const profiles=readFileSync(new URL('../public/js/npc-profiles.js',import.meta.url),'utf8');
   for(const role of ['知识区主播',' 知识区主播 ','',null,undefined]){
-    const context=vm.createContext({});vm.runInContext(source,context);
+    const context=vm.createContext({NightCourier:{CITY_DATA:structuredClone(G.CITY_DATA)}});vm.runInContext(source,context);
     context.NightCourier.NPCS.find(n=>n.id==='gu').role=role;
     assert.throws(()=>vm.runInContext(profiles,context),/Romance NPC occupations must be distinct/);
   }

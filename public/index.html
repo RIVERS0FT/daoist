@@ -7,7 +7,10 @@
   <meta name="description" content="白天送外卖，夜里修仙。地图探索、分支剧情与多存档的单机网页 RPG。">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23182f29'/%3E%3Cpath d='M16 22h32v28H16zM16 22l8-9h16l8 9M32 22v13' fill='none' stroke='%23dfc18a' stroke-width='3'/%3E%3C/svg%3E">
   <title>外卖修仙录 · 人间一程，仙途万里</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
+  <script src="vendor/leaflet/leaflet.js" defer></script>
+  <script src="js/city-data.js" defer></script>
   <script src="js/data.js" defer></script>
   <script src="js/sects.js" defer></script>
   <script src="js/npc-profiles.js" defer></script>
@@ -17,6 +20,7 @@
   <script src="js/clock.js" defer></script>
   <script src="js/storage.js" defer></script>
   <script src="js/progression.js" defer></script>
+  <script src="js/map-art.js" defer></script>
   <script src="js/map.js" defer></script>
   <script src="js/app.js" defer></script>
 </head>
@@ -28,11 +32,11 @@
       <div id="city-map" class="city-map" tabindex="0"></div>
       <div id="map-caption" class="map-caption"></div>
       <div class="map-controls" aria-label="地图控制">
-        <button data-ui="zoom-in" title="放大地图" aria-label="放大地图">+</button>
-        <button data-ui="zoom-out" title="缩小地图" aria-label="缩小地图">−</button>
-        <span></span>
-        <button data-ui="locate" title="定位玩家" aria-label="定位玩家">◎</button>
-        <button data-ui="fit-map" title="查看全城" aria-label="查看全城">⌘</button>
+        <button type="button" data-ui="zoom-in" title="放大地图" aria-label="放大地图"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12h16M12 4v16"/></svg></button>
+        <button type="button" data-ui="zoom-out" title="缩小地图" aria-label="缩小地图"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 12h16"/></svg></button>
+        <span aria-hidden="true"></span>
+        <button type="button" data-ui="locate" title="定位玩家" aria-label="定位玩家"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="5"/><path d="M12 4v3m0 10v3M4 12h3m10 0h3"/></svg></button>
+        <button type="button" data-ui="fit-map" title="查看全城" aria-label="查看全城"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button>
       </div>
       <section id="action-bar" class="action-bar" aria-label="当前行动">
         <div class="action-summary"><strong id="action-title">原地停留</strong><span id="action-detail"></span><div class="activity-progress" role="progressbar" aria-label="行动进度" aria-valuemin="0" aria-valuemax="100"><i></i></div></div>
@@ -40,7 +44,6 @@
         <button class="btn small" data-act="resumeDelivery" hidden>继续配送</button>
         <button class="text-btn" data-ui="cancel-delivery" hidden>取消订单</button>
       </section>
-      <div id="map-legend" class="map-legend"><span><i class="gold-dot"></i>配送订单</span><span><i class="sage-dot"></i>城市地点</span><span><i class="mint-dot"></i>你的位置</span></div>
     </main>
     <nav id="game-nav" class="game-nav" aria-label="游戏导航"></nav>
     <aside id="log-panel" class="log-panel" aria-label="行为与事件日志"></aside>

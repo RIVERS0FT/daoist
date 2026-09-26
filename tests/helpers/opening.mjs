@@ -1,6 +1,7 @@
 // Shared fixtures play the first nine deliveries through the real rule engine.
 // No delivery counts, unlock flags or player assets are written by these helpers.
 import assert from 'node:assert/strict';
+import '../../public/js/city-data.js';
 import '../../public/js/data.js';
 import '../../public/js/sects.js';
 import '../../public/js/engine.js';

@@ -110,17 +110,12 @@ test('未结算第十单读档重建固定剧情，不接受AI效果/伪造奖�
 test('新存档缺失/非法剧情标记和矛盾的第十单待选必须报错，不静默解锁或重置',()=>{
   for(const value of [undefined,null,0,'true']){const s=fresh();s.flags.systemAwakened=value;assert.throws(()=>read(s),/剧情状态/);}
   const early=fresh();early.flags.systemAwakened=true;assert.throws(()=>read(early),/送达数量/);
-  for(const edit of [s=>s.stats.delivered=8,s=>s.position='home',s=>s.pending.delivery.target='home',s=>s.unlockedFeatures.push('system')]){
+  for(const edit of [s=>s.stats.delivered=8,s=>{s.position='home';s.location=null;},s=>s.pending.delivery.target='home',s=>s.unlockedFeatures.push('system')]){
     const s=awakeningPending();edit(s);assert.throws(()=>read(s),/剧情|重复绑定/);
   }
 });
 
-for(const delivered of [0,1,9,42])test(`v17 已结算${delivered}单迁移保留旧解锁规则与余额，不补币、不补弹剧情`,()=>{
-  const old=fresh();old.schemaVersion=17;old.stats.delivered=delivered;delete old.flags.systemAwakened;old.player.coins=delivered?37:0;
-  const s=read(old);assert.equal(s.schemaVersion,G.VERSION);assert.equal(G.featureUnlocked(s,'system'),delivered>=1);
-  assert.equal(s.player.coins,old.player.coins);assert.equal(s.pending,null);assert.deepEqual(s.unlockNotices,[]);
-  assert.equal(s.flags.systemAwakened,false);const twice=read(s);assert.deepEqual(twice.player,s.player);assert.equal(twice.seed,s.seed);
-});
+
 
 test('已完成剧情存档不重复演出，第二章须q1才修行，后续订单仍正常发币',()=>{
   let s=afterAwakening();assert.equal(s.pending,null);assert.equal(s.flags.systemAwakened,true);

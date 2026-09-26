@@ -1,5 +1,13 @@
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+test('当前档已购的专属方保留，过去已完成剧情/羁绊的奖励只补一次',()=>{
+  let s=fresh();const id=ofType('bond')[0].id;s.alchemy.formulas=[id];s.flags.storyStreetVein=true;
+  Object.assign(s.bonds.chen,{met:true,stage:2,trust:9});const raw=JSON.stringify(s);const a=copy(s);
+  assert.equal(JSON.stringify(s),raw);assert.ok(a.alchemy.formulas.includes(id));assert.equal(a.alchemy.formulas.length,11);
+  assert.deepEqual(copy(a).alchemy.formulas,a.alchemy.formulas);assert.equal(copy(a).logs.length,a.logs.length);
+});
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
@@ -140,12 +148,7 @@ test('已获得不等于可炼制，羁绊传方仍校验炼药能力',()=>{
 test('隐藏丹方的错误提示不泄露名称',()=>{
   const s=fresh();for(const recipe of G.ALCHEMY_RECIPES){const r=G.perform(s,'alchemy',{recipe:recipe.id});assert.equal(r.ok,false);assert.ok(!r.error.includes(recipe.name));}
 });
-test('旧档已购的专属方保留，过去已完成剧情/羁绊的奖励只补一次',()=>{
-  let s=fresh();const id=ofType('bond')[0].id;s.alchemy.formulas=[id];s.flags.storyStreetVein=true;
-  Object.assign(s.bonds.chen,{met:true,stage:2,trust:9});const raw=JSON.stringify(s);const a=copy(s);
-  assert.equal(JSON.stringify(s),raw);assert.ok(a.alchemy.formulas.includes(id));assert.equal(a.alchemy.formulas.length,11);
-  assert.deepEqual(copy(a).alchemy.formulas,a.alchemy.formulas);assert.equal(copy(a).logs.length,a.logs.length);
-});
+
 test('所有专属奖励均可确定取得；多存档之间不共享所有权',()=>{
   const a=fresh(),b=fresh();a.claimed=['q1'];for(const source of G.FORMULA_STORY_SOURCES)if(source.flag)a.flags[source.flag]=true;
   for(const bond of Object.values(a.bonds))Object.assign(bond,{met:true,stage:4,trust:100});

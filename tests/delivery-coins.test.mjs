@@ -1,6 +1,7 @@
 import {throughNine, afterAwakening} from './helpers/opening.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';

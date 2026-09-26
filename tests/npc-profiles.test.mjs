@@ -1,7 +1,19 @@
 import test from 'node:test';
+// Current-schema contracts retained after removal of migration tests.
+test('当前存档不存入或信任NPC年龄覆盖，读档与查询保留原关系和资产',()=>{
+  const s=G.newGame('当前档年龄','classic',789);s.bonds.chen.met=true;s.bonds.chen.affinity=23;
+  s.bonds.chen.trust=8;s.bonds.chen.stage=1;s.bonds.chen.path='friend';
+  const expected=G.sanitizeSave(G.clone(s)),raw=G.clone(s);
+  raw.bonds.chen.age=1;raw.bonds.lu.age=999;raw.npcAges={chen:1,lu:999,zhou:0};
+  const restored=G.sanitizeSave(raw);assert.deepEqual(restored,expected);
+  const before=G.clone(restored);
+  for(const n of G.NPCS){G.getNPCProfile(n.id);G.npcPortraitPrompt(n.id);G.npcRoleplayPrompt(n.id);}
+  assert.deepEqual(restored,before);assert.equal(G.getNPCProfile('chen').age,42);assert.equal(G.getNPCProfile('lu').age,58);
+});
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import '../public/js/city-data.js';
 import '../public/js/data.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
@@ -93,14 +105,14 @@ test('原12位NPC年龄保留，女性右尾配置保留且陆听雨与三十年
   assert.deepEqual(Object.fromEntries(G.NPCS.slice(0,12).map(n=>[n.id,n.age])),ages);
   assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
   const lu=G.NPCS.find(n=>n.id==='lu');assert.ok(lu.age-30>=18);assert.equal(lu.arc[1][0],'守了三十年的阵');
-  assert.equal(G.VERSION,22);assert.equal(G.STORAGE_KEY,'night-courier:saves:v22');
+  assert.equal(G.VERSION,23);assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
 });
 
 test('年龄缺失、非整数或非成年配置在资料加载时拒绝，不输出未知年龄提示词',()=>{
   const data=readFileSync(new URL('../public/js/data.js',import.meta.url),'utf8');
   const profiles=readFileSync(new URL('../public/js/npc-profiles.js',import.meta.url),'utf8');
   for(const age of [undefined,null,'42',17,0,-1,42.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1]){
-    const context=vm.createContext({});vm.runInContext(data,context);
+    const context=vm.createContext({NightCourier:{CITY_DATA:structuredClone(G.CITY_DATA)}});vm.runInContext(data,context);
     context.NightCourier.NPCS.find(n=>n.id==='chen').age=age;
     assert.throws(()=>vm.runInContext(profiles,context),/NPC age must be an explicit adult integer: chen/);
   }
@@ -116,15 +128,4 @@ test('男性在导出手册和AI/画像中保留正确性别及同一年龄，�
     const row=exported.characters.find(c=>c.profile.id===n.id);assert.equal(row.profile.age,n.age);
     assert.ok(row.portrait.positive.includes(`${n.age}岁`));assert.ok(row.dialogue.includes(`${n.age}岁`));
   }
-});
-
-test('旧v19存档不存入或信任NPC年龄覆盖，读档与查询保留原关系和资产',()=>{
-  const s=G.newGame('旧档年龄','classic',789);s.bonds.chen.met=true;s.bonds.chen.affinity=23;
-  s.bonds.chen.trust=8;s.bonds.chen.stage=1;s.bonds.chen.path='friend';
-  const expected=G.sanitizeSave(G.clone(s)),raw=G.clone(s);
-  raw.bonds.chen.age=1;raw.bonds.lu.age=999;raw.npcAges={chen:1,lu:999,zhou:0};
-  const restored=G.sanitizeSave(raw);assert.deepEqual(restored,expected);
-  const before=G.clone(restored);
-  for(const n of G.NPCS){G.getNPCProfile(n.id);G.npcPortraitPrompt(n.id);G.npcRoleplayPrompt(n.id);}
-  assert.deepEqual(restored,before);assert.equal(G.getNPCProfile('chen').age,42);assert.equal(G.getNPCProfile('lu').age,58);
 });

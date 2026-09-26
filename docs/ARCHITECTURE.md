@@ -2,9 +2,9 @@
 
 本文档只描述**当前技术架构、状态推进方式和工程约束**。当前玩法规则见 [GAME_DESIGN.md](GAME_DESIGN.md)，版本历史见 [VERSIONS.md](VERSIONS.md)。
 
-当前应用版本：**1.19.0**
-当前存档 schema：**v22**
-当前存储键：`night-courier:saves:v22`
+当前应用版本：**1.20.0**
+当前存档 schema：**v23**
+当前存储键：`night-courier:saves:v23`
 
 ## 1. 文档职责
 
@@ -25,7 +25,7 @@
 加载顺序：
 
 ```text
-data → sects → npc-profiles → engine → sect-engine → sect-stories → clock → storage → progression → map → app
+city-data → data → sects → npc-profiles → engine → sect-engine → sect-stories → clock → storage → progression → map-art → map → app
 ```
 
 主要职责：
@@ -36,9 +36,12 @@ data → sects → npc-profiles → engine → sect-engine → sect-stories → 
 | `npc-profiles.js` | 人物性格、职业边界、画像/AI提示词 |
 | `engine.js` | 核心行动校验、状态复制、结算、路线与规则查询 |
 | `clock.js` | 连续时间、倍率、暂停理由与前后台时钟 |
-| `storage.js` | v22 存档、迁移、清洗、导入导出与备份 |
+| `storage.js` | v23 存档、清洗、导入导出与备份 |
 | `progression.js` | 功能开放、固定主线、章节侧写与成长扩展 |
-| `map.js` | SVG 地图、路线表现、订单点与手势 |
+| `map-art.js` | 静态街区建筑、滨河景观与从路网派生的街道制图 |
+| `city-data.js` | OSM 本地数据：真实节点、道路边、建筑、水系、地点锚点 |
+| `map.js` | Leaflet CRS.Simple、底图承载、路线与订单点投影 |
+| `vendor/leaflet/` | 本地 Leaflet 1.9.4、样式与 BSD 许可证 |
 | `app.js` | UI 渲染、面板、事件请求与输入编排 |
 | `server.mjs` | 本机静态服务与受限 AI 代理 |
 
@@ -159,6 +162,16 @@ G.perform(oldState, action, payload)
 - 地图和规则必须使用同一份道路配置。
 - 普通订单标记的动画不能影响世界坐标或命中区域。
 
+地图适配层使用 Leaflet 1.9.4 的 `CRS.Simple` 与 `SVGOverlay`，以 `[-y,x]` 显示本地米制坐标。数据来自上海老城厢 OSM 提取，加载顺序为 `city-data.js → data.js`；游戏显示青岚城和虚构地名。`ROAD_NODES/ROAD_EDGES` 同时服务寻路、制图和途中校验，不再存在规则网格、不规则投影或旧地图兼容层。
+
+`scripts/import-shanghai.py` 从 Overpass JSON 生成固定数据。路口只通过 OSM 节点 ID 相连，不能凭两条线在屏幕上相交就连通；选取范围内最大的可步行连通分量。游戏步行与骑行共用双向图，不模拟现实禁骑或单行限制，不提供现实交通导航。110 个虚构地址锚定真实节点，1 地图单位 = 1 米；距离用欧氏线段长度累计，移动仍由 `G.advance` 推进。最短路径使用堆实现 Dijkstra，节点搜索最多缓存 128 份，途中只缓存一个起点。
+
+`MapArtwork.render()` 只构建一次真实建筑、水系与道路 SVG；不消费随机数或写状态。地图采用纸色、细线、灰绿建筑与淡蓝水系，缩放时隐藏次要街名。原始道路名只作为虚构街名的稳定映射键，游戏文字不显示真实上海地名。路线、图标、骑手共用米制坐标；图标保持屏幕大小，标签避让，比例尺由米制单位和视图缩放直接派生。
+
+数据和 Leaflet 全部随静态站点发布，运行时不请求第三方瓦片或地理接口。地图关闭 Leaflet 常驻署名控件；「帮助 → 地图来源与许可」集中显示 OpenStreetMap 归属、ODbL 许可和数据下载，以及 Leaflet 与随包发布的 BSD 许可证。该入口在开始页和局内均可访问。提取范围、时间、来源、授权和复现方式见 [MAP_DATA.md](MAP_DATA.md)。
+
+放大、缩小、定位和全图按钮共用一份尺寸样式：44×44 px 点击区域、22×22 px SVG 图标与一致线宽；横竖屏仅调整排列，不改变按钮尺寸。图标不使用字体字符，按钮保留独立无障碍名称。
+
 ## 7. 配送票据与地点所有权
 
 待接订单与已接订单分开保存。
@@ -240,13 +253,13 @@ NPC 身份、年龄、职业以 `data.js` 为主；扩展人设在 `npc-profiles
 
 周野的分阶段身份披露必须按已结算阶段裁剪，不能把完整制作端剧透直接发送给早期 AI。
 
-## 11. 存档 v22
+## 11. 存档 v23
 
 当前：
 
 ```text
-G.VERSION = 22
-G.STORAGE_KEY = night-courier:saves:v22
+G.VERSION = 23
+G.STORAGE_KEY = night-courier:saves:v23
 G.MAX_SAVES = 12
 ```
 
@@ -269,10 +282,10 @@ G.MAX_SAVES = 12
 
 `sanitizeSave` 必须按白名单重建，而不是把原始 JSON 深合并进新状态。
 
-迁移原则：
+读取原则：
 
-- 只迁移已知旧结构。
-- 新键存在但为空，不复活旧键。
+- 仅接受当前 schema v23；v1–v22、未知与未来版本明确拒绝。
+- 只读取 v23 存储键；备份使用独立 `night-courier:saves:v23:backup`。不探测、迁移或删除旧键。
 - 在途行动必须恢复真实剩余进度与已支付成本。
 - 不重复发奖、不重复扣费。
 - 损坏关键关系或事务链时拒绝读档，而不是猜测修复。
@@ -284,6 +297,8 @@ G.MAX_SAVES = 12
 ## 12. AI 代理与信任边界
 
 `server.mjs` 使用 Node 内置 HTTP，默认只监听本机。
+
+`npm start` 与 `npm run dev` 共用启动入口，通过 Node 的 `--env-file-if-exists=.env` 读取可选配置，默认地址为 `http://127.0.0.1:8787`。服务直接读取 `public/` 文件；前端修改后手动刷新，服务端代码或环境配置修改后重新启动。
 
 AI 请求：
 
@@ -354,9 +369,9 @@ python tests/browser-smoke.py
 
 ## 15. 构建与发布
 
-### 单文件构建
+### 多文件静态构建
 
-`scripts/build.mjs` 将可信 `public/` 源码生成 `dist/index.html`。
+`scripts/build.mjs` 验证 `public/` 资源，再清理固定输出目录 `dist/` 并复制完整静态文件，生成带大小及 SHA-256 的 `asset-manifest.json`。入口使用相对路径，支持 `/daoist/` 等子路径；发布时必须包含整个目录。清理前拒绝符号链接或重定向输出路径。
 
 `dist` 是产物，不是修改源。
 
@@ -372,13 +387,13 @@ python tests/browser-smoke.py
 
 1. Node 22 源码检查。
 2. 完整 Node 测试。
-3. 单文件构建。
+3. 多文件构建。
 4. Chromium 回归。
 5. RIVERSOFT bundle 检查。
 6. 保存验证过的 `dist` 工作流产物。
 7. 独立 publish job 获取 `production` 环境中的 `RIVERSOFT_TOKEN`。
 8. 发布 `daoist` slug。
-9. 下载公网 `index.html` 并与构建文件做 SHA-256 比对。
+9. `scripts/verify-public.mjs` 下载全部公开资源并与构建逐个做 SHA-256 比对；主域不可用时验证现有 HTTPS 兼容路径。
 
 GitHub Pages 已删除，不应重新添加 Pages workflow，除非用户之后明确改变发布策略。
 
@@ -392,7 +407,7 @@ RIVERSOFT 静态沙箱不等于完整 Node 环境：真实 AI 代理和可靠本
 2. 修改 `data.js` 配置与/或规则模块。
 3. 核对 `G.perform` 的规则层入口。
 4. 核对 `G.advance` 的真实耗时结算。
-5. 核对存档白名单与迁移。
+5. 核对存档白名单、旧档拒绝与当前途中恢复。
 6. 核对 UI 是否只展示规则查询结果。
 7. 增加边界测试。
 8. 如果形成新应用版本，在 VERSIONS 按“新增 / 修复 / 优化”三段记录。
@@ -404,6 +419,6 @@ RIVERSOFT 静态沙箱不等于完整 Node 环境：真实 AI 代理和可靠本
 
 `sects.js` 保存五宗方向、实力设定、36 种功法和 10 对基础关系；`sect-engine.js` 负责独立账户、资格查询、封顶加成、在途与存档校验；`sect-stories.js` 保存固定剧情、选择记录与关系派生。UI 只选择查看对象，不改变所属宗门。
 
-原 `s.sect` 专属听雨观，v22 新增 `s.sectWorld.records` 保存其余四宗，`stories` 保存五宗已结算选项前缀，`councils` 保存三场议事前缀。不保存可任意写入的关系值。旧活动不带 sectId 时只指听雨观，新宗门活动必须携带合法 sectId。至多一宗 member=true，退出冷却取全部宗门记录的最大值。
+`s.sect` 保存听雨观，`s.sectWorld` 中的 `records` 保存其余四宗，`stories` 保存五宗已结算选项前缀，`councils` 保存三场议事前缀。不保存可任意写入的关系值。宗门行动必须对应合法宗门；未指定 sectId 的听雨观入口由既有 API 默认参数处理。至多一宗 member=true，退出冷却取全部宗门记录的最大值。
 
-`G.techniqueBonuses` 为只读白名单合计，资源上限在宗门所有权恢复后再裁剪。`finishChoice` 在真实完成后提交宗门故事，`cleanPending` 从可信模板重建；AI 不得提供资格、贡献、外交或已学功法。新字段缺失或关系矛盾时拒绝现代存档，v21 及更早只新增空白记录，不补算。
+`G.techniqueBonuses` 为只读白名单合计，资源上限在宗门所有权恢复后再裁剪。`finishChoice` 在真实完成后提交宗门故事，`cleanPending` 从可信模板重建；AI 不得提供资格、贡献、外交或已学功法。字段缺失或关系矛盾时拒绝存档，不补算或推测恢复旧版本。
