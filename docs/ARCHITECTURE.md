@@ -411,7 +411,9 @@ python tests/browser-chapter-regions.py --root dist
 
 `.github/workflows/ci.yml` 用于 PR/代码验证。
 
-所有工作流 job（PR 的 `validate`、发布的 `verify` / `publish`）统一使用 `[self-hosted, Linux, X64]`，不回退到 GitHub 托管 runner。runner 需要保持在线，提供 Bash、Git、下载 Node/Python 工具链及 Chromium 的网络访问，以及安装 Chromium 系统依赖的权限；Node 22.16.0、Python 3.12 与浏览器运行环境仍由工作流准备。现有检查、产物传递、production 环境密钥和公网哈希校验保持不变。
+所有工作流 job（PR 的 `validate`、发布的 `deploy`）统一使用 `[self-hosted, Linux, X64]`，不回退到 GitHub 托管 runner。runner 需要保持在线，提供 Bash、Git、下载 Node/Python 工具链及 Chromium 的网络访问，以及安装 Chromium 系统依赖的权限；Node 22.16.0、Python 3.12 与浏览器运行环境仍由工作流准备。
+
+GitHub artifact 存储不参与发布。部署在同一个 job 中依次检查、测试、构建和发布，直接使用验证过的 `dist`；任一步失败都不会继续发布。`production` 环境密钥仅传入发布步骤。`scripts/ci-node-tests.sh` 保存完整 Node 日志并把失败断言写入 Actions 注释；`scripts/ci-retain-reports.sh` 将测试报告、完整源码归档、提交号及构建清单保存在 runner 的 `$HOME/.local/state/daoist-actions/<owner>/<repo>/<run-id>-<attempt>/`，避免下一次 checkout 清理它们。报告由 runner 管理者按磁盘容量归档清理，不依赖 GitHub artifact 配额。
 
 ### RIVERSOFT
 
@@ -424,8 +426,8 @@ python tests/browser-chapter-regions.py --root dist
 3. 多文件构建。
 4. Chromium 回归。
 5. RIVERSOFT bundle 检查。
-6. 保存验证过的 `dist` 工作流产物。
-7. 独立 publish job 获取 `production` 环境中的 `RIVERSOFT_TOKEN`。
+6. 保持同一 job 中验证过的 `dist`，无需上传/下载中转产物。
+7. 发布步骤获取 `production` 环境中的 `RIVERSOFT_TOKEN`。
 8. 发布 `daoist` slug。
 9. `scripts/verify-public.mjs` 下载全部公开资源并与构建逐个做 SHA-256 比对；主域不可用时验证现有 HTTPS 兼容路径。
 
@@ -447,7 +449,7 @@ RIVERSOFT 静态沙箱不等于完整 Node 环境：真实 AI 代理和可靠本
 8. 如果形成新应用版本，在 VERSIONS 按“新增 / 修复 / 优化”三段记录。
 9. 更新对应 TEST_REPORT。
 10. PR CI 通过后 squash merge。
-11. 合并到 main 后验证 RIVERSOFT verify、publish 与公网哈希。
+11. 合并到 main 后验证 RIVERSOFT deploy 中的检查、发布与公网哈希。
 
 ## 16. 五宗与功法模块
 

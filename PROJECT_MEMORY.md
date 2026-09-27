@@ -14,7 +14,7 @@
 - 地图分区：12 个虚构区域，按十二章连续开放；未开放区完全不可进入或途经。镜头可预览轮廓与条件，区域开放不自动发现地址。
 - 境界：凡人 + 炼气至渡劫九个修仙境界；凡人不分重，其余各九重
 - 静态发布：RIVERSOFT
-- GitHub Actions：所有 job 使用 `[self-hosted, Linux, X64]`；PR 验证、发布验证与 publish 均不使用 GitHub 托管 runner。
+- GitHub Actions：所有 job 使用 `[self-hosted, Linux, X64]`；PR validate 与发布 deploy 均不使用 GitHub 托管 runner。deploy 在同一 job 中验证并发布 dist，不依赖 GitHub artifact 存储；日志与帧报告保存在 runner 的 `$HOME/.local/state/daoist-actions/`。
 - GitHub Pages：已移除
 - 当前公开地址：`https://mevius.riversoft.top/daoist/`
 - 本机启动：`npm start` 或 `npm run dev`，共用可选 `.env` 配置，默认 `http://127.0.0.1:8787`。
@@ -138,7 +138,7 @@ python tests/browser-smoke.py
 3. PR CI 通过。
 4. squash merge。
 5. `main` 触发 RIVERSOFT。
-6. 验证 verify 与 publish。
+6. 验证 deploy 中的检查和发布步骤。
 7. 验证公网全部静态资源与构建 SHA-256 一致。
 
 ## 重要资料

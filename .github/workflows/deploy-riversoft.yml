@@ -13,9 +13,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
+  deploy:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 45
+    timeout-minutes: 55
+    environment:
+      name: production
 
     steps:
       - name: Checkout
@@ -31,7 +33,7 @@ jobs:
         run: npm run check
 
       - name: Run tests
-        run: npm test
+        run: bash scripts/ci-node-tests.sh
 
       - name: Build the static game
         run: npm run build
@@ -57,53 +59,12 @@ jobs:
           python tests/test_frame_metrics.py
           python tests/browser-performance.py --root dist
 
-      - name: Archive frame reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: frame-performance
-          retention-days: 3
-          path: artifacts/performance/
-
       - name: Check the deployment bundle
-        run: node tools/riversoft.mjs check ./dist
-
-      - name: Save the verified deployment bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: daoist-riversoft-dist
-          path: dist/
-          if-no-files-found: error
-          retention-days: 1
-
-  publish:
-    needs: verify
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 10
-    environment:
-      name: production
-
-    steps:
-      - name: Checkout deployment tooling
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22.16.0"
-          package-manager-cache: false
-
-      - name: Download the verified deployment bundle
-        uses: actions/download-artifact@v8
-        with:
-          name: daoist-riversoft-dist
-          path: dist
-
-      - name: Recheck the downloaded bundle
         run: node tools/riversoft.mjs check ./dist
 
       - name: Publish to RIVERSOFT
         id: publish
+        timeout-minutes: 10
         env:
           RIVERSOFT_TOKEN: ${{ secrets.RIVERSOFT_TOKEN }}
         run: |
@@ -140,3 +101,7 @@ jobs:
           DEPLOYMENT_ID: ${{ steps.publish.outputs.deployment_id }}
         run: |
           node scripts/verify-public.mjs ./dist "$PUBLISHED_URL" "$DEPLOYMENT_ID"
+
+      - name: Retain validation reports on the runner
+        if: always()
+        run: bash scripts/ci-retain-reports.sh

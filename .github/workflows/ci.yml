@@ -21,7 +21,7 @@ jobs:
       - name: Validate source
         run: npm run check
       - name: Run tests
-        run: npm test
+        run: bash scripts/ci-node-tests.sh
       - name: Build static site
         run: npm run build
       - name: Set up Python
@@ -41,26 +41,6 @@ jobs:
         run: |
           python tests/test_frame_metrics.py
           python tests/browser-performance.py --root dist
-      - name: Archive frame reports
+      - name: Retain validation reports on the runner
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frame-performance
-          retention-days: 3
-          path: artifacts/performance/
-      - name: Archive reproducible validation inputs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-source
-          retention-days: 3
-          path: |
-            public/
-            tests/
-            scripts/
-            tools/
-            docs/*.md
-            README.md
-            PROJECT_MEMORY.md
-            package.json
-            server.mjs
+        run: bash scripts/ci-retain-reports.sh
