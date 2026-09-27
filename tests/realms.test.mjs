@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -10,7 +13,7 @@ import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 const fresh=()=>Object.assign(G.newGame('问道','classic',123456),{
-  unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.map(p=>p.id)
+  unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.filter(p=>!p.regional).map(p=>p.id)
 });
 const read=s=>G.sanitizeSave(G.clone(s));
 const act=(s,action,p={})=>{const r=G.perform(s,action,p);assert.ok(r.ok,r.error);return r.state;};

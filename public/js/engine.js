@@ -37,7 +37,7 @@
   G.limits = s => {const rank=G.realmRank(s),bonus=G.techniqueBonuses(s);return {health:100+Math.floor(rank*12/9)+(s.equipment.includes('robe')?25:0)+bonus.health,stamina:100+Math.floor(rank*8/9)+bonus.stamina,mana:60+Math.floor(rank*16/9)+(s.equipment.includes('jade')?30:0)+bonus.mana,battery:80+s.vehicle.levels.battery*35,durability:100+s.vehicle.levels.durability*30};};
   G.log = (s, text, tag = '日常') => { s.logs.push({ id: `${s.turn}-${s.logs.length}-${s.seed}`, at: s.minutes, tag, text: String(text).slice(0, 600) }); s.logs = s.logs.slice(-180); };
   // 地点所有权只由已结算配送授予；地图呈现与所有快捷入口共用查询。
-  G.placeUnlocked = (s,id) => !!G.place(id) && Array.isArray(s.unlockedPlaces) && s.unlockedPlaces.includes(id);
+  G.placeUnlocked = (s,id) => !!G.place(id) && G.regionPlaceOpen(s,id) && Array.isArray(s.unlockedPlaces) && s.unlockedPlaces.includes(id);
   G.visibleServicePlaces = s => G.PLACES.filter(p=>p.permanent&&G.placeUnlocked(s,p.id));
   G.visibleResidences = s => G.RESIDENCES.filter(h=>G.placeUnlocked(s,h.place));
   G.locationBlock = (s,action,payload={}) => {
@@ -45,7 +45,7 @@
     if(action==='travel') {
       target=payload.target;
       // 已接单可以暂停、改道再续送，但接单或单纯抵达本身不授予地点。
-      if(s.activeOrder?.target===target)return '';
+      if(s.activeOrder?.target===target)return G.regionBlock(s,target);
     } else if(action==='moveHome')target=G.residence(payload.id)?.place;
     else if(action==='visit')target=G.NPCS.find(n=>n.id===payload.id)?.place;
     else if(['repair','upgrade'].includes(action))target='garage';
@@ -55,6 +55,10 @@
     else if(['sectJoin','sectLeave','sectTask','sectPromote','sectAccept','sectClaim','sectBuy'].includes(action))target=G.sectDefinition(payload.sectId??G.currentSect(s).id)?.place;
     else if(action==='sectStory')target=G.sectDefinition(payload.sectId)?.place;
     else if(action==='sectCouncil')target='market';
+    if(action==='deliver')target=s.orders.find(o=>o.id===payload.id)?.target;
+    if(action==='resumeDelivery')target=s.activeOrder?.target;
+    const blocked=G.regionBlock(s,target);if(blocked)return blocked;
+    if(['deliver','resumeDelivery'].includes(action))return '';
     return G.place(target)&&!G.placeUnlocked(s,target)?`尚未解锁${G.place(target).name}，请先完成送往这里的外卖。`:'';
   };
   G.unlockDeliveryPlace = (s,id) => {
@@ -108,50 +112,97 @@
   const distance = G.roadDistance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y)*G.WORLD.metersPerUnit;
   const nodes = G.ROAD_NODES;
   const coordinateIndex=new Map(nodes.map((p,i)=>[`${p.x}:${p.y}`,i]));
+  const roadCells=new Map(),cellSize=128;
+  for(const edge of G.ROAD_EDGES){
+    const a=nodes[edge.from],b=nodes[edge.to];
+    for(let x=Math.floor((Math.min(a.x,b.x)-EPS)/cellSize);x<=Math.floor((Math.max(a.x,b.x)+EPS)/cellSize);x++)for(let y=Math.floor((Math.min(a.y,b.y)-EPS)/cellSize);y<=Math.floor((Math.max(a.y,b.y)+EPS)/cellSize);y++){
+      const key=`${x}:${y}`;if(!roadCells.has(key))roadCells.set(key,[]);roadCells.get(key).push(edge);
+    }
+  }
   const links = nodes.map(()=>[]);
-  for (const {from,to} of G.ROAD_EDGES) { links[from].push(to); links[to].push(from); }
-  // 节点搜索保留最多 128 份；途中仅缓存一个起点，避免按帧积累坐标。
+  for (const {from,to} of G.ROAD_EDGES) {const chapter=G.segmentChapter(nodes[from],nodes[to]);links[from].push({to,chapter});links[to].push({to:from,chapter});}
+  // Limit route-search arrays by bytes as the city grows; cache one moving origin.
+  const searchCacheLimit=Math.max(1,Math.min(32,Math.floor(16*1024*1024/(nodes.length*12))));
   const nodeSearches=new Map();let roadSearch=null;
-  function searchRoads(from,anchors){
+  function searchRoads(from,anchors,chapter=12){
     const exact=anchors.length===1&&from.x===nodes[anchors[0]].x&&from.y===nodes[anchors[0]].y;
-    const key=`${from.x}:${from.y}`,cached=exact?nodeSearches.get(anchors[0]):roadSearch?.key===key?roadSearch.value:null;
+    const key=`${chapter}:${from.x}:${from.y}`,cached=exact?nodeSearches.get(key):roadSearch?.key===key?roadSearch.value:null;
     if(cached)return cached;
-    const dist=Array(nodes.length).fill(Infinity),prev=Array(nodes.length).fill(-1),heap=[];
+    const dist=new Float64Array(nodes.length).fill(Infinity),prev=new Int32Array(nodes.length).fill(-1),heap=[];
     const push=(id,d)=>{let i=heap.length;heap.push([id,d]);while(i){const p=(i-1)>>1;if(heap[p][1]<=d)break;heap[i]=heap[p];i=p;}heap[i]=[id,d];};
     const pop=()=>{const first=heap[0],last=heap.pop();if(heap.length){let i=0;while(i*2+1<heap.length){let c=i*2+1;if(c+1<heap.length&&heap[c+1][1]<heap[c][1])c++;if(heap[c][1]>=last[1])break;heap[i]=heap[c];i=c;}heap[i]=last;}return first;};
-    for(const i of anchors){dist[i]=distance(from,nodes[i]);push(i,dist[i]);}
+    for(const i of anchors)if(G.segmentChapter(from,nodes[i])<=chapter){dist[i]=distance(from,nodes[i]);push(i,dist[i]);}
     while(heap.length){
       const [u,cost]=pop();if(cost>dist[u])continue;
-      for(const v of links[u]){const d=cost+distance(nodes[u],nodes[v]);if(d<dist[v]){dist[v]=d;prev[v]=u;push(v,d);}}
+      for(const {to:v,chapter:required} of links[u]){if(required>chapter)continue;const d=cost+distance(nodes[u],nodes[v]);if(d<dist[v]){dist[v]=d;prev[v]=u;push(v,d);}}
     }
     const value={dist,prev};
-    if(exact){nodeSearches.set(anchors[0],value);if(nodeSearches.size>128)nodeSearches.delete(nodeSearches.keys().next().value);}else roadSearch={key,value};
+    if(exact){nodeSearches.set(key,value);if(nodeSearches.size>searchCacheLimit)nodeSearches.delete(nodeSearches.keys().next().value);}else roadSearch={key,value};
     return value;
   }
   // 途中坐标必须位于真实路段；虚拟起点连接该路段两端，不能吸附或穿江。
   G.roadAnchors = p => {
     if(!p || !Number.isFinite(p.x) || !Number.isFinite(p.y))return [];
-    const exact=coordinateIndex.get(`${p.x}:${p.y}`)??nodes.findIndex(n=>Math.abs(n.x-p.x)<EPS&&Math.abs(n.y-p.y)<EPS);
-    if(exact>=0)return [exact];
-    for(const {from:i,to:j} of G.ROAD_EDGES){
+    const exact=coordinateIndex.get(`${p.x}:${p.y}`);
+    if(exact!==undefined)return [exact];
+    for(const {from:i,to:j} of roadCells.get(`${Math.floor(p.x/cellSize)}:${Math.floor(p.y/cellSize)}`)||[]){
       const a=nodes[i],b=nodes[j],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),t=((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len);
+      if(Math.abs(a.x-p.x)<EPS&&Math.abs(a.y-p.y)<EPS)return [i];
+      if(Math.abs(b.x-p.x)<EPS&&Math.abs(b.y-p.y)<EPS)return [j];
       if(t>=0&&t<=1&&Math.abs((p.x-a.x)*dy-(p.y-a.y)*dx)/len<1e-7)return [i,j];
     }
     return [];
   };
   G.playerPoint = s => point(G.place(s.position)||s.location||G.place('home'));
   G.locationName = s => G.place(s.position)?.name || '道路途中';
-  G.route = (fromId, toId) => {
+  G.routeMeters=(from,target,chapter=12)=>{
+    const anchors=G.roadAnchors(from);must(anchors.length&&G.place(target),'找不到合法的道路位置。');
+    return searchRoads(from,anchors,chapter).dist[G.CITY_DATA.places[target]];
+  };
+  G.roadEdgesIn=(left,top,right,bottom)=>{
+    const found=new Set();
+    for(let x=Math.floor(left/cellSize);x<=Math.floor(right/cellSize);x++)for(let y=Math.floor(top/cellSize);y<=Math.floor(bottom/cellSize);y++)for(const edge of roadCells.get(`${x}:${y}`)||[])found.add(edge);
+    return found;
+  };
+  G.route = (fromId, toId, chapter=12) => {
     const from=typeof fromId==='string'?G.place(fromId):fromId,to=G.place(toId);
     const anchors=G.roadAnchors(from);must(anchors.length&&to,'找不到合法的道路位置。');
     const end=G.CITY_DATA.places[toId];
-    const {dist,prev}=searchRoads(from,anchors);
-    must(end>=0&&Number.isFinite(dist[end]),'目的地没有连通道路。');
-    const points=[];for(let cur=end;cur>=0;cur=prev[cur])points.unshift(point(nodes[cur]));
+    const {dist,prev}=searchRoads(from,anchors,chapter);
+    must(end>=0&&Number.isFinite(dist[end]),'当前开放区域内没有连通道路，不能途经未开放区域。');
+    const points=[];for(let cur=end;cur>=0;cur=prev[cur])points.push(point(nodes[cur]));points.reverse();
     if(distance(from,points[0])>EPS)points.unshift(point(from));
     return {from:typeof fromId==='string'?fromId:null,to:toId,points,meters:dist[end]};
   };
-  G.routeFrom = (s,target) => G.route(G.playerPoint(s),target);
+  G.routeFrom = (s,target) => {must(!G.regionBlock(s,target),G.regionBlock(s,target));return G.route(G.playerPoint(s),target,G.chapterNumber(s));};
+  G.routeRegionOpen=(s,route)=>{const chapter=G.chapterNumber(s);return !!route?.points?.length&&route.points.every((p,i)=>i?G.segmentChapter(route.points[i-1],p)<=chapter:G.regionAt(p)?.chapter<=chapter);};
+  G.validateRegionState=s=>{
+    const chapter=G.chapterNumber(s);
+    must(G.regionAt(G.playerPoint(s))?.chapter<=chapter,'角色位于尚未开放的区域。');
+    must(s.unlockedPlaces.every(id=>G.regionPlaceOpen(s,id)),'地点记录包含尚未开放的区域。');
+    for(const ticket of [...s.orders,s.activeOrder,s.pending?.delivery,s.activity?.params?.event?.delivery].filter(Boolean)){
+      must(G.regionPlaceOpen(s,ticket.target),'订单位于尚未开放的区域。');
+      must(Number.isFinite(G.routeMeters(G.playerPoint(s),ticket.target,chapter)),'订单必须沿开放区域内的道路可达。');
+    }
+    if(s.activity?.route)must(G.routeRegionOpen(s,s.activity.route),'进行中路线穿过尚未开放的区域。');
+    return s;
+  };
+  G.validateRoadRoute=(raw,target)=>{
+    must(raw&&Array.isArray(raw.points)&&raw.points.length>0&&raw.points.length<=nodes.length+1,'进行中的道路路线无效。');
+    const points=raw.points.map(p=>{must(p&&Number.isFinite(p.x)&&Number.isFinite(p.y),'进行中的道路路线无效。');return point(p);});
+    must(distance(points.at(-1),G.place(target))<1e-7,'道路路线终点无效。');
+    let meters=0;
+    for(let i=1;i<points.length;i++){
+      const a=points[i-1],b=points[i],length=distance(a,b),mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+      const valid=(roadCells.get(`${Math.floor(mid.x/cellSize)}:${Math.floor(mid.y/cellSize)}`)||[]).some(({from,to})=>{
+        const c=nodes[from],d=nodes[to],edge=distance(c,d);
+        return Math.abs(distance(c,a)+distance(a,d)-edge)<1e-7&&Math.abs(distance(c,b)+distance(b,d)-edge)<1e-7;
+      });
+      must(length>0&&valid,'道路路线包含无效路段。');meters+=length;
+    }
+    must(G.roadAnchors(points[0]).length&&Math.abs(meters-raw.meters)<1e-6,'道路路线里程无效。');
+    return {from:raw.from&&G.place(raw.from)?raw.from:null,to:target,points,meters};
+  };
   G.movementRates = (s,transport=s.transport) => {
     const bike=transport==='bike';
     let speed=bike?22+4*s.vehicle.levels.speed:(4.5+s.player.agility*.08)*(1+G.techniqueBonuses(s).walk);
@@ -162,11 +213,14 @@
       wear:bike?.0006/(1+s.vehicle.levels.durability*.3):0};
   };
   G.travelPlan = (s,target,transport=s.transport) => {
-    const r=G.routeFrom(s,target),rates=G.movementRates(s,transport),km=r.meters/1000;
+    let r;const rates=G.movementRates(s,transport);
+    try{r=G.routeFrom(s,target);}catch(error){if(!(error instanceof RuleError))throw error;return {to:target,points:[],meters:Infinity,km:Infinity,minutes:Infinity,battery:Infinity,stamina:Infinity,wear:Infinity,transport,blocked:error.message};}
+    const km=r.meters/1000;
     return {...r,transport,speed:rates.speed,km,minutes:r.meters/rates.metersPerMinute,
       battery:r.meters*rates.battery,stamina:r.meters*rates.stamina,wear:r.meters*rates.wear};
   };
   G.travelBlock = (s,p) => {
+    if(p.blocked)return p.blocked;
     if(p.meters>EPS&&p.transport==='bike'&&s.vehicle.battery<=EPS)return '电动车没电了，请切换步行，或在当前位置充电。';
     if(p.meters>EPS&&p.transport==='bike'&&s.vehicle.durability<=EPS)return '车况为零，无法骑行。请步行到修车铺维修。';
     if(s.vehicle.battery+EPS<p.battery)return `电量不足：需要 ${p.battery.toFixed(1)}，当前 ${s.vehicle.battery.toFixed(1)}。可切换步行。`;
@@ -482,8 +536,15 @@
     // Replace unaccepted permanent-place offers at the boundary, never relocate accepted tickets.
     s.orders=s.orders.filter(o=>o.expiresAt>s.minutes+EPS&&o.id!==s.activeOrder?.id&&(!awakening||!G.place(o.target)?.permanent));
     const used=new Set([...s.orders.map(o=>o.target),s.activeOrder?.target]);
-    const pool=G.PLACES.filter(p=>p.id!==s.position&&!used.has(p.id)&&(!awakening||!p.permanent));
-    const distances=new Map(pool.map(p=>[p.id,G.routeFrom(s,p.id).meters]));
+    const origin=G.playerPoint(s),radius=10000;
+    const candidates=G.PLACES.filter(p=>G.regionPlaceOpen(s,p.id)&&p.id!==s.position&&!used.has(p.id)&&(!awakening||!p.permanent));
+    const nearby=candidates.filter(p=>distance(origin,p)<=radius);
+    const pool=nearby.length?nearby:candidates.sort((a,b)=>distance(origin,a)-distance(origin,b)).slice(0,8);
+    const distances=new Map(pool.map(p=>[p.id,G.routeMeters(origin,p.id,G.chapterNumber(s))]));
+    for(let i=pool.length-1;i>=0;i--)if(!Number.isFinite(distances.get(pool[i].id)))pool.splice(i,1);
+    // Limit new regional offers by actual road distance, including detours.
+    const local=pool.filter(p=>Number.isFinite(distances.get(p.id))&&distances.get(p.id)<=radius);
+    if(local.length)pool.splice(0,pool.length,...local);
     pool.sort((a,b)=>distances.get(a.id)-distances.get(b.id));
     const count=G.isNight(s)?4:6;
     while(s.orders.length<count&&pool.length){

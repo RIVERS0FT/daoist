@@ -17,7 +17,10 @@ test('年龄为固定人物配置，新建和当前档恢复不重抽年龄或�
 });
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -220,8 +223,8 @@ test('全部九位可攻略女性年龄限定18至27岁，补齐原三位女性�
     assert.equal(n.age,age);assert.ok(Number.isInteger(n.age)&&n.age>=18&&n.age<=27);
     assert.equal(n.gender,'female');assert.equal(n.romantic,true);
   }
-  assert.equal(G.APP_VERSION,'1.20.1');assert.equal(G.VERSION,23);
-  assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
+  assert.equal(G.APP_VERSION,'1.21.0');assert.equal(G.VERSION,24);
+  assert.equal(G.STORAGE_KEY,'night-courier:saves:v24');
 });
 
 test('罗映秋现为活动策划师，简介、个人故事和配送初遇职业一致',()=>{

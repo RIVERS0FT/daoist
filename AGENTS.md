@@ -37,6 +37,8 @@
 
 ## 验证与交付
 
-执行 `npm run check && npm test && npm run build`，界面改动还需 `python tests/browser-smoke.py`（开发依赖：Playwright、Chromium）。新规则同时新增边界测试，更新架构、项目记忆与测试记录。只修改 `public` 源码，不只改 `dist`。
+日常小改只执行与改动相关的源码检查、专项测试及必要的浏览器验证，不默认运行完整测试。完整验证留到推送前：执行 `npm run check && npm test && npm run build`，界面改动还需完整运行 `python tests/browser-smoke.py`（开发依赖：Playwright、Chromium）。新规则同时新增边界测试，更新架构、项目记忆与测试记录。只修改 `public` 源码，不只改 `dist`。
+
+涉及帧循环、地图、UI 更新或性能时，运行 `python tests/browser-performance.py` 专项；推送前针对 `dist` 再验证。必须检查整帧 P95 / P99 / 最大值和超预算比例，以及全部源码模块的采样耗时、浏览器布局/绘制/合成/栅格/GPU 服务线程开销，不能只凭某个函数同步耗时或平均 FPS 判断流畅。零采样不代表模块零开销，多线程时间不能直接相加当作帧长。
 
 按用户要求在功能分支提交，检查 CI 后 squash merge，并验证 RIVERSOFT 工作流及公网内容校验是否成功。仓库不再使用 GitHub Pages 部署。区分本机测试、模拟 AI、浏览器视口与真实线上部署；未完成的验证如实说明。不要提交 `.env`、API 密钥、用户存档或临时产物。

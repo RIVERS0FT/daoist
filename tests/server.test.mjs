@@ -8,6 +8,16 @@ const context={name:'云行',realm:'凡人',day:1,time:'08:00',kind:'delivery',l
 async function withApp(t,options={}){const app=createApp({port:0,host:'127.0.0.1',...options});await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${app.server.address().port}`;t.after(()=>new Promise(resolve=>{app.server.close(resolve);app.server.closeAllConnections();}));return {url,...app};}
 const configured={aiUrl:'https://example.invalid/chat/completions',aiKey:'private-test-key',aiModel:'test-model',fetchImpl:async()=>upstream()};
 const post=(url,body={context},headers={})=>fetch(`${url}/api/story`,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+
+test('AI 章节和区域材料由可信配置重建，客户端不能覆盖大纲或请求锁定区',async t=>{
+ let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(_,options)=>{sent=JSON.parse(options.body);return upstream();}});
+ assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'bound',chapter:{facts:['FORGED_CHAPTER']}}})).status,200);
+ const cleaned=JSON.parse(sent.messages[1].content);assert.equal(cleaned.chapter.id,'bound');assert.equal(cleaned.chapter.area,'长乐西坊');
+ assert.match(sent.messages[0].content,/章节约束/);assert.ok(cleaned.chapter.withheld.length);assert.doesNotMatch(JSON.stringify(sent),/FORGED_CHAPTER/);
+ assert.equal((await post(url,{context:{...context,chapterId:'truth',regionId:'truth',systemUnlocked:false}})).status,400);
+ assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'truth'}})).status,400);
+ assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'__proto__'}})).status,400);
+});
 test('HTTP 启动页和静态模块可访问，MIME 与 CSP 正确',async t=>{const {url}=await withApp(t);const r=await fetch(url);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await r.text(),/外卖修仙录/);for(const name of ['engine','clock','progression']){const js=await fetch(`${url}/js/${name}.js`);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);}});
 test('健康检查不返回密钥，未配置 AI 不伪造成功',async t=>{const {url}=await withApp(t);const r=await fetch(`${url}/api/health`);const data=await r.json();assert.equal(data.aiConfigured,false);assert.equal((await post(url)).status,503);assert.equal(JSON.stringify(data).includes('AI_API_KEY'),false);});
 test('固定静态文件白名单阻止读取环境文件与服务端源码',async t=>{const {url}=await withApp(t);for(const path of ['/.env','/server.mjs','/package.json','/docs/README.md','/%2e%2e/.env','/js/../../server.mjs'])assert.equal((await fetch(url+path)).status,404);});

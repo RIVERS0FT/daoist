@@ -15,7 +15,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -43,11 +43,27 @@ jobs:
 
       - name: Install browser test runtime
         run: |
-          python -m pip install playwright
+          python -m pip install playwright pillow
           python -m playwright install --with-deps chromium
 
       - name: Run Chromium interaction checks
-        run: python tests/browser-smoke.py
+        run: |
+          python tests/browser-smoke.py
+          python tests/browser-map-seams.py --root dist
+          python tests/browser-chapter-regions.py --root dist
+
+      - name: Check frame budgets and module attribution
+        run: |
+          python tests/test_frame_metrics.py
+          python tests/browser-performance.py --root dist
+
+      - name: Archive frame reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frame-performance
+          retention-days: 3
+          path: artifacts/performance/
 
       - name: Check the deployment bundle
         run: node tools/riversoft.mjs check ./dist

@@ -4,7 +4,11 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, extname } from 'node:path';
 import './public/js/city-data.js';
+import './public/js/city-region-data.js';
+import './public/vendor/fflate/fflate.js';
+import './public/js/city-routes.js';
 import './public/js/data.js';
+import './public/js/chapters.js';
 import './public/js/sects.js';
 import './public/js/npc-profiles.js';
 import './public/js/engine.js';
@@ -15,7 +19,9 @@ const ROOT=dirname(fileURLToPath(import.meta.url));
 const PUBLIC=join(ROOT,'public');
 const FILES=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],
-  ...['city-data','data','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map-art','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`]),
+  ...['city-data','city-region-data','city-routes','data','chapters','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map-art','map-region','map-tiles','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`]),
+  ...['fflate.js','LICENSE.txt','README.txt'].map(x=>[`/vendor/fflate/${x}`,`vendor/fflate/${x}`]),
+  ...Object.values(G.CITY_REGION.levels).flatMap(level=>Object.values(level.files)).map(file=>[`/map/region/${file}`,`map/region/${file}`]),
   ...['leaflet.js','leaflet.css','LICENSE.txt','README.txt','images/layers.png','images/layers-2x.png','images/marker-icon.png','images/marker-icon-2x.png','images/marker-shadow.png'].map(x=>[`/vendor/leaflet/${x}`,`vendor/leaflet/${x}`])
 ]);
 class HttpError extends Error{constructor(status,message){super(message);this.status=status;}}
@@ -35,7 +41,11 @@ function cleanContext(context){
   // Static profiles are rebuilt on the server, never accepted from context/profile/prompt.
   if(hasId)check(context.kind==='social'&&context.relationship?.met===true,400,'人物日常需要已结识的社交上下文。');
   const dialogue=hasId?G.npcDialogueContext(id,context.relationship):null;
+  const chapterId=context.systemUnlocked===true?(context.chapterId||'bound'):'mortal';
+  check(G.CHAPTER_OUTLINES.some(c=>c.id===chapterId),400,'章节标识无效。');
+  if(context.regionId!==undefined)check(!!G.mapRegion(context.regionId)&&G.mapRegion(context.regionId).chapter<=G.CHAPTER_OUTLINES.find(c=>c.id===chapterId).number,400,'区域尚未开放。');
   return {
+    chapter:G.chapterBrief(chapterId,context.regionId),
     ...(dialogue||{}),systemUnlocked:context.systemUnlocked===true,name:text(context.name,40),realm:text(context.realm,20),day:Number.isFinite(context.day)?Math.max(1,Math.min(99999,Math.floor(context.day))):1,
     time:text(context.time,10),weather:text(context.weather,20),location:text(context.location,40),kind:context.kind,
     title:text(context.title,80),text:text(context.text,600),npc:dialogue?.npc||text(context.npc,40),
@@ -91,7 +101,8 @@ export function createApp(options={}){
         check(inflight<2,429,'已有剧情正在生成。');
         const data=await readJSON(req);const context=cleanContext(data.context);inflight++;
         try{
-          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:context.npcId?`${SYSTEM_PROMPT}\n\n${G.npcRoleplayPrompt(context.npcId,context.relationship)}`:SYSTEM_PROMPT},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
+          const chapterPrompt=`${SYSTEM_PROMPT}\n\n以下章节约束由服务端固定配置提供，必须遵守事实范围与禁透范围；仅生成区域内的日常事件，不代替固定主线：${JSON.stringify(context.chapter)}`;
+          const upstream=await config.fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${config.aiKey}`},body:JSON.stringify({model:config.aiModel,messages:[{role:'system',content:context.npcId?`${chapterPrompt}\n\n${G.npcRoleplayPrompt(context.npcId,context.relationship)}`:chapterPrompt},{role:'user',content:JSON.stringify(context)}],temperature:.8,max_tokens:900,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(15000),redirect:'error'});
           check(upstream.ok,502,`AI 服务暂不可用（HTTP ${upstream.status}），本次使用经典剧情。`);
           const rawText=await boundedText(upstream);let raw,content,event;
           try{raw=JSON.parse(rawText);content=raw.choices?.[0]?.message?.content;check(typeof content==='string',502,'AI 没有返回可用的事件。');event=G.validateAIEvent(JSON.parse(content.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'')));}
@@ -104,7 +115,7 @@ export function createApp(options={}){
       check(req.method==='GET'||req.method==='HEAD',405,'不支持此方法。');
       const file=FILES.get(path);check(file,404,'页面不存在。');
       const content=await readFile(join(PUBLIC,file));
-      const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.png':'image/png','.txt':'text/plain; charset=utf-8'};
+      const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.txt':'text/plain; charset=utf-8'};
       res.writeHead(200,{'Content-Type':mime[extname(file)],'Content-Length':content.length});
       res.end(req.method==='HEAD'?undefined:content);
     }catch(error){

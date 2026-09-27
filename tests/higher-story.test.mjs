@@ -19,7 +19,10 @@ test('当前存档缺失新键显式补false，不发奖、不抽随机数、不
 });
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -44,7 +47,7 @@ function veteran(index=0,mode='classic'){
   const chapter=chapters[index],s=G.newGame('故城行者',mode,87651);
   s.player.realm=chapter.realm;s.stats.delivered=chapter.deliveries;s.flags.firstOrder=true;s.flags.systemAwakened=true;
   s.player.money=5000;s.player.qi=100;s.player.mana=G.limits(s).mana;s.player.stamina=G.limits(s).stamina;
-  s.unlockedFeatures=['system','cultivation','practice'];s.claimed=['q1'];
+  s.unlockedFeatures=['system','cultivation','practice'];s.claimed=['q1'];s.bonds.lin.met=true;s.bonds.chen.met=true;
   for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'))s.flags[e.flag]=true;
   for(const c of chapters.slice(0,index))for(const id of c.events)s.flags[G.EVENTS.find(e=>e.id===id).flag]=true;
   return read(s);
@@ -59,7 +62,7 @@ const invalid=(s,action,p)=>{const before=G.clone(s),r=G.perform(s,action,p);ass
 const ai={title:'不应替换的内容',text:'这是模拟AI文本。',choices:[0,1,2].map(i=>({label:`选择${i}`,result:'虚构的变化',effects:{qi:20}}))};
 
 test('十二章保留原ID顺序，新增五境十场与三十个不同回应，全部有无成本选项',()=>{
-  assert.equal(G.APP_VERSION,'1.20.1');assert.equal(G.VERSION,23);assert.equal(G.STORY_STAGES.length,12);
+  assert.equal(G.APP_VERSION,'1.21.0');assert.equal(G.VERSION,24);assert.equal(G.STORY_STAGES.length,12);
   assert.deepEqual(G.STORY_STAGES.slice(7).map(c=>[c.id,c.realm,c.deliveries]),[
     ['divine',5,54],['void',6,68],['unity',7,84],['mahayana',8,102],['tribulation',9,122]]);
   assert.equal(events.length,10);assert.equal(new Set(events.map(e=>e.id)).size,10);

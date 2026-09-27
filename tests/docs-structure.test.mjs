@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
@@ -44,7 +47,7 @@ test('版本历史只集中在VERSIONS，未来版本模板固定为新增修复
 test('当前玩法设计与可信配置的核心规模保持同步',()=>{
   assert.ok(design.includes(`当前应用版本：**${G.APP_VERSION}**`));
   assert.ok(design.includes(`当前 schema：**v${G.VERSION}**`));
-  assert.ok(design.includes(`110 个地点`));
+  assert.ok(design.includes(`${G.PLACES.length} 个地点`));
   assert.ok(design.includes(`当前共有 ${G.NPCS.length} 位具名羁绊 NPC`));
   assert.ok(design.includes(`当前固定主线共十二章`));
   assert.equal(G.STORY_STAGES.length,12);

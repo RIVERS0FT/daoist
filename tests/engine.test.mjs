@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -11,7 +14,7 @@ import '../public/js/progression.js';
 import {acknowledge} from './helpers/opening.mjs';
 const G=globalThis.NightCourier;
 // 专项回归使用已开启入口的夹具；真实新档功能与地点解锁由 gameplay-unlocks/location-unlocks 专项覆盖。
-const fresh=(mode='classic',seed=987654321)=>Object.assign(G.newGame('云行',mode,seed),{unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.map(p=>p.id)});
+const fresh=(mode='classic',seed=987654321)=>Object.assign(G.newGame('云行',mode,seed),{unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.filter(p=>!p.regional).map(p=>p.id)});
 // Legacy gameplay scenarios now wait through the real simulation; no instant
 // settlement entry point exists in production or tests.
 const complete=s=>{for(let i=0;s.activity&&!s.pending&&!s.gameOver&&i<5000;i++)s=G.advance(s,Math.max(1e-7,Math.min(1,G.activityRemaining(s))));assert.ok(!s.activity||s.gameOver,'行动应当完成');return s;};
@@ -25,9 +28,15 @@ class MemoryStorage{data=new Map();getItem(k){return this.data.get(k)??null;}set
 
 test('创建存档：姓名、初始时间和模式固定',()=>{const s=G.newGame('  云行  ','ai',12);assert.equal(s.name,'云行');assert.equal(G.clock(s),'08:00');assert.equal(G.day(s),1);assert.equal(s.mode,'ai');assert.equal(G.perform(s,'setMode',{mode:'classic'}).ok,false);});
 test('拒绝空姓名、超长姓名与无效模式',()=>{for(const name of ['','   ','名'.repeat(17)])assert.throws(()=>G.newGame(name));assert.throws(()=>G.newGame('云行','unknown'));});
-test('地图包含 110 个唯一地点，其中 101 个是动态配送地点、3 个住处常驻',()=>{assert.equal(G.PLACES.length,110);assert.equal(G.PLACES.filter(p=>!p.permanent).length,101);assert.equal(G.RESIDENCES.length,3);assert.ok(G.RESIDENCES.every(h=>G.place(h.place)?.permanent));assert.equal(new Set(G.PLACES.map(p=>p.id)).size,110);});
+test('地图保留原 110 个地点并增加全市配送地址，3 个住处常驻',()=>{const count=110+G.REGION_ROADS.places.length;assert.equal(G.PLACES.length,count);assert.equal(G.PLACES.filter(p=>!p.permanent).length,count-9);assert.equal(G.RESIDENCES.length,3);assert.ok(G.RESIDENCES.every(h=>G.place(h.place)?.permanent));assert.equal(new Set(G.PLACES.map(p=>p.id)).size,count);});
 test('同地点移动距离、时间、体力、电量全为零',()=>{const s=fresh(),p=G.travelPlan(s,'home');for(const k of ['meters','minutes','stamina','battery'])assert.equal(p[k],0);});
-test('所有地点可达且路程对称',()=>{for(const a of G.PLACES)for(const b of G.PLACES){const r=G.route(a.id,b.id);assert.ok(Number.isFinite(r.meters));near(r.meters,G.route(b.id,a.id).meters);assert.deepEqual(r.points[0],{x:a.x,y:a.y});assert.deepEqual(r.points.at(-1),{x:b.x,y:b.y});}});
+test('所有地点可达且跨区域路程对称',()=>{
+  const home=G.place('home');
+  for(const b of G.PLACES){const r=G.route(home.id,b.id);assert.ok(Number.isFinite(r.meters));assert.deepEqual(r.points[0],{x:home.x,y:home.y});assert.deepEqual(r.points.at(-1),{x:b.x,y:b.y});}
+  // Cover every territory without evicting the bounded search cache for all N² pairs.
+  const anchors=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region));
+  for(const a of anchors)for(const b of anchors)near(G.route(a.id,b.id).meters,G.route(b.id,a.id).meters);
+});
 test('江面和地图外坐标不能作为行程起点',()=>{for(const p of [{x:-1,y:100},{x:2720,y:1450}])assert.throws(()=>G.route(p,'home'),/道路/);});
 test('行程分钟由道路距离和速度计算',()=>{const s=fresh(),p=G.travelPlan(s,'temple');near(p.minutes,p.km/p.speed*60);assert.ok(p.meters>0);});
 test('升级速度会缩短同一路段骑行时间',()=>{const s=fresh(),before=G.travelPlan(s,'temple');s.vehicle.levels.speed=5;const after=G.travelPlan(s,'temple');assert.ok(after.minutes<before.minutes);assert.equal(after.meters,before.meters);});
@@ -113,7 +122,13 @@ test('损坏 JSON、超大文件与空包不会被导入',()=>{assert.throws(()=
 test('主动恢复自动备份回到上一次写入前的进度',()=>{const memory=new MemoryStorage(),store=G.createStore(memory);store.load();const s=fresh();store.upsert(s);store.upsert(run(s,'sign'));assert.equal(store.saves[0].player.coins,5);assert.ok(store.restoreBackup().ok);assert.equal(store.saves[0].player.coins,0);});
 test('NPC 每一章节都有资源耗尽时仍可选的路线，避免软锁',()=>{const s=fresh();s.player.money=0;s.player.coins=0;s.player.mana=0;s.player.stamina=0;for(const k of Object.keys(s.inventory))s.inventory[k]=0;for(const n of G.NPCS)for(const arc of n.arc){const choices=arc.slice(2);s.pending={npcId:n.id};assert.ok(choices.some(c=>!G.choiceBlock(s,c)),`${n.name} / ${arc[0]} 会锁死`);}});
 test('存储失败后返回菜单重新 load 不会丢失未写入的内存进度',()=>{const mem=new MemoryStorage(),store=G.createStore(mem);store.load();const s=fresh();store.upsert(s);mem.setItem=()=>{throw Object.assign(new Error('quota'),{name:'QuotaExceededError'});};const newer=run(s,'sign');assert.equal(store.upsert(newer).ok,false);assert.equal(store.load()[0].player.coins,5);});
-test('成长阶段会随配送、境界和人物关系推进',()=>{const s=G.newGame('渐行','classic',987654321);assert.equal(G.storyStage(s).id,'mortal');s.flags.firstOrder=true;assert.equal(G.storyStage(s).id,'mortal');s.stats.delivered=1;assert.equal(G.storyStage(s).id,'mortal');s.unlockedFeatures=['system'];assert.equal(G.storyStage(s).id,'bound');s.stats.delivered=8;s.player.realm=1;assert.equal(G.storyStage(s).id,'second-city');s.bonds.chen.met=true;s.bonds.lin.met=true;assert.equal(G.storyStage(s).id,'circle');s.stats.delivered=18;s.player.realm=2;assert.equal(G.storyStage(s).id,'guardian');});
+test('成长阶段随配送、境界、已结算剧情和人物关系连续推进',()=>{
+  const s=G.newGame('渐行','classic',987654321);assert.equal(G.storyStage(s).id,'mortal');s.flags.firstOrder=true;s.stats.delivered=1;assert.equal(G.storyStage(s).id,'mortal');
+  s.flags.systemAwakened=true;s.stats.delivered=10;assert.equal(G.storyStage(s).id,'bound');
+  s.stats.delivered=12;s.player.realm=1;assert.equal(G.storyStage(s).id,'bound');s.flags.storyStreetVein=true;assert.equal(G.storyStage(s).id,'second-city');
+  s.bonds.chen.met=true;s.bonds.lin.met=true;assert.equal(G.storyStage(s).id,'second-city');s.flags.storySecondCity=true;assert.equal(G.storyStage(s).id,'circle');
+  s.stats.delivered=18;s.player.realm=2;assert.equal(G.storyStage(s).id,'guardian');
+});
 test('达到阈值后自动进入固定主线事件，AI 存档也不覆盖关键剧情',()=>{let s=fresh('ai');s.flags.firstOrder=true;s.stats.delivered=3;s=run(s,'rest');assert.equal(s.pending.templateId,'story-street-vein');assert.equal(s.pending.source,'classic');assert.equal(s.pending.aiStatus,'skip');assert.equal(s.flags.storyStreetVein,true);});
 test('主线标记和待选关键事件跨读档保留',()=>{let s=fresh();s.flags.firstOrder=true;s.stats.delivered=3;s=run(s,'rest');const restored=G.sanitizeSave(JSON.parse(JSON.stringify(s)));assert.equal(restored.flags.storyStreetVein,true);assert.equal(restored.pending.templateId,'story-street-vein');const done=run(restored,'choose',{eventId:restored.pending.id,index:0});assert.equal(done.pending,null);});
 test('系统高级兑换需要境界，失败不扣外卖币',()=>{let s=rich();const before=s.player.coins,r=G.perform(s,'buy',{id:'foundation'});assert.equal(r.ok,false);assert.equal(r.state.player.coins,before);s.player.realm=1;s=run(s,'buy',{id:'foundation'});assert.equal(s.inventory.foundation,1);});

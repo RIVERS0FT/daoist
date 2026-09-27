@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {dirname,join} from 'node:path';
 import '../public/js/city-data.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/npc-profiles.js';
 const G=globalThis.NightCourier,root=dirname(dirname(fileURLToPath(import.meta.url)));
 const catalog={version:G.APP_VERSION,source:'public/js/data.js + public/js/npc-profiles.js',

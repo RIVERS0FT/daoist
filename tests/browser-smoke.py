@@ -8,6 +8,7 @@ requestAnimationFrame. HTTP allowlist/CSP/AI proxy have independent Node tests.
 """
 import json
 import os
+import sys
 import mimetypes
 from urllib.parse import urlparse, unquote
 from pathlib import Path
@@ -22,7 +23,9 @@ window.__storyRequests = [];
 window.__aiConfigured = false; window.__aiDelay = 0; window.__aiFail = false;
 window.__aiEvent = {title:'雨后的小灯',text:'巷口的店主在等一份热饭。',choices:[{label:'认真道谢',result:'店主也笑了。',effects:{qi:5}},{label:'请他喝一杯茶',result:'热茶驱散了寒意。',effects:{money:-5,karma:2}},{label:'留下祝福',result:'灯光亮了一点。',effects:{rep:1}}]};
 Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>window.__memory.get(k)??null,setItem:(k,v)=>window.__memory.set(k,String(v)),removeItem:k=>window.__memory.delete(k),clear:()=>window.__memory.clear()}});
+window.__nativeFetch=window.fetch.bind(window);
 window.fetch = async (url,options={}) => {
+ if(new URL(String(url),location.href).pathname.includes('/map/region/')) return window.__nativeFetch(url,options);
  if(String(url).endsWith('/api/health')) return new Response(JSON.stringify({aiConfigured:window.__aiConfigured}));
  if(String(url).endsWith('/api/story')){
   window.__storyRequests.push(JSON.parse(options.body));
@@ -173,7 +176,7 @@ def fixture(page, edits, unlock_gameplay=True):
     ack_result_ui(page)
     if unlock_gameplay:
         edits['unlockedFeatures'] = page.evaluate('NightCourier.FEATURE_UNLOCKS.map(f=>f.id)')
-        edits['unlockedPlaces'] = page.evaluate('NightCourier.PLACES.map(p=>p.id)')
+        edits['unlockedPlaces'] = page.evaluate('NightCourier.PLACES.filter(p=>!p.regional).map(p=>p.id)')
     if page.locator('#panel[open] [data-ui="close"]').count():
         page.click('#panel [data-ui="close"]')
     page.click('[data-ui="home"]')
@@ -1309,6 +1312,7 @@ def higher_story_browser_checks(browser):
               s.player.realm=chapter.realm;s.player.realmLevel=1;s.stats.delivered=chapter.deliveries;
               s.player.money=5000;s.player.mana=G.limits(s).mana;s.player.stamina=G.limits(s).stamina;
               s.flags.firstOrder=true;s.flags.systemAwakened=true;
+              s.bonds.lin.met=true;s.bonds.chen.met=true;
               s.unlockedFeatures=['system','cultivation','practice'];s.claimed=['q1'];
               for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'))s.flags[e.flag]=true;
               for(const c of G.HIGHER_STORY_CHAPTERS.slice(0,i))for(const id of c.events)s.flags[G.EVENTS.find(e=>e.id===id).flag]=true;
@@ -1488,7 +1492,7 @@ def delivery_npc_browser_checks(browser):
                 assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             record(f'{width}px {data["npc"]["name"]}：信任门槛、友情选择和明确表白均由真实UI结算')
         all_met = page.evaluate('''()=>{const G=NightCourier,s=G.newGame('沿途故人',window.__live.mode,4546);
-          s.id=window.__live.id;s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.map(p=>p.id);
+          s.id=window.__live.id;s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);
           for(const b of Object.values(s.bonds))b.met=true;return s;}''')
         fixture(page, all_met, unlock_gameplay=False)
         page.locator('#game-nav [data-panel="bonds"]').click()
@@ -1583,7 +1587,7 @@ def npc_career_browser_checks(browser):
         assert current(page) == before
         assert all(not b['met'] for b in before['bonds'].values())
         state = page.evaluate('''()=>{const G=NightCourier,s=G.newGame('职业回归',window.__live.mode,789);
-          s.id=window.__live.id;s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.map(p=>p.id);
+          s.id=window.__live.id;s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);
           for(const b of Object.values(s.bonds))Object.assign(b,{met:true,affinity:60,trust:20});
           return s;}''')
         fixture(page, state, unlock_gameplay=False)
@@ -1663,7 +1667,7 @@ def male_npc_browser_checks(browser):
           s.schemaVersion=19;for(const id of G.NEW_MALE_NPC_IDS)delete s.bonds[id];return s;}''')
         assert page.evaluate('''s=>{try{NightCourier.sanitizeSave(s);return false;}catch(e){return e.message.includes('不支持此存档版本');}}''', legacy)
         fixture(page, current(page), unlock_gameplay=False)
-        assert current(page)['schemaVersion'] == 23
+        assert current(page)['schemaVersion'] == 24
         assert len(current(page)['bonds']) == 21
         assert all(not b['met'] for b in current(page)['bonds'].values())
         assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
@@ -1742,7 +1746,7 @@ def male_npc_browser_checks(browser):
             assert page.evaluate('window.__storyRequests.length') == 0
             record(f'{width}px {mode} {data["npc"]["name"]}实际异地初遇、第三段耗时、友情选择与年龄职业显示通过')
         all_met = page.evaluate('''()=>{const G=NightCourier,s=G.newGame('男性扩员',window.__live.mode,31);s.id=window.__live.id;
-          s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.map(p=>p.id);for(const b of Object.values(s.bonds))b.met=true;return s;}''')
+          s.unlockedFeatures=['bonds'];s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);for(const b of Object.values(s.bonds))b.met=true;return s;}''')
         fixture(page, all_met, unlock_gameplay=False)
         page.locator('#game-nav [data-panel="bonds"]').click()
         assert page.locator('.npc-card').count() == 21
@@ -1916,6 +1920,54 @@ def five_sects_browser_checks(browser):
             record(f'{width}px {sect_id} 地点引荐、五宗选择、入宗执事、剧情中途读档、专属功法和十组关系可用且无AI请求')
             ctx.close()
 
+def player_anchor_snapshot(page):
+    # Inspect rendered geometry, not only the stored transform: SVG animation
+    # origins and overlay rounding can move the visible marker independently.
+    snapshot = page.evaluate('''()=>{
+      const m=window.__map,p=NightCourier.playerPoint(window.__live),bounds=m.el.getBoundingClientRect();
+      const projected=m.map.latLngToContainerPoint([-p.y,p.x]);
+      const center=selector=>{const b=m.el.querySelector(selector).getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2,width:b.width};};
+      const pulse=m.el.querySelector('.player-pulse');
+      for(const animation of pulse.getAnimations()){animation.pause();animation.currentTime=1500;}
+      return {expected:{x:bounds.left+m.el.clientLeft+projected.x,y:bounds.top+m.el.clientTop+projected.y},
+        ground:center('.player-ground'),core:center('.player-core'),pulse:center('.player-pulse'),hit:center('.point-hit')};
+    }''')
+    for axis in ['x', 'y']:
+        assert abs(snapshot['ground'][axis]-snapshot['expected'][axis]) <= 1, snapshot
+        assert abs(snapshot['pulse'][axis]-snapshot['core'][axis]) <= .1, snapshot
+    assert abs(snapshot['core']['x']-snapshot['ground']['x']) <= .1, snapshot
+    assert 0 <= snapshot['ground']['y']-snapshot['core']['y'] <= 64, snapshot
+    assert abs(snapshot['hit']['width']-48) <= .3, snapshot
+    assert abs(snapshot['core']['width']-30) <= .3, snapshot
+    return snapshot
+
+
+def tile_paint_checks(page):
+    page.wait_for_function('!window.__map.baseOverlay.isLoading()')
+    def pixels():
+        return page.evaluate('''()=>{
+          const G=NightCourier,b=window.__map.baseOverlay,z=b._tileZoom,scale=2**z,size=b.getTileSize().x;
+          const pixels=[];
+          for(const edge of G.ROAD_EDGES){
+            const a=G.ROAD_NODES[edge.from],c=G.ROAD_NODES[edge.to],x=(a.x+c.x)/2,y=(a.y+c.y)/2;
+            const tx=Math.floor(x*scale/size),ty=Math.floor(y*scale/size),tile=b._tiles[`${tx}:${ty}:${z}`]?.el;
+            if(!tile?.painted)continue;
+            const pad=b.tilePadding,dpr=tile.width/(size+2*pad),px=Math.floor((x*scale-tx*size+pad)*dpr),py=Math.floor((y*scale-ty*size+pad)*dpr);
+            pixels.push([...tile.getContext('2d').getImageData(px,py,1,1).data]);if(pixels.length===100)break;
+          }
+          return pixels;
+        }''')
+    day=pixels()
+    assert len(day)>=20 and sum(p[0]>230 and p[1]>230 and p[3]==255 for p in day)>len(day)*.6, (len(day),day[:8])
+    page.evaluate('window.__map.updateNight({...window.__map.s,minutes:1200})')
+    page.wait_for_function('!window.__map.baseOverlay.isLoading()')
+    night=pixels()
+    assert len(night)>=20 and sum(p[0]<160 and p[1]<180 and p[3]==255 for p in night)>len(night)*.6, (len(night),night[:8])
+    page.evaluate('window.__map.updateNight(window.__map.s)')
+    page.wait_for_function('!window.__map.baseOverlay.isLoading()')
+    assert page.evaluate('window.__map.baseOverlay.cacheBytes <= 48*1024*1024')
+
+
 def leaflet_browser_checks(browser):
     for width, height in [(1440,1000),(375,812),(320,740),(812,375)]:
         ctx, page, errors = setup(browser,width,height)
@@ -1924,12 +1976,22 @@ def leaflet_browser_checks(browser):
         assert page.evaluate('window.__map.map instanceof L.Map && L.version === "1.9.4" && window.__map.map.options.crs === L.CRS.Simple')
         assert page.evaluate("performance.getEntriesByType('resource').every(r=>r.name.startsWith('https://daoist.test/daoist/'))")
         page.evaluate('window.__base=document.querySelector(".base-layer");window.__map.fit()')
-        page.wait_for_timeout(100)
+        page.wait_for_function('!window.__map.baseOverlay.isLoading()')
         assert page.evaluate('''()=>{const G=NightCourier,m=window.__map;return G.PLACES.every(q=>{const at=m.map.latLngToContainerPoint([-q.y,q.x]),back=m.map.containerPointToLatLng(at);return Math.abs(back.lng-q.x)*m.scale<=.51&&Math.abs(back.lat+q.y)*m.scale<=.51;});}''')
+        player_anchor_snapshot(page)
+        assert page.evaluate('window.__map.baseOverlay instanceof L.GridLayer')
+        assert page.locator('.city-base-svg').evaluate('(e)=>getComputedStyle(e).display') == 'none'
+        assert page.evaluate('''()=>{const tiles=[...document.querySelectorAll('.leaflet-tile-container canvas')];return tiles.length>0&&tiles.every(t=>t.width>0&&t.width<=1024&&t.height<=1024);}''')
         ruler = page.evaluate('''()=>{const el=document.querySelector('.map-scale'),text=el.querySelector('.scale-distance').textContent;return {pixels:parseFloat(getComputedStyle(el).getPropertyValue('--scale-width')),meters:parseFloat(text)*(text.includes('千米')?1000:1),scale:window.__map.scale,local:1,unit:NightCourier.WORLD.metersPerUnit};}''')
         assert abs(ruler['pixels']/ruler['scale']/ruler['local']*ruler['unit']-ruler['meters']) < 1e-6
         page.screenshot(path=str(OUT/f'leaflet-overview-{width}.png'))
-        page.evaluate('window.__map.center();window.__map.zoom(1.2)')
+        page.evaluate('window.__map.center()')
+        marker_before = player_anchor_snapshot(page)
+        for multiplier in [1.2, 1.2, 1/1.2]:
+            page.evaluate('(multiplier)=>window.__map.zoom(multiplier)', multiplier)
+            marker_after = player_anchor_snapshot(page)
+            for part in ['ground', 'core', 'hit']:
+                assert abs(marker_after[part]['width']-marker_before[part]['width']) <= .3
         assert page.locator('.point-hit').first.bounding_box()['width'] >= 47
         assert page.evaluate('window.__base===document.querySelector(".base-layer")')
         assert current(page)==before
@@ -1946,24 +2008,102 @@ def leaflet_browser_checks(browser):
         page.click('[data-ui="close"]')
         box=target.bounding_box()
         x,y=box['x']+box['width']/2,box['y']+box['height']/2
+        # A pan should move Leaflet's pane without touching thousands of static
+        # shapes or repeatedly re-running label collision/layout calculations.
+        page.evaluate('''async()=>{
+          await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          const m=window.__map,oldLayout=m.layoutLabels;
+          const counts={layouts:0,base:0,labels:0,view:0,moves:0};
+          m.layoutLabels=function(...args){counts.layouts++;return oldLayout.apply(this,args);};
+          const observers=[];
+          const observe=(node,key,options)=>{const observer=new MutationObserver(records=>counts[key]+=records.length);observer.observe(node,options);observers.push({observer,key});};
+          observe(m.el.querySelector('.base-layer'),'base',{attributes:true,childList:true,characterData:true,subtree:true});
+          // Leaflet legitimately adds leaflet-drag-target to the grabbed glyph.
+          // Watch screen scaling and labels, not unrelated input-state classes.
+          for(const node of m.el.querySelectorAll('.point-screen'))observe(node,'labels',{attributes:true,attributeFilter:['transform']});
+          for(const node of m.el.querySelectorAll('.point-label'))observe(node,'labels',{attributes:true,childList:true,characterData:true,subtree:true});
+          observe(m.el,'view',{attributes:true,attributeFilter:['style','data-zoom','data-detail']});
+          const moved=()=>counts.moves++;m.map.on('move',moved);
+          window.__panProbe={read:()=>{for(const {observer,key} of observers)counts[key]+=observer.takeRecords().length;return {...counts};},
+            stop:()=>{for(const {observer} of observers)observer.disconnect();m.layoutLabels=oldLayout;m.map.off('move',moved);}};
+        }''')
         if width<600:
             cdp=ctx.new_cdp_session(page)
             cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
-            cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x+65,'y':y+8}]})
+            for offset in [20,35,50,65]:
+                cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x+offset,'y':y+8}]})
+        else:
+            page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+65,y+8,steps=8)
+        page.wait_for_timeout(60)
+        pan_counts=page.evaluate('window.__panProbe.read()')
+        assert pan_counts['moves'] >= 2, pan_counts
+        assert pan_counts['layouts'] == 0 and pan_counts['labels'] == 0, pan_counts
+        assert pan_counts['base'] == 0 and pan_counts['view'] == 0, pan_counts
+        player_anchor_snapshot(page)
+        if width<600:
             cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
         else:
-            page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+65,y+8,steps=8);page.mouse.up()
+            page.mouse.up()
+        page.evaluate('window.__map.map.stop()')
+        page.wait_for_timeout(60)
+        settled_counts=page.evaluate('window.__panProbe.read()')
+        assert settled_counts['base'] == 0 and settled_counts['view'] == 0, settled_counts
+        page.evaluate('window.__panProbe.stop()')
         assert not page.locator('#panel[open]').count(), 'Dragging a marker must not select it'
         page.locator('#city-map').focus()
         page.keyboard.press('ArrowRight')
+        player_anchor_snapshot(page)
+        if width in [1440, 375]:
+            # Exercise Leaflet's native wheel/pinch handlers as well as the
+            # application zoom buttons: they use different event sequences.
+            input_before=current(page)
+            marker_before=player_anchor_snapshot(page)
+            scale_before=page.evaluate('window.__map.scale')
+            viewport=page.locator('#city-map').bounding_box()
+            cx,cy=viewport['x']+viewport['width']/2,viewport['y']+viewport['height']/2
+            if width==1440:
+                page.mouse.move(cx,cy)
+                page.mouse.wheel(0,-240)
+            else:
+                cdp=ctx.new_cdp_session(page)
+                def pinch_points(radius):
+                    return [{'id':1,'x':cx-radius,'y':cy},{'id':2,'x':cx+radius,'y':cy}]
+                cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':pinch_points(40)})
+                for radius in [50,60,70]:
+                    cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':pinch_points(radius)})
+                cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+            page.wait_for_function('(scale)=>window.__map.scale>scale',arg=scale_before)
+            marker_after=player_anchor_snapshot(page)
+            for part in ['ground','core','hit']:
+                assert abs(marker_after[part]['width']-marker_before[part]['width']) <= .3
+            assert current(page)==input_before
+            gesture='真实滚轮' if width==1440 else '真实双指'
+            record(f'{width}px {gesture}缩放改变视图，玩家锚点/光晕对齐、图标等大且世界状态不变')
         assert not page.locator('#panel[open]').count()
         assert current(page)['player']==before['player'] and current(page)['minutes']==before['minutes']
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         page.emulate_media(reduced_motion='reduce')
         assert page.locator('.player-pulse').evaluate('(e)=>getComputedStyle(e).animationName')=='none'
+        if width in [1440,375]:
+            page.evaluate('window.__map.center()')
+            tile_paint_checks(page)
+            # Full-city overview and an outer delivery district use real local
+            # compressed resources, while the game state stays at its true point.
+            state=current(page)
+            page.evaluate('window.__map.fit()')
+            page.wait_for_function('!window.__map.baseOverlay.isLoading()',timeout=45000)
+            assert page.evaluate('window.__map.scale<.01 && NightCourier.PLACES.length===485')
+            page.screenshot(path=str(OUT/f'city-region-overview-{width}.png'))
+            page.evaluate('''()=>{const p=NightCourier.PLACES.find(p=>p.regional&&p.x>15000&&p.y>18000);window.__map.map.setView([-p.y,p.x],Math.log2(.7),{animate:false});}''')
+            page.wait_for_function('!window.__map.baseOverlay.isLoading()',timeout=45000)
+            assert page.evaluate('''()=>{const region=window.__map.baseOverlay.region;return region.chunks.size>0&&region.cacheBytes<=32*1024*1024;}''')
+            assert current(page)==state
+            page.screenshot(path=str(OUT/f'city-region-street-{width}.png'))
+            page.evaluate('window.__map.center()')
+            page.wait_for_function('!window.__map.baseOverlay.isLoading()',timeout=45000)
         page.screenshot(path=str(OUT/f'leaflet-map-{width}.png'))
         assert not errors,errors
-        record(f'{width}px Leaflet本地资源、坐标往返、比例尺、点选、缩放不改状态及减少动态效果通过')
+        record(f'{width}px Leaflet本地资源、可视玩家锚点与光晕同心、缩放图标等大、拖动无逐帧标签/底图改写、点选与减少动态效果通过')
         ctx.close()
 
 
@@ -1973,6 +2113,11 @@ with sync_playwright() as p:
     if Path(executable).exists():
         kwargs['executable_path'] = executable
     browser = p.chromium.launch(**kwargs)
+    if '--map-only' in sys.argv:
+        leaflet_browser_checks(browser)
+        browser.close()
+        print(f'{len(results)} map checks passed.')
+        sys.exit(0)
     sandbox_new_game_checks(browser)
     leaflet_browser_checks(browser)
     five_sects_browser_checks(browser)
@@ -2017,13 +2162,15 @@ with sync_playwright() as p:
     page.click('[data-ui="close"]')
     record('新档隐藏进阶导航；已开放夹具显示九重修行，炼药页不泄露未得丹方')
     page.screenshot(path=str(OUT/'game-desktop.png'))
-    assert page.evaluate('NightCourier.PLACES.length') == 110
+    assert page.evaluate('NightCourier.PLACES.length') == 485
     assert page.locator('.map-point').count() <= 15
-    assert page.evaluate("document.querySelector('.base-layer').textContent.includes('月 渡 湾')")
+    assert page.evaluate('window.__map.baseOverlay.region instanceof NightCourier.CityRegion')
+    page.wait_for_function('!window.__map.baseOverlay.isLoading()')
+    assert page.locator('.leaflet-tile-container canvas').count()>0
     page.evaluate('window.__map.fit()')
     page.screenshot(path=str(OUT/'expanded-map-desktop.png'))
     page.evaluate('window.__map.center()')
-    record('110 地点扩展地图已绘制，新配送点保持动态显示')
+    record('485 地点全市地图已绘制，新配送点保持动态显示')
     pump(page, 1200)
     assert abs(current(page)['minutes']-481.2) < 1e-5
     assert current(page)['position'] == 'home'
@@ -2185,7 +2332,7 @@ with sync_playwright() as p:
     ctx, craft, cerrors = setup(browser, 1200, 900)
     new_game(craft, '药童')
     craft.click('[data-ui="home"]')
-    craft.evaluate('''()=>{const k=NightCourier.STORAGE_KEY,x=JSON.parse(localStorage.getItem(k)),s=x.saves[0];s.player.money=10000;s.alchemy.xp=999;s.unlockedFeatures=NightCourier.FEATURE_UNLOCKS.map(f=>f.id);s.unlockedPlaces=NightCourier.PLACES.map(p=>p.id);for(const m of NightCourier.ALCHEMY_MATERIALS)s.inventory[m.id]=10;localStorage.setItem(k,JSON.stringify(x));window.dispatchEvent(new StorageEvent('storage',{key:k}));}''')
+    craft.evaluate('''()=>{const k=NightCourier.STORAGE_KEY,x=JSON.parse(localStorage.getItem(k)),s=x.saves[0];s.player.money=10000;s.alchemy.xp=999;s.unlockedFeatures=NightCourier.FEATURE_UNLOCKS.map(f=>f.id);s.unlockedPlaces=NightCourier.PLACES.filter(p=>!p.regional).map(p=>p.id);for(const m of NightCourier.ALCHEMY_MATERIALS)s.inventory[m.id]=10;localStorage.setItem(k,JSON.stringify(x));window.dispatchEvent(new StorageEvent('storage',{key:k}));}''')
     craft.locator('[data-ui="load"]').first.click()
     assert current(craft)['player']['money'] == 10000
     craft.locator('[data-place="market"]').focus();craft.keyboard.press('Enter')
@@ -2293,12 +2440,13 @@ with sync_playwright() as p:
         pump(mobile, 100)
         mobile.screenshot(path=str(OUT/f'game-{width}.png'))
         mobile.click('[data-ui="fit-map"]')
-        bounds = mobile.locator('.osm-roads').bounding_box()
+        bounds = mobile.locator('.city-svg:not(.city-base-svg)').bounding_box()
         viewport = mobile.locator('#city-map').bounding_box()
         assert bounds['x'] >= viewport['x'] and bounds['x']+bounds['width'] <= viewport['x']+viewport['width']+.5
         assert bounds['y'] >= viewport['y'] and bounds['y']+bounds['height'] <= viewport['y']+viewport['height']+.5
-        assert mobile.locator('.osm-building path').count() > 2500
-        assert mobile.locator('.osm-area-labels text').all_text_contents() == ['听 雨 园','长 乐 里','青 藤 坊','月 渡 湾']
+        mobile.wait_for_function('!window.__map.baseOverlay.isLoading()')
+        assert mobile.locator('.leaflet-tile-container canvas').count()>0
+        assert mobile.evaluate('window.__map.baseOverlay.region.territories.length') == 12
         mobile.screenshot(path=str(OUT/f'map-overview-{width}.png'))
         before_position = current(mobile)['position']
         mobile.click('[data-ui="locate"]')
@@ -2306,7 +2454,7 @@ with sync_playwright() as p:
         record(f'{width}px 全城视图完整容纳新路网，定位及缩放不改变人物位置')
         assert mobile.evaluate('document.documentElement.scrollWidth<=innerWidth')
         mobile.evaluate('window.__map.fit()')
-        assert mobile.evaluate('''()=>{const m=window.__map;return m.tx>=0&&m.ty>=0&&m.tx+NightCourier.WORLD.width*m.scale<=m.el.clientWidth+.5&&m.ty+NightCourier.WORLD.height*m.scale<=m.el.clientHeight+.5;}''')
+        assert mobile.evaluate('''()=>{const m=window.__map,[l,t,r,b]=m.extent,a=m.map.latLngToContainerPoint([-t,l]),c=m.map.latLngToContainerPoint([-b,r]);return a.x>=-.5&&a.y>=-.5&&c.x<=m.el.clientWidth+.5&&c.y<=m.el.clientHeight+.5;}''')
         mobile.screenshot(path=str(OUT/f'expanded-map-{width}.png'))
         mobile.evaluate('window.__map.center()')
         for selector in ['#game-nav', '#action-bar', '.time-controls']:
@@ -2334,10 +2482,11 @@ with sync_playwright() as p:
 
     ctx, expanded, xerrors = setup(browser)
     new_game(expanded, '新城骑手')
-    assert expanded.evaluate('NightCourier.PLACES.length') == 110
-    assert expanded.evaluate('''()=>{const G=NightCourier;return [...document.querySelectorAll('.osm-road')].every(el=>el.getAttribute('d')===G.MapArtwork.edgePath(G.ROAD_EDGES.filter(e=>e.kind===el.dataset.roadKind)));}''')
+    assert expanded.evaluate('NightCourier.PLACES.length') == 485
+    tile_paint_checks(expanded)
     assert expanded.locator('.city-name').inner_text() == '青岚城'
-    assert not any(name in expanded.locator('.base-layer').text_content() for name in ['上海','黄浦江','人民路','中华路','豫园'])
+    names=expanded.evaluate('JSON.stringify([NightCourier.PLACES,NightCourier.MAP_REGIONS.map(r=>r.name)])')
+    assert not any(name in names for name in ['上海','黄浦江','人民路','中华路','豫园'])
     expanded.screenshot(path=str(OUT/'map-overview-1440.png'))
     vehicle = current(expanded)['vehicle']; vehicle['battery'] = 0
     fixture(expanded, {'vehicle': vehicle})

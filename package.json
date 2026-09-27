@@ -1,6 +1,6 @@
 {
   "name": "night-courier-reborn",
-  "version": "1.20.1",
+  "version": "1.21.0",
   "private": true,
   "type": "module",
   "description": "白天送外卖，夜里修仙。根据项目对话记录重新实现的单机 Web RPG。",
@@ -11,8 +11,12 @@
     "dev": "npm start",
     "start": "node --env-file-if-exists=.env server.mjs",
     "test": "node --test tests/*.test.mjs",
+    "test:map": "python tests/browser-smoke.py --map-only",
+    "test:map-seams": "python tests/browser-map-seams.py",
+    "chapters:export": "node scripts/export-chapters.mjs",
+    "test:performance": "python tests/browser-performance.py",
     "build": "node scripts/build.mjs",
-    "check": "node --check server.mjs && node --check public/js/npc-profiles.js && node --check public/js/data.js && node --check public/js/engine.js && node --check public/js/sects.js && node --check public/js/sect-engine.js && node --check public/js/sect-stories.js && node --check public/js/clock.js && node --check public/js/storage.js && node --check public/js/progression.js && node --check public/js/city-data.js && node --check public/js/map-art.js && node --check public/js/map.js && node --check public/js/app.js && node scripts/export-npc-prompts.mjs --check && node scripts/export-sects.mjs --check",
+    "check": "node --check server.mjs && node --check public/js/npc-profiles.js && node --check public/js/data.js && node --check public/js/chapters.js && node --check public/js/engine.js && node --check public/js/sects.js && node --check public/js/sect-engine.js && node --check public/js/sect-stories.js && node --check public/js/clock.js && node --check public/js/storage.js && node --check public/js/progression.js && node --check public/js/city-data.js && node --check public/js/city-routes.js && node --check public/js/city-region-data.js && node --check public/js/map-region.js && node --check public/js/map-art.js && node --check public/js/map-tiles.js && node --check public/js/map.js && node --check public/js/app.js && node scripts/export-npc-prompts.mjs --check && node scripts/export-sects.mjs --check && node scripts/export-chapters.mjs --check",
     "npc:export": "node scripts/export-npc-prompts.mjs",
     "sects:export": "node scripts/export-sects.mjs"
   }

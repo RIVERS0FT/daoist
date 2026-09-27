@@ -25,11 +25,14 @@ test('本机服务可读取 Leaflet 样式、脚本和图片，未知文件保�
     const bytes=Buffer.from(await r.arrayBuffer());assert.deepEqual(bytes,await readFile(new URL(`../public/vendor/leaflet/${file}`,import.meta.url)));
   }
   for(const file of ['.env','../../server.mjs','leaflet.js.map','missing.js'])assert.equal((await fetch(`${url}/vendor/leaflet/${file}`)).status,404);
-  for(const name of ['map-art','city-data']){
+  for(const name of ['map-art','map-tiles','city-data','city-region-data','city-routes','map-region']){
     const artwork=await fetch(`${url}/js/${name}.js`);
     assert.equal(artwork.status,200);assert.match(artwork.headers.get('content-type'),/javascript/);
     assert.equal(await artwork.text(),await readFile(new URL(`../public/js/${name}.js`,import.meta.url),'utf8'));
   }
+  const file=Object.values(NightCourier.CITY_REGION.levels.overview.files)[0];
+  const region=await fetch(`${url}/map/region/${file}`);assert.equal(region.status,200);assert.match(region.headers.get('content-type'),/application\/json/);
+  assert.equal((await fetch(`${url}/map/region/missing.json`)).status,404);
 });
 
 async function fixture(t){

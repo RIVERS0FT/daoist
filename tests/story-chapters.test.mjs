@@ -2,7 +2,10 @@ import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.m
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -100,12 +103,14 @@ for(const version of [16,17])test(`v${version} 旧首单待选与已解锁存档
 
 
 
-test('第三至第七章的境界、送达与人物门槛不变',()=>{
-  const s=fresh();s.unlockedFeatures=['system'];s.stats.delivered=8;s.player.realm=1;label(s,'第三章 · 城有第二面');
-  s.bonds.chen.met=true;s.bonds.lin.met=true;label(s,'第四章 · 夜路同行');
+test('第三至第七章必须连续通过前章固定剧情和成长门槛',()=>{
+  const s=fresh();s.flags.systemAwakened=true;s.stats.delivered=12;s.player.realm=1;label(s,'第二章 · 初入仙途');
+  s.flags.storyStreetVein=true;label(s,'第三章 · 城有第二面');
+  s.flags.storySecondCity=true;s.bonds.chen.met=true;s.bonds.lin.met=true;label(s,'第四章 · 夜路同行');
   s.stats.delivered=18;s.player.realm=2;label(s,'第五章 · 阵眼苏醒');
-  s.stats.delivered=30;s.player.realm=3;label(s,'第六章 · 系统为何而来');
-  s.stats.delivered=42;s.player.realm=4;label(s,'第七章 · 人间即阵心');
+  s.stats.delivered=30;s.player.realm=3;label(s,'第五章 · 阵眼苏醒');
+  s.flags.storyLanternNetwork=true;label(s,'第六章 · 系统为何而来');
+  s.stats.delivered=42;s.player.realm=4;s.flags.storySystemDoubt=true;label(s,'第七章 · 人间即阵心');
 });
 
 

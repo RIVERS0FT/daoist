@@ -16,10 +16,10 @@
       for(const [type,id,ring] of data.polygons)if(type===kind)out+=`<path data-osm-way="${id}" d="${line(ring.map(([x,y])=>({x,y})))}Z"/>`;
       out+='</g>';
     }
-    const groups=new Map();for(const edge of G.ROAD_EDGES){if(!groups.has(edge.kind))groups.set(edge.kind,[]);groups.get(edge.kind).push(edge);}
+    const groups=new Map();for(const edge of G.CORE_ROAD_EDGES){if(!groups.has(edge.kind))groups.set(edge.kind,[]);groups.get(edge.kind).push(edge);}
     const sorted=[...groups].sort(([a],[b])=>width(a)-width(b));
     out+='<g class="osm-roads" fill="none" stroke-linecap="round" stroke-linejoin="round">';
-    for(const [kind,edges] of sorted)out+=`<path class="osm-road-edge" d="${edgePath(edges)}" stroke-width="${width(kind)+2}"/>`;
+    for(const [kind,edges] of sorted)out+=`<path class="osm-road-edge" data-road-kind="${kind}" d="${edgePath(edges)}" stroke-width="${width(kind)+2}"/>`;
     for(const [kind,edges] of sorted)out+=`<path class="osm-road ${width(kind)>12?'arterial':''}" data-road-kind="${kind}" d="${edgePath(edges)}" stroke-width="${width(kind)}"/>`;
     out+='</g><g class="street-labels osm-street-labels">';
     const occupied=[];

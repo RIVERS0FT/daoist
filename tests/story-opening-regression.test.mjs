@@ -8,7 +8,10 @@ test('绑定门槛复用实际系统所有权，不改变当前档已经拥有�
 });
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -81,10 +84,10 @@ test('原七个阶段 ID、后五章门槛与宗门可选性质保持不变',()=
   assert.deepEqual(G.STORY_STAGES.slice(0,7).map(e=>e.id),['mortal','bound','second-city','circle','guardian','system','truth']);
   assert.deepEqual(G.STORY_STAGES.slice(0,7).map(e=>e.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
   const s=fresh();s.flags.firstOrder=true;s.stats.delivered=1;s.unlockedFeatures=['system'];assertBound(s);
-  s.stats.delivered=8;s.player.realm=1;assert.equal(G.storyStage(s).id,'second-city');
-  s.bonds.lin.met=true;s.bonds.chen.met=true;assert.equal(G.storyStage(s).id,'circle');
+  s.stats.delivered=12;s.player.realm=1;s.flags.storyStreetVein=true;assert.equal(G.storyStage(s).id,'second-city');
+  s.flags.storySecondCity=true;s.bonds.lin.met=true;s.bonds.chen.met=true;assert.equal(G.storyStage(s).id,'circle');
   for(const [delivered,realm,id] of [[18,2,'guardian'],[30,3,'system'],[42,4,'truth']]){
-    s.stats.delivered=delivered;s.player.realm=realm;assert.equal(G.storyStage(s).id,id);
+    s.stats.delivered=delivered;s.player.realm=realm;if(realm>=3)s.flags.storyLanternNetwork=true;if(realm>=4)s.flags.storySystemDoubt=true;assert.equal(G.storyStage(s).id,id);
   }
   assert.equal(s.sect.invited,false);assert.equal(s.sect.member,false);
 });
@@ -94,7 +97,7 @@ test('解锁单叙述与章名一致，绑定不添加新奖励或系统提前�
   assert.equal(e.title,`${stage.chapter} · ${stage.title}`);assert.equal(e.kind,'story');
   assert.deepEqual(e.choices.map(c=>c.effects),[{karma:2,qi:8},{insight:1,qi:4},{rep:2,money:8}]);
   for(const c of e.choices){assert.ok(!c.duration);assert.ok(!c.itemCost);}
-  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.20.1');assert.equal(G.VERSION,23);
+  const s=fresh();assertOpening(s);assert.equal(G.APP_VERSION,'1.21.0');assert.equal(G.VERSION,24);
 });
 
 

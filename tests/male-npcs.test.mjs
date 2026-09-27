@@ -4,7 +4,10 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
@@ -52,7 +55,7 @@ test('男性总数12、女性9、总数21，追加九人有明确年龄、独立
     for(const a of n.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(s,c.effects,c.itemCost)));}
     assert.deepEqual(n.arc[3].slice(2).map(c=>c.path),['friend','friend','friend']);
   }
-  assert.equal(G.VERSION,23);assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
+  assert.equal(G.VERSION,24);assert.equal(G.STORAGE_KEY,'night-courier:saves:v24');
 });
 
 test('除周野新故事外原十一人文字数值、画像AI保持指纹一致',()=>{

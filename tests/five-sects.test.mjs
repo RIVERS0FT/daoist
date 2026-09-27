@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -42,7 +45,7 @@ test('exactly 36 unique techniques, 11 common and 5 per unique discipline; no fo
  assert.equal(G.TECHNIQUES.length,36);assert.equal(new Set(G.TECHNIQUES.map(t=>t.id)).size,36);assert.equal(new Set(G.TECHNIQUES.map(t=>t.name)).size,36);
  assert.equal(G.SECTS.length,5);assert.equal(new Set(G.SECTS.map(x=>x.discipline)).size,5);
  assert.equal(G.ITEMS.filter(t=>t.type==='technique').length,36);assert.equal(G.TECHNIQUES.filter(t=>t.source==='system').length,11);
- assert.equal(G.PLACES.length,110);assert.equal(G.ALCHEMY_RECIPES.length,108);
+ assert.equal(G.PLACES.length,110+G.REGION_ROADS.places.length);assert.equal(G.ALCHEMY_RECIPES.length,108);
  for(const d of G.SECTS){assert.equal(d.library.filter(t=>t.manual).length,5);assert.ok(G.PLACES.some(p=>p.id===d.place));}
  assert.equal(G.sectDefinition('tingyu').discipline,'符阵修');assert.equal(G.sectDefinition('jingang').discipline,'体修');assert.equal(G.sectDefinition('baicao').discipline,'药修');
  assert.equal(new Set(G.SECTS.map(s=>s.standing)).size,5);assert.equal(G.SECT_RELATIONS.length,10);assert.equal(new Set(G.SECT_RELATIONS.map(r=>G.sectPair(r.a,r.b))).size,10);

@@ -2,7 +2,10 @@ import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -140,7 +143,7 @@ test('AI文本不能授予地点；只有保留下来的配送结算可授予真
 
 test('补单保留两个近单并保证未知服务地点可获得，渲染查询不推进随机源',()=>{
   for(let seed=1;seed<=100;seed++){
-    const s=fresh('classic',seed),pool=G.PLACES.filter(p=>p.id!=='home').map(p=>G.routeFrom(s,p.id).meters).sort((a,b)=>a-b);
+    const s=fresh('classic',seed),pool=G.PLACES.filter(p=>p.id!=='home'&&G.regionPlaceOpen(s,p.id)).map(p=>G.routeMeters(G.playerPoint(s),p.id,G.chapterNumber(s))).filter(Number.isFinite).sort((a,b)=>a-b);
     assert.equal(s.orders.length,6);for(const o of s.orders.slice(0,2))assert.ok(G.routeFrom(s,o.target).meters<=pool[8]);
     assert.ok(s.orders.some(o=>G.place(o.target).permanent&&!G.placeUnlocked(s,o.target)));
     const before=JSON.stringify(s);G.visibleServicePlaces(s);G.visibleResidences(s);assert.equal(JSON.stringify(s),before);
@@ -158,7 +161,9 @@ test('持续完成发现单可以解锁全部服务地点，不需要反复赌�
 });
 
 test('地图全部地点已发现后仍正常补单，不重置发现记录或额外奖励',()=>{
-  const s=fresh();s.unlockedPlaces=G.PLACES.map(p=>p.id);s.orders=[];const money=s.player.money;G.refreshOrders(s);
+  const s=fresh();s.player.realm=9;s.stats.delivered=150;s.flags.systemAwakened=true;s.flags.firstOrder=true;s.bonds.lin.met=true;s.bonds.chen.met=true;
+  for(const key of G.STORY_FLAG_KEYS)s.flags[key]=true;
+  s.unlockedPlaces=G.PLACES.map(p=>p.id);s.orders=[];const money=s.player.money;G.refreshOrders(s);
   assert.equal(s.orders.length,6);assert.equal(s.unlockedPlaces.length,G.PLACES.length);assert.equal(s.player.money,money);
 });
 

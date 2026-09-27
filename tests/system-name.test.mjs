@@ -22,7 +22,10 @@ test('当前档永久权限保持有效，新档独立保留第一章，取消�
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';

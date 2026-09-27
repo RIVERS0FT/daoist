@@ -2,7 +2,10 @@
 // No delivery counts, unlock flags or player assets are written by these helpers.
 import assert from 'node:assert/strict';
 import '../../public/js/city-data.js';
+import '../../public/vendor/fflate/fflate.js';
+import '../../public/js/city-routes.js';
 import '../../public/js/data.js';
+import '../../public/js/chapters.js';
 import '../../public/js/sects.js';
 import '../../public/js/engine.js';
 import '../../public/js/sect-engine.js';

@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
-  G.VERSION = 23;
-  G.APP_VERSION = '1.20.1';
+  G.VERSION = 24;
+  G.APP_VERSION = '1.21.0';
   G.SYSTEM_UNLOCK_DELIVERIES = 10;
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
@@ -66,6 +66,11 @@
   // 游戏地点为虚构；坐标固定在真实 OSM 路网节点上。
   G.ROAD_NODES = G.CITY_DATA.nodes.map(([osmId,x,y])=>({osmId,x,y}));
   G.ROAD_EDGES = G.CITY_DATA.edges.map(([from,to,kind,osmId])=>({from,to,kind,osmId}));
+  G.CORE_ROAD_EDGES=G.ROAD_EDGES.slice();
+  if(G.REGION_ROADS){
+    for(const [osmId,x,y] of G.REGION_ROADS.nodes)G.ROAD_NODES.push({osmId,x,y});
+    for(const [from,to,kind,osmId] of G.REGION_ROADS.edges)G.ROAD_EDGES.push({from,to,kind,osmId});
+  }
   G.PLACES = [
   {
     "id": "home",
@@ -838,6 +843,10 @@
     "permanent": false
   }
 ].map(p=>({...p,...G.ROAD_NODES[G.CITY_DATA.places[p.id]]}));
+  for(const p of G.REGION_ROADS?.places||[]){
+    G.CITY_DATA.places[p.id]=p.node;
+    G.PLACES.push({id:p.id,name:p.name,desc:'城郊路网中的配送地址。',kind:'delivery',permanent:false,regional:true,...G.ROAD_NODES[p.node]});
+  }
   G.place = id => G.PLACES.find(p => p.id === id);
   G.RESIDENCES = [
     { id:'qiyun', name:'栖云宿舍', place:'stop-3', rent:70, desc:'合租床位便宜，但只能恢复基础体力与少量气血、灵力。', recovery:{health:20,stamina:70,mana:10,battery:0}, full:[] },

@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -11,7 +14,7 @@ import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 // 专项回归使用已开启入口的夹具；真实新档功能与地点解锁由 gameplay-unlocks/location-unlocks 专项覆盖。
-const fresh=()=>Object.assign(G.newGame('时行','classic',24681357),{unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.map(p=>p.id)});
+const fresh=()=>Object.assign(G.newGame('时行','classic',24681357),{unlockedFeatures:G.FEATURE_UNLOCKS.map(f=>f.id),unlockedPlaces:G.PLACES.filter(p=>!p.regional).map(p=>p.id)});
 const start=(s,action,p={})=>{const r=G.perform(s,action,p);assert.ok(r.ok,r.error);return r.state;};
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-5,`${a} != ${b}`);
 const finish=s=>{for(let i=0;s.activity&&!s.pending&&!s.gameOver&&i<6000;i++)s=G.advance(s,Math.max(1e-7,Math.min(1,G.activityRemaining(s))));return s;};

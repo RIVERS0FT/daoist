@@ -1,0 +1,6 @@
+{
+  "frame_budget_ms": 16.667,
+  "p95_ms": 33.5,
+  "max_ms": 150,
+  "over_budget_ratio": 0.1
+}

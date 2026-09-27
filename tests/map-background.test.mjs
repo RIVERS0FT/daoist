@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -10,7 +13,7 @@ import '../public/js/clock.js';
 import '../public/js/storage.js';
 const G=globalThis.NightCourier;
 // 路网与计时专项夹具明确开放地点；真实新档另测。
-const fresh=()=>Object.assign(G.newGame('远行','classic',123456),{unlockedPlaces:G.PLACES.map(p=>p.id)});
+const fresh=()=>Object.assign(G.newGame('远行','classic',123456),{unlockedPlaces:G.PLACES.filter(p=>!p.regional).map(p=>p.id)});
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
 function runClock(s,speed=1){
   const c=new G.GameClock(dt=>{s=G.advance(s,dt);if(s.pending||s.ending||s.gameOver)c.pause('event');});
@@ -21,7 +24,7 @@ function runClock(s,speed=1){
 
 
 
-test('110 个配送地址只沿真实共享道路边移动',()=>{
+test('原城区与全市配送地址只沿真实共享道路边移动',()=>{
   for(const from of ['home','southbank-10'])for(const place of G.PLACES){
     const r=G.route(from,place.id);assert.ok(Number.isFinite(r.meters));
     assert.deepEqual(r.points.at(-1),{x:place.x,y:place.y});

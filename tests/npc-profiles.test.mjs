@@ -14,7 +14,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/npc-profiles.js';
 import '../public/js/engine.js';
@@ -105,7 +108,7 @@ test('原12位NPC年龄保留，女性右尾配置保留且陆听雨与三十年
   assert.deepEqual(Object.fromEntries(G.NPCS.slice(0,12).map(n=>[n.id,n.age])),ages);
   assert.deepEqual(G.NPCS.filter(n=>n.romantic).map(n=>n.age).sort((a,b)=>a-b),[18,18,19,19,20,20,21,24,27]);
   const lu=G.NPCS.find(n=>n.id==='lu');assert.ok(lu.age-30>=18);assert.equal(lu.arc[1][0],'守了三十年的阵');
-  assert.equal(G.VERSION,23);assert.equal(G.STORAGE_KEY,'night-courier:saves:v23');
+  assert.equal(G.VERSION,24);assert.equal(G.STORAGE_KEY,'night-courier:saves:v24');
 });
 
 test('年龄缺失、非整数或非成年配置在资料加载时拒绝，不输出未知年龄提示词',()=>{

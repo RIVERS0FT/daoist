@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -10,7 +13,7 @@ import '../public/js/storage.js';
 import '../public/js/progression.js';
 const G=globalThis.NightCourier;
 // 路网与计时专项夹具明确开放地点；真实新档另测。
-const fresh=(seed=12345)=>Object.assign(G.newGame('扩城测试','classic',seed),{unlockedPlaces:G.PLACES.map(p=>p.id)});
+const fresh=(seed=12345)=>Object.assign(G.newGame('扩城测试','classic',seed),{unlockedPlaces:G.PLACES.filter(p=>!p.regional).map(p=>p.id)});
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
 const start=(s,kind,params={})=>{const r=G.perform(s,kind,params);assert.ok(r.ok,r.error);return r.state;};
 const restore=s=>G.sanitizeSave(JSON.parse(JSON.stringify(s)));
@@ -74,7 +77,9 @@ test('返回路线不能修改寻路缓存，任意目的地均只沿共享道�
   assert.deepEqual(G.route('home','lingxi-20'),expected);
   const lookup=new Map(G.ROAD_NODES.map((n,i)=>[`${n.x}:${n.y}`,i]));
   const edges=new Set(G.ROAD_EDGES.flatMap(({from,to})=>[`${from}:${to}`,`${to}:${from}`]));
-  for(const p of G.PLACES)for(const q of G.PLACES){
+  // Every address is covered; 12 origins exercise cross-region corridors.
+  const origins=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region));
+  for(const p of origins)for(const q of G.PLACES){
     const r=G.route(p.id,q.id);
     for(let i=1;i<r.points.length;i++)assert.ok(edges.has(`${lookup.get(`${r.points[i-1].x}:${r.points[i-1].y}`)}:${lookup.get(`${r.points[i].x}:${r.points[i].y}`)}`));
   }

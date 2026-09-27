@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import '../public/js/city-data.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';

@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v23';
-  G.BACKUP_KEY = 'night-courier:saves:v23:backup';
+  G.STORAGE_KEY = 'night-courier:saves:v24';
+  G.BACKUP_KEY = 'night-courier:saves:v24:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
   const num = (v, fallback, min=0, max=999999, integer=true) => Number.isFinite(v) ? G.clamp(integer?Math.floor(v):v,min,max) : fallback;
@@ -209,7 +209,7 @@
     if(kind==='charge'&&raw.duration!==duration)throw new Error('充电时长与当前规则不一致。');
     if(raw.route){
       if(!target||!Array.isArray(raw.route.points)||!G.roadAnchors(raw.route.points[0]).length)throw new Error('进行中的道路路线无效。');
-      a.route=G.route(raw.route.points[0],target);a.travelled=num(raw.travelled,0,0,a.route.meters,false);
+      a.route=G.validateRoadRoute(raw.route,target);a.travelled=num(raw.travelled,0,0,a.route.meters,false);
     }
     if(a.phase==='travel'){
       if(!a.route||a.route.meters<=0)throw new Error('移动行动缺少有效路线。');
@@ -304,6 +304,7 @@
     s.claimed=Array.isArray(raw.claimed)?[...new Set(raw.claimed.filter(id=>G.QUESTS.some(q=>q.id===id)))]:[];
     if(typeof raw.flags?.systemAwakened!=='boolean')throw new Error('存档缺少有效的外卖系统剧情状态。');
     s.flags={firstOrder:raw.flags?.firstOrder===true,systemAwakened:raw.flags.systemAwakened===true};
+    for(const key of G.STORY_FLAG_KEYS||[])s.flags[key]=raw.flags?.[key]===true;
     if(s.flags.systemAwakened&&s.stats.delivered<G.SYSTEM_UNLOCK_DELIVERIES)throw new Error('外卖系统剧情完成记录与送达数量不一致。');
     s.recentEvents=Array.isArray(raw.recentEvents)?raw.recentEvents.filter(id=>G.EVENTS.some(e=>e.id===id)).slice(-4):[];
     s.unlockedEndings=Array.isArray(raw.unlockedEndings)?[...new Set(raw.unlockedEndings.filter(id=>Object.hasOwn(G.ENDINGS,id)))]:[];

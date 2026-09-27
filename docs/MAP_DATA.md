@@ -1,6 +1,31 @@
 # 地图数据与复现
 
-游戏展示的是虚构青岚城：城市、道路、街区、水系、配送地址均使用虚构名称。几何底图使用上海老城厢及周边的 OpenStreetMap 数据。
+游戏展示的是虚构青岚城：城市、道路、街区、水系、配送地址均使用虚构名称。几何底图覆盖上海全市；原老城厢数据及地点坐标保持不变。
+
+## 章节区域
+
+`chapters.js` 使用固定种子将全市显示范围划成十二个凸多边形游戏区域，与真实行政区边界无关，不改 OSM 几何、地点 ID 或坐标。原 110 个地址全部位于首章青藤旧城，新增地址按坐标归区。区域按十二章连续开放，地图遮罩与道路段求交校验共用同一边界；未开放区不能进入或途经，开放区中暂时无法经开放道路抵达的地址不发单。制作大纲与各区地址数量见 [CHAPTER_OUTLINES.md](CHAPTER_OUTLINES.md)。
+
+## 全市扩展数据
+
+- 来源：[Geofabrik 上海提取](https://download.geofabrik.de/asia/china/shanghai.html)，固定输入 `shanghai-260926.osm.pbf`，OSM 数据时间为 2026-09-26T20:22:51Z。文件下载地址和 SHA-256 保存在 `city-region-data.js` 与 `city-routes.js`。
+- 与原图共用米制原点（121.477° E、31.237° N）及换算常数，不重新投影已有地点。显示范围约 135 × 141 千米，包含崇明等岛屿；外缘含数据提取的少量邻接背景。
+- 提取到 209,963 条道路 way、10,262 条水道、153,497 个建筑多边形、6,994 个绿地及 5,412 个水域。OSM 中 4 个无效 area 跳过；不存在的几何不通过程序补造。
+- 海岸与行政边界叠加按 10 米精度闭合，修复独立边界微小错位导致的缺口；背景按总览/城区/街道分级简化，街道背景容差 5 米。可行驶道路叠加原始厘米精度顶点，路线不会按背景简化后的线移动。
+- 原城区和外围共用同一背景、配色及细节阈值，不按旧城区边界切换图层；街道级别全域绘制已有建筑与小路。瓦片补绘边缘，同时读取相邻分区的文字及宽道路，避免分区边缘截断。
+- 新增 375 个虚构配送地址，均在上海行政范围内并通过真实道路连接原城区。使用通往地址及相邻配送区之间的真实道路走廊；追加 90,827 个节点、94,091 条边，原有节点/道路前缀不改。没有轮渡、高速通行或跨水域虚构连接；道路不可达岛屿仅绘制背景。
+- 原始派生核心库为 `public/js/city-data.js`；新增路网为 `city-routes.js`；地理分区索引及边界为 `city-region-data.js`，分区在 `public/map/region/`。这些文件随应用提供，均为 ODbL 派生数据库。路网使用无损差分整数及 gzip；背景按固定顺序整数编码及 gzip，解码逻辑分别在生成文件和 `map-region.js` 中。
+
+复现（依赖 Python `osmium`、`shapely`）：
+
+```powershell
+python scripts/import-shanghai-region.py artifacts/shanghai-260926.osm.pbf
+python scripts/import-shanghai-routes.py artifacts/shanghai-260926.osm.pbf
+```
+
+导入过程不修改原 `city-data.js`。新增地址 ID 按固定 4 千米候选网格编码，实际位置落在原始 OSM 节点上；旧地点不重排。制图分区只按视野读取本地资源，不请求 Geofabrik 或在线瓦片。`fflate` 0.8.3 用于启动时同步解码路网，MIT 许可证随包保存；分区使用浏览器原生 `DecompressionStream`。
+
+## 原城区固定数据
 
 - 来源：© [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)，[ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)。地理数据库及其派生数据按 ODbL 提供；游戏剧情、人物和代码不因地图许可而变为 OSM 数据。
 - 提取服务：[Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API)，`https://overpass-api.de/api/interpreter`。

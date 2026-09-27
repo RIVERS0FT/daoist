@@ -38,16 +38,17 @@
       desc:'渡劫境把旧阵最深的选择重新摆在你面前：用绝对控制换取永不出错，还是接受不确定并共同承担。雷声之后仍有门铃，你最后要安放的不是修为，而是自己与人间的关系。',events:['story-tribulation-question','story-tribulation-dawn']}
   ];
   G.higherChapterReady = (s, chapter) => G.featureUnlocked(s,'system') &&
+    G.STORY_STAGES.slice(0,7).every(stage=>stage.ready(s)) &&
     s.player.realm>=chapter.realm && s.stats.delivered>=chapter.deliveries && G.storyEventComplete(s,chapter.previous);
 
   G.STORY_STAGES = [
     { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'你还只是为房租、饭钱和下一张订单奔忙的普通骑手。九次寻常送达让“抵达”慢慢有了重量；第十份热饭把问题摆到你面前：没有奖励时，你为什么仍愿意把一份饭送热。完成第十单固定剧情，在本章解锁外卖系统。', ready:()=>true },
     { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启，但力量没有替你解决生活。你一边接单、领取第一份委托、学习吐纳，一边发现系统更像一个不会表达的记录者：它会计算连接，却还不懂每次抵达对人意味着什么。', ready:s=>G.featureUnlocked(s,'system') },
-    { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'炼气后，门牌、桥墩与旧墙开始露出另一层纹理。你学着不把所有异常都叫作机缘，也不把所有陌生都当成危险；青岚城的背面首先是一段需要被求证的历史。', ready:s=>s.flags?.storySecondCity === true || (s.stats.delivered>=8 && s.player.realm>=1) },
-    { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识的夜行人越来越多：有人交班，有人守车，有人等末班车，也有人只是想吃完一顿不被打断的饭。修行圈不再是一张强者名单，而是一群各有疲惫、原则和牵挂的人。', ready:s=>G.metNPCCount(s)>=2 && s.player.realm>=1 },
-    { id:'guardian', chapter:'第五章', title:'阵眼苏醒', desc:'筑基以后，配送路线重新连接断裂城脉。你却逐渐明白，所谓阵点并不是可随意调度的资源；每盏灯后都有工作、家人、失误和休息，守护必须先承认这些具体生活。', ready:s=>s.flags?.storyLanternNetwork === true || (s.stats.delivered>=18 && s.player.realm>=2) },
-    { id:'system', chapter:'第六章', title:'系统为何而来', desc:'金丹让你第一次能追问外卖系统本身。奖励、委托与“有效连接数”开始出现裂缝：它确实帮过你，却也在回避一个关键问题——它为什么如此害怕连接减少。', ready:s=>s.flags?.storySystemDoubt === true || (s.stats.delivered>=30 && s.player.realm>=3) },
-    { id:'truth', chapter:'第七章', title:'人间即阵心', desc:'元婴之后，你看清系统是旧护城阵残存的器灵，也看清自己从来不是唯一被选中的救世主。力量来自万家灯火，因此真正的问题变成：谁能解释、谁能拒绝、谁有权决定它往哪里流。', ready:s=>s.flags?.storySystemTruth === true || (s.stats.delivered>=42 && s.player.realm>=4) }
+    { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'炼气后，门牌、桥墩与旧墙开始露出另一层纹理。你学着不把所有异常都叫作机缘，也不把所有陌生都当成危险；青岚城的背面首先是一段需要被求证的历史。', ready:s=>G.storyEventComplete(s,'story-street-vein') && s.stats.delivered>=12 && s.player.realm>=1 },
+    { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识的夜行人越来越多：有人交班，有人守车，有人等末班车，也有人只是想吃完一顿不被打断的饭。修行圈不再是一张强者名单，而是一群各有疲惫、原则和牵挂的人。', ready:s=>G.storyEventComplete(s,'story-second-city') && G.metNPCCount(s)>=2 && s.player.realm>=1 },
+    { id:'guardian', chapter:'第五章', title:'阵眼苏醒', desc:'筑基以后，配送路线重新连接断裂城脉。你却逐渐明白，所谓阵点并不是可随意调度的资源；每盏灯后都有工作、家人、失误和休息，守护必须先承认这些具体生活。', ready:s=>s.stats.delivered>=18 && s.player.realm>=2 },
+    { id:'system', chapter:'第六章', title:'系统为何而来', desc:'金丹让你第一次能追问外卖系统本身。奖励、委托与“有效连接数”开始出现裂缝：它确实帮过你，却也在回避一个关键问题——它为什么如此害怕连接减少。', ready:s=>G.storyEventComplete(s,'story-lantern-network') && s.stats.delivered>=30 && s.player.realm>=3 },
+    { id:'truth', chapter:'第七章', title:'人间即阵心', desc:'元婴之后，你看清系统是旧护城阵残存的器灵，也看清自己从来不是唯一被选中的救世主。力量来自万家灯火，因此真正的问题变成：谁能解释、谁能拒绝、谁有权决定它往哪里流。', ready:s=>G.storyEventComplete(s,'story-system-doubt') && s.stats.delivered>=42 && s.player.realm>=4 }
   ];
   G.STORY_STAGES.push(...G.HIGHER_STORY_CHAPTERS.map(chapter=>({
     ...chapter,ready:s=>G.higherChapterReady(s,chapter)
@@ -135,7 +136,7 @@
   G.storyStage = s => {
     let current = G.STORY_STAGES[0];
     if(!G.featureUnlocked(s,'system'))return current;
-    for (const stage of G.STORY_STAGES) if (stage.ready(s)) current = stage;
+    for (const stage of G.STORY_STAGES) { if(!stage.ready(s))break;current=stage; }
     return current;
   };
   G.storyStageLabel = s => {
@@ -203,7 +204,7 @@
     },
     {
       id:'story-second-city', kind:'story', flag:'storySecondCity',
-      ready:s=>s.player.realm>=1 && s.stats.delivered>=8,
+      ready:s=>G.chapterNumber(s)>=3 && s.player.realm>=1 && s.stats.delivered>=12,
       title:'城市的背面',
       text:'炼气之后，你开始看见以前看不见的东西：医院走廊尽头有褪色旧符，桥墩下面刻着阵号，某些深夜订单的门牌会在你眨眼时改变。你把这些异常逐一报给外卖系统，它只返回坐标、灵息强度和“待确认”，像一个会计算却不知道人会害怕的记录员。更奇怪的是，所有异常都沿着你的配送路线分布。青岚城的另一面并没有轰然开启，它只是从你每天经过的地方一点点露出来。',
       choices:[
@@ -214,7 +215,7 @@
     },
     {
       id:'story-lantern-network', kind:'story', flag:'storyLanternNetwork',
-      ready:s=>s.player.realm>=2 && s.stats.delivered>=18 && G.metNPCCount(s)>=2,
+      ready:s=>G.chapterNumber(s)>=5 && s.player.realm>=2 && s.stats.delivered>=18 && G.metNPCCount(s)>=2,
       title:'每个人都是一个阵点',
       text:'筑基后的某夜，系统第一次把“订单”改成了“阵点”。医馆、修车铺、书店、山门和无数普通住户之间被灯火连在一起。可当你真正望过去，看见的不是整齐节点：有人刚下班，有人在照顾家人，有人今天只想关门休息。旧阵法喜欢把这些差异抹平成同一种信号，你却已经认识了太多具体的人。阵法没有高高在上的唯一阵眼——每一个愿意回应别人的人都能成为阵点，但没有谁因此失去说“不”的权利。',
       choices:[
@@ -225,7 +226,7 @@
     },
     {
       id:'story-system-doubt', kind:'story', flag:'storySystemDoubt',
-      ready:s=>s.player.realm>=3 && s.stats.delivered>=30,
+      ready:s=>G.chapterNumber(s)>=6 && s.player.realm>=3 && s.stats.delivered>=30,
       title:'系统第一次拒绝回答',
       text:'金丹凝成后，你终于有能力查看系统更深的一层。后台没有商城，没有任务表，只有一条持续增长的记录：“有效连接数”。你追问为什么需要这么多连接，又问如果有人不想成为阵点会怎样。界面先闪过一次“请求越权”，随后直接关闭。几秒后，它又短暂亮起，像是想解释，却最终只留下一个不断跳动的数字。你第一次明确感觉到：这个帮助过你的东西并不只是神秘，它也有自己不愿触碰的恐惧。',
       choices:[
@@ -236,7 +237,7 @@
     },
     {
       id:'story-system-truth', kind:'story', flag:'storySystemTruth',
-      ready:s=>s.player.realm>=4 && s.stats.delivered>=42,
+      ready:s=>G.chapterNumber(s)>=7 && s.player.realm>=4 && s.stats.delivered>=42,
       title:'万家灯火，不属于任何人',
       text:'元婴之后，你终于看清系统的核心：它是旧护城阵残存的器灵。数十年前阵法破碎，许多守阵者和普通人失去联系；为了让自己继续运转，它一点点学习现代城市最熟悉的语言——订单、导航、奖励、确认送达——把“有人抵达”翻译成自己能够理解的连接。它选择过别人，也失败过、遗忘过，还把连接数量误当成安全本身。你从来不是唯一的救世主。看清这一点后，器灵第一次没有立刻弹出任务，只问：如果力量来自万家灯火，那么接下来该由谁决定它往哪里流？',
       choices:[
@@ -345,6 +346,7 @@
       // 已完成的旧剧情和羁绊补领一次；仍在待选/执行中的主线不算完成。
       G.syncFormulaRewards(s);
       G.syncFeatureUnlocks(s,true);
+      G.validateRegionState(s);
       return s;
     };
   }

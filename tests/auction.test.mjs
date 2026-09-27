@@ -2,7 +2,10 @@ import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/vendor/fflate/fflate.js';
+import '../public/js/city-routes.js';
 import '../public/js/data.js';
+import '../public/js/chapters.js';
 import '../public/js/sects.js';
 import '../public/js/engine.js';
 import '../public/js/sect-engine.js';
@@ -17,7 +20,7 @@ const choose=(s,index)=>act(s,'choose',{eventId:s.pending.id,index});
 const atomic=(s,action,p={})=>{const before=JSON.stringify(s),r=G.perform(s,action,p);assert.equal(r.ok,false);assert.equal(r.state,s);assert.equal(JSON.stringify(s),before);return r.error;};
 // Auction-isolated fixtures suppress unrelated story prompts but do not grant goods or auction wins.
 function eligible(seed=123,realm=0){
-  const s=G.newGame('万宝客','classic',seed);s.unlockedPlaces=G.PLACES.map(p=>p.id);s.unlockedFeatures=G.FEATURE_UNLOCKS.map(f=>f.id);
+  const s=G.newGame('万宝客','classic',seed);s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);s.unlockedFeatures=G.FEATURE_UNLOCKS.map(f=>f.id);
   s.position='market';s.minutes=1080;s.player.money=10000;s.player.realm=realm;
   s.flags.firstOrder=true;for(const e of G.EVENTS.filter(e=>e.kind==='story'&&!e.higherChapter))s.flags[e.flag]=true;
   G.syncFormulaRewards(s);return s;
