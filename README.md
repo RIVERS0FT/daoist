@@ -109,6 +109,8 @@ docs/                    设计、版本、架构、角色与验证文档
 
 `main` 推送后由 `.github/workflows/deploy-riversoft.yml` 执行完整验证、构建并发布到 RIVERSOFT。工作流通过 `scripts/verify-public.mjs` 逐个下载页面、脚本、样式和地图资源，与本次 `dist/` 构建做 SHA-256 比对。
 
+PR 验证与发布流程的全部 job 使用 `[self-hosted, Linux, X64]`，需要仓库可用的对应 runner 在线；环境要求见 [技术架构](docs/ARCHITECTURE.md#ci)。
+
 RIVERSOFT 是受限静态沙箱，适合经典静态版体验；真实 AI 代理、稳定 localStorage 和完整本机能力仍应通过 `npm start` 运行。
 
 ## 项目边界

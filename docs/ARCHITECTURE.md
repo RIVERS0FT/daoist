@@ -411,6 +411,8 @@ python tests/browser-chapter-regions.py --root dist
 
 `.github/workflows/ci.yml` 用于 PR/代码验证。
 
+所有工作流 job（PR 的 `validate`、发布的 `verify` / `publish`）统一使用 `[self-hosted, Linux, X64]`，不回退到 GitHub 托管 runner。runner 需要保持在线，提供 Bash、Git、下载 Node/Python 工具链及 Chromium 的网络访问，以及安装 Chromium 系统依赖的权限；Node 22.16.0、Python 3.12 与浏览器运行环境仍由工作流准备。现有检查、产物传递、production 环境密钥和公网哈希校验保持不变。
+
 ### RIVERSOFT
 
 `.github/workflows/deploy-riversoft.yml` 是当前唯一静态线上发布流程。
