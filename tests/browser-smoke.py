@@ -7,6 +7,8 @@ Most cases drive GameClock with controlled timestamps; a separate case uses real
 requestAnimationFrame. HTTP allowlist/CSP/AI proxy have independent Node tests.
 """
 import json
+import argparse
+import time
 import os
 import sys
 import mimetypes
@@ -15,8 +17,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / 'artifacts'
-OUT.mkdir(exist_ok=True)
+OUT = Path(os.environ.get('DAOIST_BROWSER_OUTPUT', str(ROOT / 'artifacts')))
+OUT.mkdir(parents=True, exist_ok=True)
 BOOT = r'''
 window.__memory = new Map();
 window.__storyRequests = [];
@@ -2107,38 +2109,7 @@ def leaflet_browser_checks(browser):
         ctx.close()
 
 
-with sync_playwright() as p:
-    executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
-    kwargs = {'headless': True}
-    if Path(executable).exists():
-        kwargs['executable_path'] = executable
-    browser = p.chromium.launch(**kwargs)
-    if '--map-only' in sys.argv:
-        leaflet_browser_checks(browser)
-        browser.close()
-        print(f'{len(results)} map checks passed.')
-        sys.exit(0)
-    sandbox_new_game_checks(browser)
-    leaflet_browser_checks(browser)
-    five_sects_browser_checks(browser)
-    zhou_story_browser_checks(browser)
-    male_npc_browser_checks(browser)
-    npc_career_browser_checks(browser)
-    npc_profile_browser_checks(browser)
-    delivery_npc_browser_checks(browser)
-    higher_story_browser_checks(browser)
-    story_chapter_browser_checks(browser)
-    sect_browser_checks(browser)
-    delivery_coins_browser_checks(browser)
-    unlock_notice_browser_checks(browser)
-    place_unlock_browser_checks(browser)
-    result_browser_checks(browser)
-
-    realm_browser_checks(browser)
-    location_browser_checks(browser)
-    auction_browser_checks(browser)
-    system_name_browser_checks(browser)
-    progressive_browser_checks(browser)
+def core_browser_checks(browser):
     ctx, page, errors = setup(browser)
     page.screenshot(path=str(OUT/'start-desktop.png'))
     new_game(page)
@@ -2650,10 +2621,63 @@ with sync_playwright() as p:
     assert not bgerrors, bgerrors
     record('真实后台定时器：无动画回调仍推进，手动暂停仍生效')
     ctx.close()
-    browser.close()
 
-(OUT/'browser-tests.json').write_text(json.dumps({
-    'mode':'offline Chromium bundle; controlled GameClock timestamps plus real-rAF and background-heartbeat probes; mocked storage and AI',
-    'tests':results, 'passed':len(results), 'failed':0, 'receipt_reload_modes':reload_modes,
-}, ensure_ascii=False, indent=2), encoding='utf-8')
-print(f'{len(results)} browser checks passed.')
+
+SUITES = {
+    'sandbox_new_game': sandbox_new_game_checks,
+    'leaflet': leaflet_browser_checks,
+    'five_sects': five_sects_browser_checks,
+    'zhou_story': zhou_story_browser_checks,
+    'male_npc': male_npc_browser_checks,
+    'npc_career': npc_career_browser_checks,
+    'npc_profile': npc_profile_browser_checks,
+    'delivery_npc': delivery_npc_browser_checks,
+    'higher_story': higher_story_browser_checks,
+    'story_chapter': story_chapter_browser_checks,
+    'sect': sect_browser_checks,
+    'delivery_coins': delivery_coins_browser_checks,
+    'unlock_notice': unlock_notice_browser_checks,
+    'place_unlock': place_unlock_browser_checks,
+    'result': result_browser_checks,
+    'realm': realm_browser_checks,
+    'location': location_browser_checks,
+    'auction': auction_browser_checks,
+    'system_name': system_name_browser_checks,
+    'progressive': progressive_browser_checks,
+    'core': core_browser_checks,
+}
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--suite', choices=['all', *SUITES], default='all')
+    parser.add_argument('--map-only', action='store_true')
+    parser.add_argument('--list-suites', action='store_true')
+    args = parser.parse_args()
+    if args.list_suites:
+        print(json.dumps(list(SUITES)))
+        sys.exit(0)
+    selected = ['leaflet'] if args.map_only else list(SUITES) if args.suite == 'all' else [args.suite]
+    durations = []
+    started = time.monotonic()
+    try:
+        with sync_playwright() as p:
+            executable = os.environ.get('CHROMIUM_PATH', '/usr/bin/chromium')
+            kwargs = {'headless': True}
+            if Path(executable).exists():
+                kwargs['executable_path'] = executable
+            browser = p.chromium.launch(**kwargs)
+            for name in selected:
+                before = len(results)
+                stamp = time.monotonic()
+                SUITES[name](browser)
+                durations.append({'suite': name, 'seconds': round(time.monotonic()-stamp, 3), 'passed': len(results)-before})
+            browser.close()
+    except BaseException:
+        (OUT/'browser-tests.json').write_text(json.dumps({'tests':results, 'passed':len(results), 'failed':1, 'durations':durations}, ensure_ascii=False, indent=2), encoding='utf-8')
+        raise
+    (OUT/'browser-tests.json').write_text(json.dumps({
+        'mode':'offline Chromium bundle; controlled GameClock timestamps plus real-rAF and background-heartbeat probes; mocked storage and AI',
+        'tests':results, 'passed':len(results), 'failed':0, 'receipt_reload_modes':reload_modes,
+        'durations':durations, 'seconds':round(time.monotonic()-started, 3),
+    }, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'{len(results)} browser checks passed.')

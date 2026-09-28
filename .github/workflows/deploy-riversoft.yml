@@ -67,7 +67,7 @@ jobs:
 
       - name: Run Chromium interaction checks
         run: |
-          python tests/browser-smoke.py
+          python tests/ci-browser.py --workers 2
           python tests/browser-map-seams.py --root dist
           python tests/browser-chapter-regions.py --root dist
 
@@ -103,8 +103,14 @@ jobs:
         timeout-minutes: 10
         env:
           RIVERSOFT_TOKEN: ${{ secrets.RIVERSOFT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          node --input-type=module -e '
+            import {GitHub} from "./scripts/delivery-lib.mjs";
+            const latest = await new GitHub().get("git/ref/heads/main");
+            if (latest.object.sha !== process.env.GITHUB_SHA) throw new Error("Main advanced; refusing to publish an older release.");
+          '
           node tools/riversoft.mjs deploy ./dist \
             --slug daoist \
             --title "外卖修仙录" \

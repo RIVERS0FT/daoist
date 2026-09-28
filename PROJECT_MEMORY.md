@@ -14,8 +14,10 @@
 - 地图分区：12 个虚构区域，按十二章连续开放；未开放区完全不可进入或途经。镜头可预览轮廓与条件，区域开放不自动发现地址。
 - 境界：凡人 + 炼气至渡劫九个修仙境界；凡人不分重，其余各九重
 - 静态发布：RIVERSOFT
-- GitHub Actions：所有 job 使用 `[self-hosted, Linux, X64]`；PR validate 与发布 deploy 均不使用 GitHub 托管 runner。deploy 在同一 job 中验证并发布 dist，不依赖 GitHub artifact 存储；日志与帧报告保存在 runner 的 `$HOME/.local/state/daoist-actions/`。
+- GitHub Actions：所有 job 使用单一 `VM-0-10-debian` self-hosted runner。PR 严格验证一次，`release.yml` 接收完成事件，核对明确登记的 head SHA 请求及 head/base/tree 后 squash merge，复用已验证构件发布并校验公网；人工 push/手动 deploy 保留完整验证。日志与帧报告位于 `$HOME/.local/state/daoist-actions/`。
 - 持久构件：`VM-0-10-debian` 的 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`，可用 `DAOIST_ARTIFACT_ROOT` 指定根目录。发布包保留 1 天、源码快照 3 天；后续保存清理已到期条目。部署先保存并按哈希恢复构件，再发布；原有报告目录保留。Python/Playwright 由 uv 独立环境提供，不依赖系统 pip 或 sudo。
+- 交付入口：显式暂存后 `npm run ship -- submit --message "..."`；默认异步，`status <PR>` 查询，`wait <PR>` 由普通脚本每分钟查询一次，`retry <PR>` 接续。结果与脱敏失败日志写入 Actions 摘要、PR 评论及 `delivery-result.json`，不承诺聊天会话自动回调。首次需先安装工作流到 main。
+- 浏览器回归：21 个独立场景组、两个进程，完整覆盖保留；报告记录每组耗时，性能采样单独串行运行。旧 head、基线变化、损坏/过期构件与合并后内容不一致均停止交付。
 - 原城区 `public/js/city-data.js` 按已发布原始字节保存，Git 禁止换行转换，跨 Windows/Linux SHA-256 均须为 `804b67e2d48d54646c322c92b8125b0c3425c083db41fcd29902eff45fe4d582`。
 - GitHub Pages：已移除
 - 当前公开地址：`https://mevius.riversoft.top/daoist/`
@@ -139,8 +141,8 @@ python tests/browser-smoke.py
 2. 更新设计/架构/版本/测试文档中真正相关的文件。
 3. PR CI 通过。
 4. squash merge。
-5. `main` 触发 RIVERSOFT。
-6. 验证 deploy 中的检查和发布步骤。
+5. 自动交付复用 PR 严格验证构件；人工 main 推送走全量恢复流程。
+6. 验证 release/deploy 中的发布结果。
 7. 验证公网全部静态资源与构建 SHA-256 一致。
 
 ## 重要资料

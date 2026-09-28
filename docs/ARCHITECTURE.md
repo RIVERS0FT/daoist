@@ -407,30 +407,40 @@ python tests/browser-chapter-regions.py --root dist
 
 `dist` 是产物，不是修改源。
 
-### CI
+### CI 与自动交付
 
-`.github/workflows/ci.yml` 用于 PR/代码验证。
+所有 job 使用 `[self-hosted, Linux, X64]` 并确认 runner 名称为 `VM-0-10-debian`。当前只运行一个同名 runner 服务，因此发布 job 串行；扩充 runner 前必须增加跨进程发布锁。Node 固定 22.16.0；固定提交的 `astral-sh/setup-uv` 在 `RUNNER_TEMP` 创建 Python 3.12 独立环境，安装 Playwright/Pillow/Chromium，不依赖系统 pip、sudo 或 GitHub artifact/cache 配额。
 
-所有工作流 job（PR 的 `validate`、发布的 `deploy`）统一使用 `[self-hosted, Linux, X64]`，checkout 前确认 runner 为 `VM-0-10-debian`，不回退到 GitHub 托管 runner。runner 需要 Bash、Git、网络下载与用户工具目录写权限，并预装 Chromium 系统依赖。工作流准备 Node 22.16.0；固定提交版本的 `astral-sh/setup-uv` 在 `RUNNER_TEMP` 中创建 Python 3.12 独立环境并安装 Playwright/Pillow/Chromium，不依赖系统 pip/ensurepip，不调用 sudo 或 apt，关闭 uv 的 GitHub Actions 缓存。
+- `.github/workflows/ci.yml`：验证 PR 合并候选，完整执行源码检查、Node、浏览器、地图专项及严格帧预算；成功后保存 `dist`。同一 PR 新提交会取消旧验证。
+- `tests/browser-smoke.py` 保留原完整入口，同时提供 21 个独立 `--suite` 场景；`tests/ci-browser.py --workers 2` 用两个子进程执行，隔离截图、日志、浏览器上下文，汇总全部检查与每组耗时。`--workers 1` 可用于同机基准。性能采样在两个浏览器工作进程全部退出后单独运行；真实 RAF、后台定时器与 AI 迟到响应检查保留。
+- `scripts/ci-step.mjs` 保留命令退出码、日志和耗时。构件只在全部严格验证通过后保存。失败仍归档源码、报告与日志。
+- `.github/workflows/release.yml` 由 CI 的 `workflow_run: completed` 触发，也支持手动接续已登记的请求。控制器始终 checkout `main`，从不执行 PR 工作区内的发布脚本。只有仓库写入者登记到具体 head SHA 的 `daoist/delivery-request` 状态才允许自动合并部署；普通 PR 只验证。
+- 请求同时绑定 PR 与提交号；控制器复查仓库、作者权限、非草稿、目标 main、CI 工作流身份与最终结果。新提交、取消请求、基线变化、构件过期/缺失/损坏均停止交付，返回原因。需要更新分支、重新验证并登记请求，不能把旧结果当作新版本验证。
+- CI 保存实际 merge candidate 的 head/base/tree SHA；合并前通过 GitHub Git API 校验父提交和内容树，使用带预期 head SHA 的 squash merge。合并后再比较内容树与最新 main，匹配才发布。同一内容的 squash SHA 可以变化；内容不一致不能复用。
+- 机器人使用 `GITHUB_TOKEN` 合并，直接在 release job 接续部署与公网校验，不依赖机器人 push 再触发工作流。`production` 密钥只传入发布步骤，PR job 没有发布密钥。
+- 发布请求按 head SHA 分组，重复事件不会再次合并；完整结果与发布意图保存在持久目录 `deliveries/<head-sha>.json`。已知 deploymentId 的重试只重验公网；上次发布结果未知时停止并要求核对原日志，不能盲目再次发布。
+- 成功、失败、取消结果写入 `artifacts/delivery-result.json`、Actions 摘要和 PR 中按 SHA 区分的同一条机器人评论。记录阶段、提交、CI/run 链接、部署 ID、失败断言/堆栈及完整日志路径，并对密钥脱敏。runner 掉线或任务强制终止导致收尾步骤未执行时，客户端从 Actions 最终状态和失败日志恢复诊断。
 
-GitHub artifact 存储不参与发布。部署在同一个 job 中依次检查、测试、构建和发布，直接使用验证过的 `dist`；任一步失败都不会继续发布。`production` 环境密钥仅传入发布步骤。`scripts/ci-node-tests.sh` 保存完整 Node 日志并把失败断言写入 Actions 注释；`scripts/ci-retain-reports.sh` 将测试报告、完整源码归档、提交号及构建清单保存在 runner 的 `$HOME/.local/state/daoist-actions/<owner>/<repo>/<run-id>-<attempt>/`，避免下一次 checkout 清理它们。报告由 runner 管理者按磁盘容量归档清理，不依赖 GitHub artifact 配额。
+`scripts/ship.mjs` 是普通 Node CLI，不调用模型。先显式暂存目标文件，再执行 `npm run ship -- submit --message "..."`：核对仓库/分支/远端、执行本机检查、提交暂存内容、推送、创建或复用 PR、登记该 SHA 的发布请求。可用 `--body-file` 提供 PR 说明。提交后默认立即返回；`status <PR>` 一次读取结果，`wait <PR>` 每分钟在脚本内部查询、只输出最终结果，默认 60 分钟超时且不取消远端任务；`retry <PR>` 接续已有请求。不会自动 add、stash、reset 或 force push。存在未暂存/未跟踪文件时要求先处理或使用独立 worktree，保留无关工作。
+
+首次安装必须先把工作流合入 main，再使用自动入口；`workflow_run` 不会运行仅存在于功能分支的控制器。自动把结果送回已经结束的聊天会话需要客户端回调，仓库本身只提供 GitHub 摘要、评论和命令结果。
 
 ### 持久构件
 
-`scripts/runner-artifacts.mjs` 保存完整发布包与源码快照。默认根目录为 runner 账户的 `$HOME/.local/share/daoist-actions/meviu523/daoist/`，当前对应 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`；仓库变量 `DAOIST_ARTIFACT_ROOT` 可指定绝对根目录。存储不得位于 checkout 或 `RUNNER_TEMP` 内，目录必须由 runner 账户拥有读写权限。
+`scripts/runner-artifacts.mjs` 默认存储在 runner 的 `$HOME/.local/share/daoist-actions/meviu523/daoist/`，当前为 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`；`DAOIST_ARTIFACT_ROOT` 可指定绝对根目录。目录不得在 checkout / `RUNNER_TEMP` 内，并拒绝符号链接或目录重定向。
 
-- 每份构件独立保存为 `<run-id>-<attempt>-<name>/files/` 及 `manifest.json`，记录仓库、提交 SHA、运行编号、到期时间与逐文件 SHA-256，先写临时目录再改名，同一条目不覆盖。
-- `daoist-riversoft-dist` 保存完整 `dist/`，保留 1 天；发布前从本次构件恢复并复核哈希、文件集合与静态资源规则。
-- `validation-source` 保存 PR 的源码、测试、脚本、工具、Markdown 文档与运行入口，保留 3 天，即使测试失败也尝试归档；排除隐藏文件、`.env`、`node_modules`、截图和用户存档。
-- 后续保存时，只清理本仓库内已到期且身份元数据有效的构件；未知条目、无效元数据和符号链接不自动删除。没有后续运行时不会按时清理。已有 `.local/state` 报告仍由管理员管理，不受此策略影响。
-- 恢复只接受同一运行、同一提交且未过期的发布包，校验成功后才替换 `dist`。完整重跑产生新的 attempt；过期包需重新验证构建。
-- Actions 摘要提供服务器绝对路径，通过 SSH/SCP 或服务器文件系统获取，没有 GitHub Artifacts 下载入口。原 GitHub 构件不迁移、不删除。
+- 每份构件保存为 `<run-id>-<attempt>-<name>/files/` 和 `manifest.json`，记录仓库、提交、运行、到期时间与逐文件 SHA-256。先写临时目录再改名，不覆盖既有条目。
+- `daoist-riversoft-dist` 保留 1 天；PR 成功构件附带严格验证及 head/base/tree 证据。跨工作流恢复必须与控制器从 GitHub 验证的精确 run、attempt 和内容树对应，校验完整文件集合与哈希后才替换 dist。普通恢复仍只接受同一运行和提交。
+- `validation-source` 保留 3 天，包含源码、测试、脚本、工具、Markdown 文档与入口，排除隐藏文件、环境密钥、依赖、截图和存档。
+- 保存时只清理本仓库内身份元数据有效且已过期的构件；不删除未知目录、损坏元数据或符号链接。无后续保存就不会自动定时清理。
+- `scripts/ci-retain-reports.sh` 将日志、报告、交付结果、源码归档与清单保存在 `$HOME/.local/state/daoist-actions/<owner>/<repo>/<run-id>-<attempt>/`。报告和 `deliveries/` 记录由管理者维护，不套用构件保留期。
+- Actions 摘要给出服务器路径，通过 SSH/SCP 或服务器文件系统获取，没有 GitHub Artifacts 下载入口；原 GitHub 构件不迁移或删除。
 
 固定原城区数据库使用 `.gitattributes` 的 `-text` 规则保留已发布字节，防止 Linux checkout 的 LF 与 Windows CRLF 转换造成数据库哈希不同。
 
 ### RIVERSOFT
 
-`.github/workflows/deploy-riversoft.yml` 是当前唯一静态线上发布流程。
+自动交付使用 `.github/workflows/release.yml` 复用已验证构件。`.github/workflows/deploy-riversoft.yml` 保留 main 的人工 push 和手动恢复路径，执行全量验证后发布。两条路径均在发布前检查 main 未被更新，防止排队的旧版本覆盖新版本。
 
 手动运行默认仍执行严格帧预算。只有用户明确批准的单次发布才启用 `performance_report_only`：继续执行性能测试并留存结果，但预算超限不阻断该次发布；统计自测、页面异常、源码/功能检查与公网验收仍然阻断失败。普通 push 和 PR 不受此选项影响。
 
@@ -464,7 +474,7 @@ RIVERSOFT 静态沙箱不等于完整 Node 环境：真实 AI 代理和可靠本
 8. 如果形成新应用版本，在 VERSIONS 按“新增 / 修复 / 优化”三段记录。
 9. 更新对应 TEST_REPORT。
 10. PR CI 通过后 squash merge。
-11. 合并到 main 后验证 RIVERSOFT deploy 中的检查、发布与公网哈希。
+11. 自动交付核对合并内容并复用严格验证的构件；人工 push 走完整验证。以 RIVERSOFT 发布与公网哈希均成功为完成。
 
 ## 16. 五宗与功法模块
 

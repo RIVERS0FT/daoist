@@ -9,6 +9,10 @@ permissions:
 env:
   DAOIST_ARTIFACT_ROOT: ${{ vars.DAOIST_ARTIFACT_ROOT }}
 
+concurrency:
+  group: daoist-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: [self-hosted, Linux, X64]
@@ -20,17 +24,18 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 2
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "22.16.0"
           package-manager-cache: false
       - name: Validate source
-        run: npm run check
+        run: node scripts/ci-step.mjs source npm run check
       - name: Run tests
-        run: bash scripts/ci-node-tests.sh
+        run: node scripts/ci-step.mjs node bash scripts/ci-node-tests.sh
       - name: Build static site
-        run: npm run build
+        run: node scripts/ci-step.mjs build npm run build
       - name: Setup isolated Python tooling
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -44,13 +49,17 @@ jobs:
           echo "$RUNNER_TEMP/daoist-browser/bin" >> "$GITHUB_PATH"
       - name: Run Chromium interaction checks
         run: |
-          python tests/browser-smoke.py
-          python tests/browser-map-seams.py --root dist
-          python tests/browser-chapter-regions.py --root dist
+          node scripts/ci-step.mjs browser python tests/ci-browser.py --workers 2
+          node scripts/ci-step.mjs seams python tests/browser-map-seams.py --root dist
+          node scripts/ci-step.mjs regions python tests/browser-chapter-regions.py --root dist
       - name: Check frame budgets and module attribution
         run: |
-          python tests/test_frame_metrics.py
-          python tests/browser-performance.py --root dist
+          node scripts/ci-step.mjs frame-metrics python tests/test_frame_metrics.py
+          node scripts/ci-step.mjs performance python tests/browser-performance.py --root dist
+      - name: Save the strictly validated bundle for delivery
+        run: |
+          node scripts/ci-step.mjs bundle node tools/riversoft.mjs check ./dist
+          node scripts/runner-artifacts.mjs save daoist-riversoft-dist
       - name: Retain validation reports on the runner
         if: always()
         run: bash scripts/ci-retain-reports.sh

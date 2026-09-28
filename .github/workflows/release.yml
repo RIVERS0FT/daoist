@@ -1,0 +1,75 @@
+name: Deliver validated pull request
+run-name: Deliver ${{ github.event.workflow_run.head_sha || inputs.head_sha }}
+
+on:
+  workflow_run:
+    workflows: [Validate pull request]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR with an explicit delivery request
+        required: true
+        type: string
+      head_sha:
+        description: Exact requested PR commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DAOIST_ARTIFACT_ROOT: ${{ vars.DAOIST_ARTIFACT_ROOT }}
+
+# The required named host has one runner service, serializing all publication
+# jobs. Group duplicates by commit; a global group would discard other pending PRs.
+concurrency:
+  group: daoist-delivery-${{ github.event.workflow_run.head_sha || inputs.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'meviu523/daoist'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+      actions: read
+    steps:
+      - name: Require the persistent artifact host
+        run: test "$RUNNER_NAME" = 'VM-0-10-debian'
+      - name: Checkout trusted delivery controller
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.16.0'
+          package-manager-cache: false
+      - name: Verify request and CI then squash merge
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs prepare
+      - name: Publish the verified bundle and verify public assets
+        if: steps.prepare.outputs.deploy == 'true'
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RIVERSOFT_TOKEN: ${{ secrets.RIVERSOFT_TOKEN }}
+        run: node scripts/release.mjs publish
+      - name: Return delivery result and failure logs
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: node scripts/release.mjs report
+      - name: Retain delivery result on the runner
+        if: always()
+        run: bash scripts/ci-retain-reports.sh

@@ -107,11 +107,18 @@ docs/                    设计、版本、架构、角色与验证文档
 
 仓库不再使用 GitHub Pages。
 
-`main` 推送后由 `.github/workflows/deploy-riversoft.yml` 执行完整验证、构建并发布到 RIVERSOFT。工作流通过 `scripts/verify-public.mjs` 逐个下载页面、脚本、样式和地图资源，与本次 `dist/` 构建做 SHA-256 比对。
+显式暂存目标文件后，一次提交并申请自动交付：
 
-PR 验证与发布流程的全部 job 使用 `[self-hosted, Linux, X64]`，需要仓库可用的对应 runner 在线。部署在同一 job 中验证并发布构建包，报告保留在 runner 本机，不依赖 GitHub artifact 配额；环境与报告路径见 [技术架构](docs/ARCHITECTURE.md#ci)。
+```sh
+npm run ship -- submit --message "修改说明"
+npm run ship -- status 53
+```
 
-构件默认保存在 `VM-0-10-debian` 的 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`，每次运行摘要列出具体目录。发布包保留 1 天，源码快照保留 3 天，后续归档清理过期项；通过服务器文件系统获取，不使用 GitHub Artifacts 下载。
+`submit` 完成本机检查、提交、推送和 PR 后立即返回；CI 严格通过后自动 squash merge，核对合并内容并复用 self-hosted 构件部署，最后逐个校验公网文件 SHA-256。失败会停止后续步骤，在 Actions 摘要和 PR 评论返回阶段、错误日志及服务器报告路径。`--body-file` 可指定 PR 说明；`wait <PR>` 由普通脚本低频等待最终结果，`retry <PR>` 接续已有请求。
+
+首次需先将新工作流安装到 main。人工 main 推送或手动 `deploy-riversoft.yml` 仍执行完整验证。部署检查和性能预算不会自动豁免；详细身份校验、重试和恢复规则见 [技术架构](docs/ARCHITECTURE.md#ci-与自动交付)。
+
+所有 job 使用唯一的 `VM-0-10-debian` self-hosted runner。构件位于 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`，发布包保留 1 天、源码快照 3 天，不使用 GitHub Artifacts；原报告与交付结果保留在 runner。浏览器回归可执行 `npm run test:browser`，两个独立进程汇总全部检查，性能采样单独运行。
 
 RIVERSOFT 是受限静态沙箱，适合经典静态版体验；真实 AI 代理、稳定 localStorage 和完整本机能力仍应通过 `npm start` 运行。
 

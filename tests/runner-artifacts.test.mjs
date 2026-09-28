@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {context, prune, restore, save} from '../scripts/runner-artifacts.mjs';
+import {context, prune, restore, restoreValidated, save} from '../scripts/runner-artifacts.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'daoist-artifact-test-'));
@@ -109,4 +109,22 @@ test('source snapshot retains validation inputs for three days and excludes loca
   assert(saved.metadata.files.some(file => file.path === 'docs/example.md'));
   assert(!saved.metadata.files.some(file => file.path.includes('.env') || file.path.startsWith('dist/')));
   await assert.rejects(restore(ctx, saved.key, 2000), /does not belong/);
+});
+
+test('a squash release can restore a different run only with matching strict validation evidence', async t => {
+  const {ctx, env, workspace} = await fixture(t);
+  const validation = {pr: 53, headSha: 'b'.repeat(40), baseSha: 'c'.repeat(40), treeSha: 'd'.repeat(40), strict: true};
+  const saved = await save(ctx, 'daoist-riversoft-dist', Date.now(), validation);
+  const release = context({...env, GITHUB_RUN_ID: '456', GITHUB_SHA: 'e'.repeat(40)});
+  const expected = {runId: '123', attempt: '1', sha: ctx.sha, validation};
+  await assert.rejects(restore(release, saved.key), /does not belong/);
+  await restoreValidated(release, saved.key, expected);
+  assert.equal(await readFile(join(workspace, 'dist', 'js', 'game.js'), 'utf8'), 'original');
+  for (const field of ['headSha', 'baseSha', 'treeSha']) {
+    await assert.rejects(restoreValidated(release, saved.key, {...expected, validation: {...validation, [field]: 'f'.repeat(40)}}), /does not match/);
+  }
+  await assert.rejects(restoreValidated(release, saved.key, {...expected, attempt: '2'}), /does not match/);
+  await assert.rejects(restoreValidated(release, saved.key, {...expected, validation: {...validation, strict: false}}), /Invalid validation/);
+  await writeFile(join(saved.directory, 'files', 'js', 'game.js'), 'tampered');
+  await assert.rejects(restoreValidated(release, saved.key, expected), /checksum mismatch/);
 });

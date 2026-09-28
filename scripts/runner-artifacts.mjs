@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {homedir} from 'node:os';
 import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {execFileSync} from 'node:child_process';
 
 const policies = {'daoist-riversoft-dist': 1, 'validation-source': 3};
 const keyPattern = /^([1-9]\d*)-([1-9]\d*)-(daoist-riversoft-dist|validation-source)$/;
@@ -12,7 +13,7 @@ const exists = path => lstat(path).catch(error => { if (error.code !== 'ENOENT')
 const within = (base, path) => { const rel = relative(base, path); return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
 
 // Check every parent, including directory junctions, before writes or deletion.
-async function safeDirectory(path, create = false) {
+export async function safeDirectory(path, create = false) {
   const parent = dirname(path);
   if (parent !== path) await safeDirectory(parent, create);
   if (create && !await exists(path)) await mkdir(path, {mode: 0o700});
@@ -82,7 +83,7 @@ export async function prune(ctx, now = Date.now()) {
   }
 }
 
-export async function save(ctx, name, now = Date.now()) {
+export async function save(ctx, name, now = Date.now(), validation = null) {
   if (!Object.hasOwn(policies, name)) throw Error('Unknown artifact name.');
   await safeDirectory(ctx.workspace);
   const paths = ['public', 'tests', 'scripts', 'tools', 'README.md', 'PROJECT_MEMORY.md', 'package.json', 'server.mjs'];
@@ -102,7 +103,8 @@ export async function save(ctx, name, now = Date.now()) {
       await mkdir(dirname(target), {recursive: true, mode: 0o700});
       await writeFile(target, file.data, {flag: 'wx', mode: 0o600});
     }
-    const metadata = {schema: 1, repository: ctx.repository, runId: ctx.runId, attempt: ctx.attempt, sha: ctx.sha, name, createdAt: now, expiresAt: now + policies[name] * 86400000, files: files.map(({data, ...file}) => file)};
+    if (validation) validateEvidence(validation);
+    const metadata = {schema: 1, repository: ctx.repository, runId: ctx.runId, attempt: ctx.attempt, sha: ctx.sha, name, createdAt: now, expiresAt: now + policies[name] * 86400000, files: files.map(({data, ...file}) => file), ...(validation ? {validation} : {})};
     await writeFile(join(staging, 'manifest.json'), JSON.stringify(metadata, null, 2) + '\n', {flag: 'wx', mode: 0o600});
     await rename(staging, directory);
     return {key, directory, metadata};
@@ -111,7 +113,12 @@ export async function save(ctx, name, now = Date.now()) {
   }
 }
 
-export async function restore(ctx, key, now = Date.now()) {
+export function validateEvidence(value) {
+  if (!value || value.strict !== true || !Number.isSafeInteger(value.pr) || value.pr < 1 ||
+      !['headSha', 'baseSha', 'treeSha'].every(name => /^[a-f0-9]{40}$/.test(value[name] || ''))) throw Error('Invalid validation evidence.');
+}
+
+export async function inspect(ctx, key, now = Date.now()) {
   if (!keyPattern.test(key)) throw Error('Invalid artifact key.');
   const directory = join(ctx.store, key);
   await safeDirectory(directory);
@@ -119,10 +126,29 @@ export async function restore(ctx, key, now = Date.now()) {
   if ((await lstat(manifest)).isSymbolicLink()) throw Error('Redirected manifest.');
   const meta = JSON.parse(await readFile(manifest, 'utf8'));
   validateMetadata(meta, key, ctx);
-  if (meta.name !== 'daoist-riversoft-dist' || meta.runId !== ctx.runId || meta.sha !== ctx.sha) throw Error('Artifact does not belong to this deployment.');
   if (meta.expiresAt <= now) throw Error('Artifact expired; rerun the entire workflow to verify a fresh bundle.');
   const files = await readTree(join(directory, 'files'));
   if (JSON.stringify(files.map(({data, ...file}) => file)) !== JSON.stringify(meta.files)) throw Error('Artifact file checksum mismatch.');
+  return {meta, files};
+}
+
+// A different workflow may restore only the exact successful PR run verified by
+// the release controller against GitHub. Never search for the latest bundle.
+export async function restoreValidated(ctx, key, expected, now = Date.now()) {
+  validateEvidence(expected.validation);
+  const {meta, files} = await inspect(ctx, key, now);
+  if (meta.name !== 'daoist-riversoft-dist' || meta.runId !== String(expected.runId) || meta.attempt !== String(expected.attempt) || meta.sha !== expected.sha ||
+      !['pr', 'headSha', 'baseSha', 'treeSha', 'strict'].every(name => meta.validation?.[name] === expected.validation[name])) throw Error('Artifact validation does not match the successful PR run.');
+  return replaceDist(ctx, files);
+}
+
+export async function restore(ctx, key, now = Date.now()) {
+  const {meta, files} = await inspect(ctx, key, now);
+  if (meta.name !== 'daoist-riversoft-dist' || meta.runId !== ctx.runId || meta.sha !== ctx.sha) throw Error('Artifact does not belong to this deployment.');
+  return replaceDist(ctx, files);
+}
+
+async function replaceDist(ctx, files) {
   await safeDirectory(ctx.workspace);
   const destination = join(ctx.workspace, 'dist');
   if (await exists(destination)) await safeDirectory(destination);
@@ -145,7 +171,14 @@ async function main() {
   const [command, value] = process.argv.slice(2);
   const ctx = context();
   if (command === 'save') {
-    const saved = await save(ctx, value);
+    let validation = null;
+    if (value === 'daoist-riversoft-dist' && process.env.GITHUB_EVENT_NAME === 'pull_request') {
+      const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'));
+      const git = ref => execFileSync('git', ['rev-parse', ref], {encoding: 'utf8'}).trim();
+      validation = {pr: event.number, headSha: git('HEAD^2'), baseSha: git('HEAD^1'), treeSha: git('HEAD^{tree}'), strict: true};
+      if (git('HEAD') !== ctx.sha || validation.headSha !== event.pull_request.head.sha || validation.baseSha !== event.pull_request.base.sha) throw Error('PR checkout changed before archiving.');
+    }
+    const saved = await save(ctx, value, Date.now(), validation);
     console.log(`Saved ${value}: ${saved.directory}`);
     if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `artifact-key=${saved.key}\n`);
     if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `\n### Self-hosted artifact\n\n- Runner: ${process.env.RUNNER_NAME}\n- Directory: \`${saved.directory}\`\n- Commit: \`${ctx.sha}\`\n- Expires: ${new Date(saved.metadata.expiresAt).toISOString()} (removed on a later archive run)\n- Retrieve from the runner filesystem; no GitHub Artifacts download.\n`);
