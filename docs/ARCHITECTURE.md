@@ -411,22 +411,37 @@ python tests/browser-chapter-regions.py --root dist
 
 `.github/workflows/ci.yml` 用于 PR/代码验证。
 
-所有工作流 job（PR 的 `validate`、发布的 `deploy`）统一使用 `[self-hosted, Linux, X64]`，不回退到 GitHub 托管 runner。runner 需要保持在线，提供 Bash、Git、下载 Node/Python 工具链及 Chromium 的网络访问，以及安装 Chromium 系统依赖的权限；Node 22.16.0、Python 3.12 与浏览器运行环境仍由工作流准备。
+所有工作流 job（PR 的 `validate`、发布的 `deploy`）统一使用 `[self-hosted, Linux, X64]`，checkout 前确认 runner 为 `VM-0-10-debian`，不回退到 GitHub 托管 runner。runner 需要 Bash、Git、网络下载与用户工具目录写权限，并预装 Chromium 系统依赖。工作流准备 Node 22.16.0；固定提交版本的 `astral-sh/setup-uv` 在 `RUNNER_TEMP` 中创建 Python 3.12 独立环境并安装 Playwright/Pillow/Chromium，不依赖系统 pip/ensurepip，不调用 sudo 或 apt，关闭 uv 的 GitHub Actions 缓存。
 
 GitHub artifact 存储不参与发布。部署在同一个 job 中依次检查、测试、构建和发布，直接使用验证过的 `dist`；任一步失败都不会继续发布。`production` 环境密钥仅传入发布步骤。`scripts/ci-node-tests.sh` 保存完整 Node 日志并把失败断言写入 Actions 注释；`scripts/ci-retain-reports.sh` 将测试报告、完整源码归档、提交号及构建清单保存在 runner 的 `$HOME/.local/state/daoist-actions/<owner>/<repo>/<run-id>-<attempt>/`，避免下一次 checkout 清理它们。报告由 runner 管理者按磁盘容量归档清理，不依赖 GitHub artifact 配额。
+
+### 持久构件
+
+`scripts/runner-artifacts.mjs` 保存完整发布包与源码快照。默认根目录为 runner 账户的 `$HOME/.local/share/daoist-actions/meviu523/daoist/`，当前对应 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`；仓库变量 `DAOIST_ARTIFACT_ROOT` 可指定绝对根目录。存储不得位于 checkout 或 `RUNNER_TEMP` 内，目录必须由 runner 账户拥有读写权限。
+
+- 每份构件独立保存为 `<run-id>-<attempt>-<name>/files/` 及 `manifest.json`，记录仓库、提交 SHA、运行编号、到期时间与逐文件 SHA-256，先写临时目录再改名，同一条目不覆盖。
+- `daoist-riversoft-dist` 保存完整 `dist/`，保留 1 天；发布前从本次构件恢复并复核哈希、文件集合与静态资源规则。
+- `validation-source` 保存 PR 的源码、测试、脚本、工具、Markdown 文档与运行入口，保留 3 天，即使测试失败也尝试归档；排除隐藏文件、`.env`、`node_modules`、截图和用户存档。
+- 后续保存时，只清理本仓库内已到期且身份元数据有效的构件；未知条目、无效元数据和符号链接不自动删除。没有后续运行时不会按时清理。已有 `.local/state` 报告仍由管理员管理，不受此策略影响。
+- 恢复只接受同一运行、同一提交且未过期的发布包，校验成功后才替换 `dist`。完整重跑产生新的 attempt；过期包需重新验证构建。
+- Actions 摘要提供服务器绝对路径，通过 SSH/SCP 或服务器文件系统获取，没有 GitHub Artifacts 下载入口。原 GitHub 构件不迁移、不删除。
+
+固定原城区数据库使用 `.gitattributes` 的 `-text` 规则保留已发布字节，防止 Linux checkout 的 LF 与 Windows CRLF 转换造成数据库哈希不同。
 
 ### RIVERSOFT
 
 `.github/workflows/deploy-riversoft.yml` 是当前唯一静态线上发布流程。
 
-`main` 推送后：
+手动运行默认仍执行严格帧预算。只有用户明确批准的单次发布才启用 `performance_report_only`：继续执行性能测试并留存结果，但预算超限不阻断该次发布；统计自测、页面异常、源码/功能检查与公网验收仍然阻断失败。普通 push 和 PR 不受此选项影响。
+
+仅原仓库 `main` 推送或手动运行 `main` 时：
 
 1. Node 22 源码检查。
 2. 完整 Node 测试。
 3. 多文件构建。
 4. Chromium 回归。
 5. RIVERSOFT bundle 检查。
-6. 保持同一 job 中验证过的 `dist`，无需上传/下载中转产物。
+6. 在同一 job 中将验证过的 `dist` 保存到持久存储，恢复并复核哈希。
 7. 发布步骤获取 `production` 环境中的 `RIVERSOFT_TOKEN`。
 8. 发布 `daoist` slug。
 9. `scripts/verify-public.mjs` 下载全部公开资源并与构建逐个做 SHA-256 比对；主域不可用时验证现有 HTTPS 兼容路径。

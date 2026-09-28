@@ -6,13 +6,20 @@ on:
 permissions:
   contents: read
 
+env:
+  DAOIST_ARTIFACT_ROOT: ${{ vars.DAOIST_ARTIFACT_ROOT }}
+
 jobs:
   validate:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     steps:
+      - name: Require the persistent artifact host
+        run: test "$RUNNER_NAME" = 'VM-0-10-debian'
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -24,14 +31,17 @@ jobs:
         run: bash scripts/ci-node-tests.sh
       - name: Build static site
         run: npm run build
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Setup isolated Python tooling
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           python-version: "3.12"
+          enable-cache: false
       - name: Install browser test runtime
         run: |
-          python -m pip install playwright pillow
-          python -m playwright install --with-deps chromium
+          uv venv --python 3.12 "$RUNNER_TEMP/daoist-browser"
+          uv pip install --python "$RUNNER_TEMP/daoist-browser/bin/python" playwright pillow
+          "$RUNNER_TEMP/daoist-browser/bin/python" -m playwright install chromium
+          echo "$RUNNER_TEMP/daoist-browser/bin" >> "$GITHUB_PATH"
       - name: Run Chromium interaction checks
         run: |
           python tests/browser-smoke.py
@@ -44,3 +54,6 @@ jobs:
       - name: Retain validation reports on the runner
         if: always()
         run: bash scripts/ci-retain-reports.sh
+      - name: Save reproducible validation inputs
+        if: always()
+        run: node scripts/runner-artifacts.mjs save validation-source

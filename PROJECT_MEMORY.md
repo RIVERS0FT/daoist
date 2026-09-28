@@ -1,6 +1,6 @@
 # 项目记忆 · 外卖修仙 Web RPG
 
-更新时间：2026-09-27。
+更新时间：2026-09-28。
 
 本文件只保存**当前项目状态与长期维护约束**。版本历史统一见 `docs/VERSIONS.md`，当前玩法统一见 `docs/GAME_DESIGN.md`，技术实现统一见 `docs/ARCHITECTURE.md`。
 
@@ -15,6 +15,8 @@
 - 境界：凡人 + 炼气至渡劫九个修仙境界；凡人不分重，其余各九重
 - 静态发布：RIVERSOFT
 - GitHub Actions：所有 job 使用 `[self-hosted, Linux, X64]`；PR validate 与发布 deploy 均不使用 GitHub 托管 runner。deploy 在同一 job 中验证并发布 dist，不依赖 GitHub artifact 存储；日志与帧报告保存在 runner 的 `$HOME/.local/state/daoist-actions/`。
+- 持久构件：`VM-0-10-debian` 的 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`，可用 `DAOIST_ARTIFACT_ROOT` 指定根目录。发布包保留 1 天、源码快照 3 天；后续保存清理已到期条目。部署先保存并按哈希恢复构件，再发布；原有报告目录保留。Python/Playwright 由 uv 独立环境提供，不依赖系统 pip 或 sudo。
+- 原城区 `public/js/city-data.js` 按已发布原始字节保存，Git 禁止换行转换，跨 Windows/Linux SHA-256 均须为 `804b67e2d48d54646c322c92b8125b0c3425c083db41fcd29902eff45fe4d582`。
 - GitHub Pages：已移除
 - 当前公开地址：`https://mevius.riversoft.top/daoist/`
 - 本机启动：`npm start` 或 `npm run dev`，共用可选 `.env` 配置，默认 `http://127.0.0.1:8787`。

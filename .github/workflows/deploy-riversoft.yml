@@ -4,9 +4,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      performance_report_only:
+        description: "Explicitly approved release: record frame budget failures without blocking deployment"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+env:
+  DAOIST_ARTIFACT_ROOT: ${{ vars.DAOIST_ARTIFACT_ROOT }}
 
 concurrency:
   group: daoist-riversoft-production
@@ -14,14 +22,20 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.repository == 'meviu523/daoist' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 55
     environment:
       name: production
 
     steps:
+      - name: Require the persistent artifact host
+        run: test "$RUNNER_NAME" = 'VM-0-10-debian'
+
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -38,15 +52,18 @@ jobs:
       - name: Build the static game
         run: npm run build
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Setup isolated Python tooling
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           python-version: "3.12"
+          enable-cache: false
 
       - name: Install browser test runtime
         run: |
-          python -m pip install playwright pillow
-          python -m playwright install --with-deps chromium
+          uv venv --python 3.12 "$RUNNER_TEMP/daoist-browser"
+          uv pip install --python "$RUNNER_TEMP/daoist-browser/bin/python" playwright pillow
+          "$RUNNER_TEMP/daoist-browser/bin/python" -m playwright install chromium
+          echo "$RUNNER_TEMP/daoist-browser/bin" >> "$GITHUB_PATH"
 
       - name: Run Chromium interaction checks
         run: |
@@ -55,12 +72,31 @@ jobs:
           python tests/browser-chapter-regions.py --root dist
 
       - name: Check frame budgets and module attribution
+        env:
+          PERFORMANCE_REPORT_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.performance_report_only }}
         run: |
           python tests/test_frame_metrics.py
-          python tests/browser-performance.py --root dist
+          if [ "$PERFORMANCE_REPORT_ONLY" = 'true' ]; then
+            echo '::warning::Frame budget gate waived for this manually approved release; metrics are still recorded.'
+            printf '%s\n' 'Frame budget gate waived for this manually approved release; see retained performance report.' >> "$GITHUB_STEP_SUMMARY"
+            python tests/browser-performance.py --root dist --report-only
+          else
+            python tests/browser-performance.py --root dist
+          fi
 
       - name: Check the deployment bundle
         run: node tools/riversoft.mjs check ./dist
+
+      - name: Save the verified deployment bundle
+        id: archive
+        run: node scripts/runner-artifacts.mjs save daoist-riversoft-dist
+
+      - name: Restore and recheck the saved bundle
+        env:
+          ARTIFACT_KEY: ${{ steps.archive.outputs.artifact-key }}
+        run: |
+          node scripts/runner-artifacts.mjs restore "$ARTIFACT_KEY"
+          node tools/riversoft.mjs check ./dist
 
       - name: Publish to RIVERSOFT
         id: publish

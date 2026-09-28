@@ -1,4 +1,13 @@
 # Preserve upstream bytes so Leaflet SHA-256 checks match on Windows and Linux.
 /public/vendor/leaflet/leaflet.js -text
 /public/vendor/leaflet/leaflet.css -text
+# Keep the published city database byte-identical across runner platforms.
+/public/js/city-data.js -text
+# Exporters compare generated text byte-for-byte on every platform.
+/docs/ZHOU_STORY.md text eol=lf
+/docs/ZHOU_STORY.json text eol=lf
+/docs/NPC_PROMPTS.md text eol=lf
+/docs/npc-prompts.json text eol=lf
+/docs/SECTS_AND_TECHNIQUES.md text eol=lf
+/docs/CHAPTER_OUTLINES.md text eol=lf
 *.sh text eol=lf

@@ -111,6 +111,8 @@ docs/                    设计、版本、架构、角色与验证文档
 
 PR 验证与发布流程的全部 job 使用 `[self-hosted, Linux, X64]`，需要仓库可用的对应 runner 在线。部署在同一 job 中验证并发布构建包，报告保留在 runner 本机，不依赖 GitHub artifact 配额；环境与报告路径见 [技术架构](docs/ARCHITECTURE.md#ci)。
 
+构件默认保存在 `VM-0-10-debian` 的 `/home/git-runner/.local/share/daoist-actions/meviu523/daoist/`，每次运行摘要列出具体目录。发布包保留 1 天，源码快照保留 3 天，后续归档清理过期项；通过服务器文件系统获取，不使用 GitHub Artifacts 下载。
+
 RIVERSOFT 是受限静态沙箱，适合经典静态版体验；真实 AI 代理、稳定 localStorage 和完整本机能力仍应通过 `npm start` 运行。
 
 ## 项目边界
