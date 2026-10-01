@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createApp} from '../server.mjs';
 import http from 'node:http';
+import {readFile,readdir} from 'node:fs/promises';
 const validEvent={title:'归途的灯',text:'店主在门边留了一盏灯。',choices:[{label:'道谢',result:'你们相视一笑。',effects:{qi:5}},{label:'买一杯茶',result:'手心暖了起来。',effects:{money:-5,stamina:3}},{label:'帮忙收拾',result:'门前干净了。',effects:{karma:1}}]};
 const upstream=()=>new Response(JSON.stringify({choices:[{message:{content:JSON.stringify(validEvent)}}]}),{status:200,headers:{'Content-Type':'application/json'}});
 const context={name:'云行',realm:'凡人',day:1,time:'08:00',kind:'delivery',location:'旧城',title:'一份外卖',text:'送餐时遇到了店主。',stats:{money:50},recent:[]};
@@ -11,14 +12,44 @@ const post=(url,body={context},headers={})=>fetch(`${url}/api/story`,{method:'PO
 
 test('AI 章节和区域材料由可信配置重建，客户端不能覆盖大纲或请求锁定区',async t=>{
  let sent;const {url}=await withApp(t,{...configured,fetchImpl:async(_,options)=>{sent=JSON.parse(options.body);return upstream();}});
- assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'bound',chapter:{facts:['FORGED_CHAPTER']}}})).status,200);
+ assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'district-310104',chapter:{facts:['FORGED_CHAPTER']}}})).status,200);
  const cleaned=JSON.parse(sent.messages[1].content);assert.equal(cleaned.chapter.id,'bound');assert.equal(cleaned.chapter.area,'长乐西坊');
  assert.match(sent.messages[0].content,/章节约束/);assert.ok(cleaned.chapter.withheld.length);assert.doesNotMatch(JSON.stringify(sent),/FORGED_CHAPTER/);
- assert.equal((await post(url,{context:{...context,chapterId:'truth',regionId:'truth',systemUnlocked:false}})).status,400);
- assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'truth'}})).status,400);
+ assert.equal((await post(url,{context:{...context,chapterId:'truth',regionId:'district-310113',systemUnlocked:false}})).status,400);
+ assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'bound',regionId:'district-310113'}})).status,400);
  assert.equal((await post(url,{context:{...context,systemUnlocked:true,chapterId:'__proto__'}})).status,400);
 });
 test('HTTP 启动页和静态模块可访问，MIME 与 CSP 正确',async t=>{const {url}=await withApp(t);const r=await fetch(url);assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await r.text(),/外卖修仙录/);for(const name of ['engine','clock','progression']){const js=await fetch(`${url}/js/${name}.js`);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);}});
+test('真实 HTTP 首页引用的全部脚本、样式和 favicon 均可达',async t=>{
+  const {url}=await withApp(t),page=await fetch(url),html=await page.text();
+  const resources=[...html.matchAll(/<(?:script|link)\b[^>]*\b(?:src|href)="([^"]+)"/g)].map(match=>match[1]);
+  assert.ok(resources.includes('js/art.js'));assert.ok(resources.includes('art/game-icon-v1.png'));
+  for(const path of resources){
+    const target=new URL(path,url);assert.equal(target.origin,url,`${path} 必须同源`);
+    const response=await fetch(target);assert.equal(response.status,200,path);
+    assert.equal(response.headers.get('cache-control'),'no-store',path);
+    assert.equal(response.headers.get('x-content-type-options'),'nosniff',path);
+    const mime=path.endsWith('.js')?'text/javascript':path.endsWith('.css')?'text/css':'image/png';
+    assert.ok(response.headers.get('content-type').startsWith(mime),path);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),await readFile(new URL(`../public/${path}`,import.meta.url)),path);
+  }
+});
+test('全部 61 张游戏美术以真实 PNG 返回，未知路径和越界读取仍为 404',async t=>{
+  const {url}=await withApp(t);
+  const files=(await readdir(new URL('../public/art/',import.meta.url),{recursive:true})).filter(file=>file.endsWith('.png')).map(file=>`art/${file.replaceAll('\\','/')}`);
+  assert.equal(files.length,61);
+  for(const path of files){
+    const response=await fetch(`${url}/${path}`);assert.equal(response.status,200,path);
+    assert.equal(response.headers.get('content-type'),'image/png',path);
+    const bytes=Buffer.from(await response.arrayBuffer());
+    assert.deepEqual(bytes.subarray(0,8),Buffer.from([137,80,78,71,13,10,26,10]),path);
+    assert.equal(Number(response.headers.get('content-length')),bytes.length,path);
+    assert.deepEqual(bytes,await readFile(new URL(`../public/${path}`,import.meta.url)),path);
+  }
+  for(const path of ['/art/unknown-v1.png','/art/icons/unknown-v1.png','/art/ui/unknown-v1.png','/art/items/unknown-v1.png','/art/items/pill-qi-v1.png.bak','/art/icons/help-v1.png.bak','/art/art.js','/art/../server.mjs','/art/%2e%2e%2f.env','/art/%2e%2e%2fserver.mjs','/art/saves.json']){
+    assert.equal((await fetch(url+path)).status,404,path);
+  }
+});
 test('健康检查不返回密钥，未配置 AI 不伪造成功',async t=>{const {url}=await withApp(t);const r=await fetch(`${url}/api/health`);const data=await r.json();assert.equal(data.aiConfigured,false);assert.equal((await post(url)).status,503);assert.equal(JSON.stringify(data).includes('AI_API_KEY'),false);});
 test('固定静态文件白名单阻止读取环境文件与服务端源码',async t=>{const {url}=await withApp(t);for(const path of ['/.env','/server.mjs','/package.json','/docs/README.md','/%2e%2e/.env','/js/../../server.mjs'])assert.equal((await fetch(url+path)).status,404);});
 test('Host 校验阻止 DNS 重绑定式主机名',async t=>{const {url}=await withApp(t);const status=await new Promise((resolve,reject)=>{const req=http.get(url,{headers:{Host:'attacker.invalid'}},res=>{res.resume();resolve(res.statusCode);});req.on('error',reject);});assert.equal(status,403);});

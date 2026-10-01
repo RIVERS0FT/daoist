@@ -1,7 +1,9 @@
-"""Real RAF + whole-page CPU/renderer performance check; no mocked clock or saves.
+"""Real RAF + whole-page CPU/renderer performance check; no mocked clock or storage.
 
 python tests/browser-performance.py --root public --output artifacts/performance
 Use --headed to profile a visible local browser, --cpu-rate 4 for a slower CPU.
+Optional --scenes start-art,npc-art,inventory-art,player-appearance use isolated,
+validated saves and real UI.
 """
 import argparse
 import json
@@ -49,13 +51,77 @@ def serve(page,directory):
 
 
 def wait_trace(page,complete):
-    deadline=time.monotonic()+15
+    # CDP may export tens of MB after sampling has stopped. This deadline only
+    # bounds trace delivery; scene duration, sampling and frame budgets stay fixed.
+    deadline=time.monotonic()+60
     while not complete:
         if time.monotonic()>deadline:raise TimeoutError('Chromium trace did not finish')
         page.wait_for_timeout(50)
 
 
+def prepare_art_scene(page,scene):
+    # Keep unfinished travel/late-chapter state in its own real save. Artwork
+    # fixtures start paused at home, without pending stories or notifications.
+    close=page.locator('#panel[open] [data-ui="close"]')
+    if close.count():close.click()
+    if page.locator('#panel[open]').count():
+        # A blocking story has no close control; use the existing home handler
+        # during setup rather than choose a story branch to obtain a fixture.
+        page.locator('#game-header [data-ui="home"]').evaluate('(button)=>button.click()')
+    else:
+        pause=page.locator('[data-ui="pause"]')
+        if pause.get_attribute('aria-label')!='继续游戏':pause.click()
+        page.locator('#game-header [data-ui="home"]').click()
+    fixture=page.evaluate('''scene=>{
+      const G=NightCourier,name=scene==='npc-art'?'人物帧长测试':scene==='player-appearance'?'形象帧长测试':'开始页帧长测试';
+      const s=G.newGame(name,'classic',20261001,scene==='player-appearance'?'male-rider-steady':G.DEFAULT_APPEARANCE_ID);
+      if(scene==='npc-art'){s.bonds.lin.met=true;s.bonds.zhou.met=true;}
+      if(scene==='inventory-art'){
+        for(const item of G.ITEMS.filter(item=>!item.unique))s.inventory[item.id]=1;
+        s.learned=['breathing','lightstep'];s.equipment=['jade','robe'];
+      }
+      G.syncFeatureUnlocks(s,true);
+      const clean=G.sanitizeSave(s),store=G.createStore(localStorage);store.load();
+      const saved=store.upsert(clean);if(!saved.ok)throw new Error(saved.error);
+      dispatchEvent(new StorageEvent('storage',{key:G.STORAGE_KEY}));
+      return {id:clean.id,appearanceId:clean.appearanceId,met:G.visibleNPCs(clean).map(n=>n.id),features:clean.unlockedFeatures};
+    }''',scene)
+    page.locator(f'[data-ui="load"][data-id="{fixture["id"]}"]').click()
+    page.wait_for_selector('#game-screen[data-paused="true"]:not([hidden])')
+    assert page.locator('[data-npc-portrait]').count()==0,'Portrait was mounted before its measured scene'
+    if scene=='npc-art':
+        assert sorted(fixture['met'])==['lin','zhou'],fixture
+        assert fixture['features']==['bonds'],fixture
+    return fixture
+
+
+def decode_art_image(locator):
+    locator.scroll_into_view_if_needed()
+    return locator.evaluate('''async img=>{
+      await img.decode();
+      if(!img.complete||!img.naturalWidth||img.hidden||img.closest('[hidden]'))throw new Error('Artwork failed to load: '+img.src);
+      return {src:img.getAttribute('src'),width:img.naturalWidth,height:img.naturalHeight};
+    }''')
+
+
+def scroll_art_container(page,selector):
+    container=page.locator(selector)
+    before=container.evaluate('(el)=>({top:el.scrollTop,max:el.scrollHeight-el.clientHeight})')
+    box=container.bounding_box();page.mouse.move(box['x']+box['width']*.5,box['y']+box['height']*.5)
+    page.mouse.wheel(0,420);page.wait_for_timeout(120)
+    down=container.evaluate('(el)=>el.scrollTop')
+    page.mouse.wheel(0,-420);page.wait_for_timeout(120)
+    up=container.evaluate('(el)=>el.scrollTop')
+    if before['max']>1:assert down!=before['top'] or up!=down,f'{selector}: scrollable artwork did not scroll'
+    return {'before':before['top'],'down':down,'up':up,'max':before['max']}
+
+
 def run_scene(page,cdp,scene,seconds,modules,output,budget):
+    art_fixture=prepare_art_scene(page,scene) if scene in ('start-art','npc-art','inventory-art','player-appearance') else None
+    art_checks={'fixture':art_fixture,'iterations':0,'images':[],'scrolls':[]} if art_fixture else None
+    if scene=='player-appearance':
+        art_checks['saved_count']=page.evaluate('JSON.parse(localStorage.getItem(NightCourier.STORAGE_KEY)).saves.length')
+        art_checks['selected']=[]
     if scene.startswith('region-'):
         # Isolated late-chapter fixture: measure actual detailed territory, not
         # the cheaper fog surface of a new game's locked districts.
@@ -70,7 +136,6 @@ def run_scene(page,cdp,scene,seconds,modules,output,budget):
         page.evaluate('(()=>{const p=NightCourier.PLACES.find(p=>p.regional&&p.x>15000&&p.y>18000);__perfMap.map.setView([-p.y,p.x],Math.log2(.7),{animate:false});})()')
     if scene=='travel':
         page.locator('.map-point[data-place="garage"]').focus();page.keyboard.press('Enter')
-        page.locator('[data-act="travel"]').click()
     elif scene=='idle':
         page.click('[data-ui="pause"]');page.click('[data-ui="pause"]') # Reset autosave baseline through real controls.
     page.wait_for_timeout(350)
@@ -83,7 +148,12 @@ def run_scene(page,cdp,scene,seconds,modules,output,budget):
     cdp.send('Profiler.start');page.evaluate('window.__perfStart()')
     started=time.monotonic()
     try:
-        if scene=='probe-long-task':
+        if scene=='travel':
+            # Start the real action inside capture: a short route can finish
+            # while tracing/profiling is being prepared on a slower host.
+            page.locator('[data-act="travel"]').click()
+            page.wait_for_timeout(seconds*1000)
+        elif scene=='probe-long-task':
             page.wait_for_timeout(350)
             page.evaluate('''()=>{setTimeout(()=>{const until=performance.now()+200;while(performance.now()<until){};},0);}''')
             page.wait_for_timeout(350)
@@ -108,6 +178,81 @@ def run_scene(page,cdp,scene,seconds,modules,output,budget):
             while time.monotonic()-started<seconds:
                 page.locator('#game-nav [data-panel="help"]').click();page.wait_for_timeout(180)
                 page.locator('#panel [data-ui="close"]').click();page.wait_for_timeout(180)
+        elif scene=='start-art':
+            while time.monotonic()-started<seconds or art_checks['iterations']<2:
+                page.locator('#game-header [data-ui="home"]').click()
+                art_checks['images'].append(decode_art_image(page.locator('.hero-illustration img')))
+                art_checks['scrolls'].append(scroll_art_container(page,'#start-screen'))
+                page.locator(f'[data-ui="load"][data-id="{art_fixture["id"]}"]').click()
+                page.wait_for_selector('#game-screen[data-paused="true"]:not([hidden])')
+                page.wait_for_function('!__perfMap.baseOverlay.isLoading()')
+                page.wait_for_timeout(180);art_checks['iterations']+=1
+        elif scene=='player-appearance':
+            while time.monotonic()-started<seconds or art_checks['iterations']<2:
+                avatar=page.locator(f'.avatar img[data-player-appearance="{art_fixture["appearanceId"]}"]')
+                art_checks['images'].append(decode_art_image(avatar))
+                avatar.evaluate('(img)=>{window.__perfAppearanceAvatar=img;}')
+                page.locator('#game-header [data-ui="home"]').click()
+                page.locator('[data-ui="new-game"]').click()
+                page.wait_for_selector('#panel[open] #new-game-form')
+                radios=page.locator('#new-game-form input[name="appearanceId"]')
+                assert radios.count()==2,'The real form must contain two appearance choices'
+                assert page.locator('#new-game-form input[name="appearanceId"][value="male-rider"]').is_checked()
+                for appearance in ('male-rider','male-rider-steady'):
+                    art_checks['images'].append(decode_art_image(page.locator(f'.appearance-preview [data-player-appearance="{appearance}"]')))
+                page.evaluate('window.__perfAppearancePreviews=[...document.querySelectorAll(".appearance-preview [data-player-appearance]")]')
+                for appearance in ('male-rider-steady','male-rider'):
+                    radio=page.locator(f'#new-game-form input[name="appearanceId"][value="{appearance}"]')
+                    radio.check();assert radio.is_checked(),f'Appearance selection failed: {appearance}'
+                    assert page.locator('#new-game-form input[name="appearanceId"]:checked').count()==1
+                    art_checks['selected'].append(appearance)
+                art_checks['scrolls'].append(scroll_art_container(page,'.panel-body'))
+                assert page.evaluate('''()=>{
+                  const current=[...document.querySelectorAll('.appearance-preview [data-player-appearance]')];
+                  return current.length===2&&current.every((img,i)=>img===__perfAppearancePreviews[i]&&img.isConnected&&!img.hidden);
+                }'''),'Appearance selection or scroll recreated preview images'
+                # Close without submitting: repeated profiling must not consume save slots.
+                page.locator('#panel [data-ui="close"]').click()
+                page.locator(f'[data-ui="load"][data-id="{art_fixture["id"]}"]').click()
+                page.wait_for_selector('#game-screen[data-paused="true"]:not([hidden])')
+                page.wait_for_function('!__perfMap.baseOverlay.isLoading()')
+                art_checks['images'].append(decode_art_image(avatar))
+                page.wait_for_timeout(180)
+                assert page.evaluate('__perfAppearanceAvatar===document.querySelector(".avatar img")'),'Repeated form display recreated the HUD avatar'
+                page.locator('#game-header .identity[data-panel="character"]').click()
+                page.wait_for_selector('#panel[open] .character-appearance')
+                art_checks['images'].append(decode_art_image(page.locator(f'.player-portrait [data-player-appearance="{art_fixture["appearanceId"]}"]')))
+                art_checks['scrolls'].append(scroll_art_container(page,'.panel-body'))
+                page.locator('#panel [data-ui="close"]').click()
+                assert page.evaluate('__perfAppearanceAvatar===document.querySelector(".avatar img")'),'Character panel recreated the HUD avatar'
+                assert page.evaluate('__perfMap.s.appearanceId')==art_fixture['appearanceId'],'The unsubmitted form changed the fixture appearance'
+                assert page.evaluate('JSON.parse(localStorage.getItem(NightCourier.STORAGE_KEY)).saves.length')==art_checks['saved_count'],'Opening the form created an extra save'
+                art_checks['iterations']+=1
+            art_checks['preview_nodes_stable']=True;art_checks['avatar_node_stable']=True
+        elif scene=='inventory-art':
+            while time.monotonic()-started<seconds or art_checks['iterations']<2:
+                page.locator('#game-nav [data-panel="inventory"]').click()
+                page.wait_for_selector('#panel[open] .inventory-card')
+                art_checks['cards']=page.locator('.inventory-card').count()
+                assert art_checks['cards']>=175,'Inventory fixture must include all consumable types and materials'
+                for item_id in ('qi','herb','fragment','breathing','jade','robe'):
+                    art_checks['images'].append(decode_art_image(page.locator(f'[data-item-art="{item_id}"]')))
+                art_checks['scrolls'].append(scroll_art_container(page,'.panel-body'))
+                page.locator('#panel [data-ui="close"]').click()
+                page.wait_for_selector('#game-screen[data-paused="true"]:not([hidden])')
+                page.wait_for_timeout(180);art_checks['iterations']+=1
+        elif scene=='npc-art':
+            while time.monotonic()-started<seconds or art_checks['iterations']<2:
+                page.locator('#game-nav [data-panel="bonds"]').click()
+                page.wait_for_selector('#panel[open] .npc-card')
+                assert sorted(page.locator('.npc-card').evaluate_all('(cards)=>cards.map(c=>c.dataset.npcId)'))==['lin','zhou']
+                assert page.locator('[data-npc-portrait]').count()==2,'Both known portraits must be measured'
+                for npc in ('lin','zhou'):
+                    art_checks['images'].append(decode_art_image(page.locator(f'[data-npc-portrait="{npc}"]')))
+                art_checks['scrolls'].append(scroll_art_container(page,'.panel-body'))
+                page.locator('#panel [data-ui="close"]').click()
+                page.wait_for_selector('#game-screen[data-paused="true"]:not([hidden])')
+                page.wait_for_timeout(180);art_checks['iterations']+=1
         else:page.wait_for_timeout(seconds*1000)
         sample=page.evaluate('window.__perfStop()')
     finally:
@@ -115,6 +260,10 @@ def run_scene(page,cdp,scene,seconds,modules,output,budget):
         cdp.remove_listener('Tracing.dataCollected',on_data);cdp.remove_listener('Tracing.tracingComplete',on_done)
     summary=summarize_trace(events,profile,modules,sample['raf'],budget)
     summary.update({'scene':scene,'long_tasks':sample['longTasks'],'state_before':sample['before'],'state_after':sample['after']})
+    if art_checks:
+        for key in ('minutes','position','distance','activity'):
+            assert sample['after'][key]==sample['before'][key],f'{scene}: artwork changed {key}'
+        art_checks['gameplay_unchanged']=True;summary['art']=art_checks
     output.mkdir(parents=True,exist_ok=True)
     (output/f'{scene}.trace.json').write_text(json.dumps({'traceEvents':events}),encoding='utf8')
     (output/f'{scene}.cpuprofile').write_text(json.dumps(profile),encoding='utf8')

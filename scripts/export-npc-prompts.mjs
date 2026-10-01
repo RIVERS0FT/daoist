@@ -3,6 +3,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {dirname,join} from 'node:path';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/js/data.js';
 import '../public/js/chapters.js';
 import '../public/js/npc-profiles.js';

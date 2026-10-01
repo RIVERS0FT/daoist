@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -55,13 +56,13 @@ test('男性总数12、女性9、总数21，追加九人有明确年龄、独立
     for(const a of n.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(s,c.effects,c.itemCost)));}
     assert.deepEqual(n.arc[3].slice(2).map(c=>c.path),['friend','friend','friend']);
   }
-  assert.equal(G.VERSION,24);assert.equal(G.STORAGE_KEY,'night-courier:saves:v24');
+  assert.equal(G.VERSION,25);assert.equal(G.STORAGE_KEY,'night-courier:saves:v25');
 });
 
 test('除周野新故事外原十一人文字数值、画像AI保持指纹一致',()=>{
   assert.equal(hash(G.NPCS.slice(0,12).filter(n=>n.id!=='zhou').map(({gender,...n})=>n)),'bddd20c6c18b8dc78034e2670d3606e97f58d859ea7b6246066621c8ac386945');
   assert.equal(hash(G.npcPromptCatalog().slice(0,12).filter(c=>c.profile.id!=='zhou')),'ddc4524ae7071b0de05477eeb31f0d10de765a61cfcb94f9c6a6a84aa976b080');
-  assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,12);
+  assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,16);
 });
 
 for(const id of ids)test(`${id}：四段三选项在经典和AI中均固定，结果实际结算且只有友情`,()=>{

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -28,7 +29,8 @@ function eligible(mode='classic'){
  const s=G.newGame('五宗边界',mode,44123);s.player.realm=4;s.player.money=100000;s.player.coins=10000;
  s.stats.delivered=42;s.flags.firstOrder=true;s.flags.systemAwakened=true;s.claimed=['q1'];s.stats.trained=1;
  for(const k of G.STORY_FLAG_KEYS.slice(0,6))s.flags[k]=true;
- s.unlockedPlaces=G.PLACES.filter(p=>p.permanent).map(p=>p.id);s.bonds.lu.met=true;s.sect.invited=true;
+ for(const k of ['storyWestwardNote','storyRiverRelay'])s.flags[k]=true;
+ s.unlockedPlaces=G.PLACES.filter(p=>p.permanent).map(p=>p.id);s.bonds.lu.met=true;s.bonds.lin.met=true;s.sect.invited=true;
  s.unlockedFeatures=G.FEATURE_UNLOCKS.map(f=>f.id);s.unlockNotices=[];
  return s;
 }

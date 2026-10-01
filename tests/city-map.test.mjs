@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -58,9 +59,9 @@ test('沿真实弯折行驶、停止再规划、多次读档均无瞬移或重�
   assert.deepEqual(s.activity.route.points[0],p);assert.deepEqual(G.playerPoint(s),p);
 });
 
-test('v1–v23、缺少版本以及未来版本明确拒绝，现代存档仍正常往返',()=>{
+test('v1–v24、缺少版本以及未来版本明确拒绝，现代存档仍正常往返',()=>{
   const s=G.newGame('新城','classic',42);
-  for(const version of [...Array.from({length:23},(_,i)=>i+1),undefined,25]){
+  for(const version of [...Array.from({length:G.VERSION-1},(_,i)=>i+1),undefined,G.VERSION+1]){
     const old={...G.clone(s),schemaVersion:version},before=JSON.stringify(old);
     assert.throws(()=>G.sanitizeSave(old),/不支持此存档版本/);assert.equal(JSON.stringify(old),before);
   }

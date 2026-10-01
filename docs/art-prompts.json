@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-01",
+  "mode": "built-in image_gen",
+  "style": "semi-realistic modern urban cultivation RPG; muted teal and warm gold; painterly brushwork; adult character proportions",
+  "assets": [
+    {
+      "id": "city_keyart",
+      "path": "public/art/night-courier-keyart-v1.png",
+      "prompt": "Use case: stylized-concept\nAsset type: 都市修仙游戏主视觉，可用于开始页与宣传插画；单张完整横幅，约 16:9 构图。\nPrimary request: 原创都市修仙 RPG《外卖修仙录》游戏美术。半写实数字绘画，细腻而可辨识的绘画笔触，克制东方气质、现代日常生活，自然成年人体比例，低饱和深青绿与青灰，暖金色微光；高级故事游戏插画，避免照片质感和动漫幼态。无文字、无字幕、无水印、无品牌、无机构徽记。\nScene/backdrop: 虚构青岚城的雨后黄昏街巷，取江南现代老城生活质感：朴素砖墙、街角店铺的温暖灯光、电线与远处城市轮廓，石板与路面有柔和倒影；不画可辨识真实地标。\nSubject: 一位成年配送骑手的侧后方身影，与一辆真实日常电动车及车后方无品牌配送箱；骑手穿日常配送外套，戴安全头盔，车辆轮胎与路面可靠接触，画面展现平凡生活中的修行主题。一缕极淡青金色气息沿巷中微光升起，远处楼顶与月色融入朦胧气韵；细微、有诗意，不画御剑飞行或华丽战甲。\nComposition/framing: 宽幅叙事环境插画，近景街巷与骑手形成视觉引导；骑手位于右下三分之一，电动车完整可辨，左上留安静的深青灰空气和屋檐空间以便日后界面排字，图中本身不生成标题文字。保留景深与清晰叙事轮廓。\nLighting/mood: 雨后入夜、暖色店灯与冷青暮色交织，温暖、踏实、略带仙途的神秘，清楚可读且不过度黑暗。\nConstraints: 没有其他可识别人物，没有任何故事秘密或具体 NPC 身份；无地图 UI、按钮、数据、道路标注、现实上海名称，不画取餐动作。"
+    },
+    {
+      "id": "zhou_portrait",
+      "path": "public/art/zhou-rider-v1.png",
+      "prompt": "Use case: stylized-concept\nAsset type: 游戏 NPC 周野早期人物立绘，单张3:4竖幅。\nPrimary request: 原创都市修仙 RPG《外卖修仙录》游戏美术。半写实数字绘画，细腻而可辨识的绘画笔触，克制东方气质、现代日常生活，自然成年人体比例，低饱和深青绿与青灰，暖金色微光；高级故事游戏插画，避免照片质感和动漫幼态。无文字、无字幕、无水印、无品牌、无机构徽记。\nSubject: 周野，25岁，成年男性，普通骑手。脸型略方，下颌利落，浓眉，深棕眼睛明亮直接，稍乱的黑色短发，日晒小麦肤色，精瘦结实，肩膀略向前，带跑单奔忙的朝气与坦率笑意。暖赭色配送外套、深灰内搭、低调反光细条，配色赭黄、石墨灰、黑色；无平台商标，不把护具画成战甲。无标志头盔夹在一侧臂弯，另一只手松握旧手机。头盔、外套、短发为固定识别点。\nComposition/framing: 单人腰部以上半身像，完整头顶与双肩，完整手部、头盔及手机，脸清晰；平视略微侧身，周边留裁切余量，头部不过大，自然成年比例。\nScene/backdrop: 简洁深青灰渐变背景，细微绘画肌理，无具体地点、无其他人物。\nLighting/mood: 柔和侧光，温和暖色面部与深青灰背景协调，可信、坦率。\nConstraints: 只画早期普通骑手形象，衣袖干净，不出现灵力、法阵、黑签、蚀灯纹、组织符号或敌对姿态。无文字、水印、标志，不仿真人或名人，无畸形手指、多余肢体，不画全身。"
+    },
+    {
+      "id": "lin_portrait",
+      "path": "public/art/lin-office-v1.png",
+      "prompt": "Use case: stylized-concept\nAsset type: 游戏 NPC 林晚人物立绘，单张3:4竖幅。\nPrimary request: 原创都市修仙 RPG《外卖修仙录》游戏美术。半写实数字绘画，细腻而可辨识的绘画笔触，克制东方气质、现代日常生活，自然成年人体比例，低饱和深青绿与青灰，暖金色微光；高级故事游戏插画，避免照片质感和动漫幼态。无文字、无字幕、无水印、无品牌、无机构徽记。\nSubject: 林晚，24岁，成年女性，行政秘书。偏窄鹅蛋脸，平直眉，眼尾略垂，深棕瞳，安静且观察细致；黑发低髻，耳边少量碎发；自然浅暖肤色，匀称身形、肩背端正。米白日常西装外套，内搭衣领平整的雾蓝衬衫，穿着职业自然；配色米白、雾蓝、暖灰。将合拢的素色日程本抱在腰前，另一只手持黑色签字笔；淡淡点头，专注且忙碌后略有倦意，初识时礼貌而克制。低髻、平直眉、雾蓝衬衫、日程本为固定识别点。\nComposition/framing: 单人腰部以上半身像，完整头顶与双肩，完整手部、日程本与签字笔，脸清晰；平视略微侧身，周边留裁切余量，自然成年比例。\nScene/backdrop: 简洁深青灰渐变背景，细微绘画肌理，无具体地点、无其他人物。\nLighting/mood: 柔和侧光、低饱和色彩、克制温和。\nConstraints: 是行政秘书，不是医护人员；无白大褂、听诊器、医疗道具、机构徽记或恋爱符号。无文字、水印、品牌、幼态、夸张比例、畸形手指或多余肢体，不仿真人或名人，不画全身。",
+      "correction": "Use case: precise-object-edit. Edit target: the supplied portrait of Lin Wan, adult 24-year-old administrative secretary. Make exactly one small correction: remove the EXTRA black-and-gold pen near the upper hand, around the upper-left edge of the black planner at chest level. Keep the single black-and-gold pen held by the lower/front hand across the lower part of the planner. Restore the upper hand to a natural, anatomically correct grip around the closed planner without any pen. Preserve the same face, low bun hairstyle, age, cream blazer, mist-blue shirt, expression, both existing hands, dark teal painterly background, waist-up 3:4 framing, lighting and every other detail. No new objects, no text, no logo, no watermarks; there must be exactly ONE pen in the final image."
+    }
+  ]
+}

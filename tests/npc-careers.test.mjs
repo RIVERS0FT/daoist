@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -43,9 +44,9 @@ test('除单独重写的周野外，旧职业改写的44段人物故事数值仍
 });
 
 test('旧事件ID、类型、人物关联及数值保持原样，职业不会改变订单或世界随机规则',()=>{
-  const rules=G.EVENTS.filter(e=>!e.sectStory&&e.sectCouncil===undefined&&!G.NEW_MALE_NPC_IDS.includes(e.deliveryNpc)&&!e.id.startsWith('delivery-zhou-')).map(e=>({id:e.id,kind:e.kind,npc:e.deliveryNpc||e.encounterNpc||null,choices:e.choices.map(mechanics)}));
+  const rules=G.EVENTS.filter(e=>!e.districtChapter&&!e.sectStory&&e.sectCouncil===undefined&&!G.NEW_MALE_NPC_IDS.includes(e.deliveryNpc)&&!e.id.startsWith('delivery-zhou-')).map(e=>({id:e.id,kind:e.kind,npc:e.deliveryNpc||e.encounterNpc||null,choices:e.choices.map(mechanics)}));
   assert.equal(hash(rules),'ed79e62514a2df13d06c9a1cb9aabd9496802e522d6aa83162506747eb9b9477');
-  assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,12);
+  assert.equal(G.DELIVERY_NPC_CHANCE,.35);assert.equal(G.SYSTEM_UNLOCK_DELIVERIES,10);assert.equal(G.STORY_STAGES.length,16);
 });
 
 for(const [id,role]of Object.entries(roles))test(`${id}：职业贯穿卡片配置、异地初遇、半身像、AI上下文和同源导出`,()=>{

@@ -84,13 +84,14 @@
     queueUnlock(s,'bond',id);
     G.log(s,source==='delivery'?`这一单让你第一次正式结识${npc.name}。对方已出现在「羁绊」中。`:`你在一段意外的相逢中结识了${npc.name}。从现在起，可以在「羁绊」中找到对方。`,'相逢');
   }
-  G.newGame = (name, mode = 'classic', seed = Date.now()) => {
+  G.newGame = (name, mode = 'classic', seed = Date.now(), appearanceId = G.DEFAULT_APPEARANCE_ID) => {
     name = String(name).trim();
     if (!name || [...name].length > 16) throw new RuleError('名字需要 1–16 个字符。');
     if (!['classic','ai'].includes(mode)) throw new RuleError('请选择有效的剧情模式。');
+    if (!G.playerAppearance(appearanceId)) throw new RuleError('请选择有效的玩家形象。');
     const id = root.crypto?.randomUUID?.() || `save-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const s = {
-      schemaVersion: G.VERSION, id, name, mode, createdAt: Date.now(), updatedAt: Date.now(), seed: (Number(seed) >>> 0) || 1,
+      schemaVersion: G.VERSION, id, name, mode, appearanceId, createdAt: Date.now(), updatedAt: Date.now(), seed: (Number(seed) >>> 0) || 1,
       turn: 0, minutes: 480, position: 'home', residenceId: 'qingteng', gameOver: null, transport: 'bike', weather: 'clear',
       player: { money: 120, coins: 0, health: 100, stamina: 100, mana: 60, qi: 0, realm: 0, realmLevel: 1, insight: 5, constitution: 5, agility: 5, luck: 5, karma: 0, rep: 0 },
       vehicle: { battery: 80, durability: 100, levels: {speed:0,battery:0,durability:0} },
@@ -124,7 +125,7 @@
   // Limit route-search arrays by bytes as the city grows; cache one moving origin.
   const searchCacheLimit=Math.max(1,Math.min(32,Math.floor(16*1024*1024/(nodes.length*12))));
   const nodeSearches=new Map();let roadSearch=null;
-  function searchRoads(from,anchors,chapter=12){
+  function searchRoads(from,anchors,chapter=Infinity){
     const exact=anchors.length===1&&from.x===nodes[anchors[0]].x&&from.y===nodes[anchors[0]].y;
     const key=`${chapter}:${from.x}:${from.y}`,cached=exact?nodeSearches.get(key):roadSearch?.key===key?roadSearch.value:null;
     if(cached)return cached;
@@ -155,7 +156,7 @@
   };
   G.playerPoint = s => point(G.place(s.position)||s.location||G.place('home'));
   G.locationName = s => G.place(s.position)?.name || '道路途中';
-  G.routeMeters=(from,target,chapter=12)=>{
+  G.routeMeters=(from,target,chapter=Infinity)=>{
     const anchors=G.roadAnchors(from);must(anchors.length&&G.place(target),'找不到合法的道路位置。');
     return searchRoads(from,anchors,chapter).dist[G.CITY_DATA.places[target]];
   };
@@ -164,7 +165,7 @@
     for(let x=Math.floor(left/cellSize);x<=Math.floor(right/cellSize);x++)for(let y=Math.floor(top/cellSize);y<=Math.floor(bottom/cellSize);y++)for(const edge of roadCells.get(`${x}:${y}`)||[])found.add(edge);
     return found;
   };
-  G.route = (fromId, toId, chapter=12) => {
+  G.route = (fromId, toId, chapter=Infinity) => {
     const from=typeof fromId==='string'?G.place(fromId):fromId,to=G.place(toId);
     const anchors=G.roadAnchors(from);must(anchors.length&&to,'找不到合法的道路位置。');
     const end=G.CITY_DATA.places[toId];

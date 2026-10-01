@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -77,8 +78,8 @@ test('返回路线不能修改寻路缓存，任意目的地均只沿共享道�
   assert.deepEqual(G.route('home','lingxi-20'),expected);
   const lookup=new Map(G.ROAD_NODES.map((n,i)=>[`${n.x}:${n.y}`,i]));
   const edges=new Set(G.ROAD_EDGES.flatMap(({from,to})=>[`${from}:${to}`,`${to}:${from}`]));
-  // Every address is covered; 12 origins exercise cross-region corridors.
-  const origins=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region));
+  // Every address is covered; 15 reachable district origins exercise cross-region corridors.
+  const origins=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region)).filter(Boolean);
   for(const p of origins)for(const q of G.PLACES){
     const r=G.route(p.id,q.id);
     for(let i=1;i<r.points.length;i++)assert.ok(edges.has(`${lookup.get(`${r.points[i-1].x}:${r.points[i-1].y}`)}:${lookup.get(`${r.points[i].x}:${r.points[i].y}`)}`));

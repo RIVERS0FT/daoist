@@ -44,10 +44,10 @@ test('新城与郊区订单都按当前位置的真实路程生成，长途行�
 
 test('v23 进行中存档保留原文件但拒绝导入，新版路线仍不能穿越非道路区域',async()=>{
   const context=vm.createContext({console});
-  for(const name of ['city-data','data','chapters','sects','engine','sect-engine','sect-stories'])vm.runInContext(await readFile(new URL(`../public/js/${name}.js`,import.meta.url),'utf8'),context);
+  for(const name of ['city-data','city-region-data','data','chapters','sects','engine','sect-engine','sect-stories'])vm.runInContext(await readFile(new URL(`../public/js/${name}.js`,import.meta.url),'utf8'),context);
   const old=context.NightCourier;let s=old.newGame('原路继续','classic',123);s.unlockedPlaces=old.PLACES.map(p=>p.id);
   s=old.perform(s,'travel',{target:'bookshop'}).state;s=old.advance(s,.73);s=JSON.parse(JSON.stringify(s));
-  const legacy={...G.clone(s),schemaVersion:23};assert.throws(()=>G.sanitizeSave(legacy),/仅支持 v24/);
+  const legacy={...G.clone(s),schemaVersion:23};assert.throws(()=>G.sanitizeSave(legacy),/仅支持 v25/);
   const loaded=G.sanitizeSave(s);assert.deepEqual(loaded.location,s.location);assert.deepEqual(loaded.activity.route,s.activity.route);
   const broken=G.clone(s);broken.activity.route.points[1].x+=7;
   assert.throws(()=>G.sanitizeSave(broken),/道路路线/);

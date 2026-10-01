@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -13,7 +14,7 @@ import '../public/js/storage.js';
 import '../public/js/progression.js';
 
 const G=globalThis.NightCourier;
-const chapterIds=['mortal','bound','second-city','circle','guardian','system','truth','divine','void','unity','mahayana','tribulation'];
+const chapterIds=['mortal','bound','westward','second-city','river-relay','circle','guardian','system','truth','shared-ledger','divine','void','unity','mahayana','coast-watch','tribulation'];
 const coreEvents=[
   'first-order','system-awakening','story-street-vein','story-second-city','story-lantern-network',
   'story-system-doubt','story-system-truth','story-divine-echo','story-divine-consent',
@@ -21,9 +22,9 @@ const coreEvents=[
   'story-mahayana-rookie','story-mahayana-ordinary','story-tribulation-question','story-tribulation-dawn'
 ];
 
-test('十二章都有扩写主题、章节问题和至少三个人物侧写，21位NPC全部进入主线视角',()=>{
-  assert.equal(G.APP_VERSION,'1.21.0');
-  assert.equal(G.VERSION,24);
+test('十六章都有扩写主题、章节问题和至少三个人物侧写，21位NPC全部进入主线视角',()=>{
+  assert.equal(G.APP_VERSION,'1.22.0');
+  assert.equal(G.VERSION,25);
   assert.deepEqual(G.STORY_STAGES.map(stage=>stage.id),chapterIds);
   assert.deepEqual(G.CHAPTER_CHARACTER_BEATS.map(stage=>stage.id),chapterIds);
   const covered=new Set();

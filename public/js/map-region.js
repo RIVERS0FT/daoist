@@ -3,6 +3,19 @@
   'use strict';const G=root.NightCourier;
   const intersects=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
   const pathOf=rings=>{const path=new Path2D();for(const ring of rings){if(ring.length<4)continue;path.moveTo(ring[0],ring[1]);for(let i=2;i<ring.length;i+=2)path.lineTo(ring[i],ring[i+1]);}return path;};
+  // Clip ring coordinates to this tile before recording Canvas commands. Large
+  // administrative seas otherwise make native Paint work dominate each frame.
+  const clipRing=(ring,bounds)=>{
+    let points=ring.slice(0,-1);
+    for(const [axis,limit,sign] of [[0,bounds[0],1],[0,bounds[2],-1],[1,bounds[1],1],[1,bounds[3],-1]]){
+      const out=[];
+      for(let i=0;i<points.length;i++){
+        const a=points[i],b=points[(i+1)%points.length],u=sign*(a[axis]-limit),v=sign*(b[axis]-limit);
+        if(u>=0)out.push(a);
+        if((u<0&&v>=0)||(u>=0&&v<0)){const t=u/(u-v);out.push([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]);}
+      }points=out;if(!points.length)break;
+    }return points.length>=3?[...points,points[0]].flat():[];
+  };
   const nextFrame=()=>new Promise(resolve=>root.requestAnimationFrame(resolve));
   const decode=async bytes=>{
     let offset=0;const integer=()=>{let n=0,place=1,b;do{b=bytes[offset++];n+=(b&127)*place;place*=128;}while(b&128);return n;};
@@ -26,8 +39,8 @@
   G.CityRegion=class{
     constructor(el){
       this.el=el;this.chunks=new Map();this.cacheBytes=0;this.land=G.CITY_REGION.land.map(pathOf);this.boundary=G.CITY_REGION.boundary.map(pathOf);
-      this.baseURL=new URL('map/region/',document.baseURI);this.palette=null;this.chapter=1;
-      this.territories=G.MAP_REGIONS.map(r=>({...r,path:pathOf([[...r.polygon.flat(),...r.polygon[0]]])}));
+      this.baseURL=new URL('map/region/',document.baseURI);this.palette=null;this.chapter=1;this.labelLayouts=new Map();
+      this.territories=G.MAP_REGIONS;
     }
     async load(file){
       const cached=this.chunks.get(file);if(cached){this.chunks.delete(file);this.chunks.set(file,cached);return cached.promise;}
@@ -51,8 +64,9 @@
     }
     async prepare(coords,size,pad){
       const scale=2**coords.z,bounds=[(coords.x*size-pad)/scale,(coords.y*size-pad)/scale,((coords.x+1)*size+pad)/scale,((coords.y+1)*size+pad)/scale];
-      const corners=[[bounds[0],bounds[1]],[bounds[2],bounds[1]],[bounds[2],bounds[3]],[bounds[0],bounds[3]]].map(([x,y])=>G.regionAt({x,y}));
-      if(corners.every(r=>r===corners[0])&&corners[0].chapter>this.chapter)return [];
+      // A concave district or island can lie inside a tile whose corners all
+      // belong elsewhere. Bounds provide a conservative loading check.
+      if(!this.territories.some(r=>r.chapter<=this.chapter&&intersects(r.bounds,bounds)))return [];
       // One detail policy across the entire city, including the original centre.
       const level=G.CITY_REGION.levels[coords.z<=-7?'overview':coords.z<=-5?'district':'street'],files=new Set();
       // Labels and wide strokes can reach a tile from the adjacent data chunk.
@@ -117,16 +131,36 @@
       }
       // Solid map fog hides streets and buildings, while keeping the outline
       // and chapter requirement readable. These polygons also gate road edges.
-      for(const r of this.territories)if(r.chapter>this.chapter){ctx.fillStyle=colors.night?'#1a2c28':'#e4e3d8';ctx.fill(r.path);}
+      const viewport=[x,y,x+span,y+span];
+      for(const r of this.territories)if(r.chapter>this.chapter&&intersects(r.bounds,viewport)){
+        ctx.fillStyle=colors.night?'#1a2c28':'#e4e3d8';
+        for(const polygon of r.polygons)ctx.fill(pathOf(polygon.map(ring=>clipRing(ring,viewport))),'evenodd');
+      }
       if(scale<.08){ctx.strokeStyle=colors.night?'#41564e':'#bac4b9';ctx.lineWidth=.65/scale;for(const path of this.land)ctx.stroke(path);}
-      for(const r of this.territories){
-        ctx.strokeStyle=colors.night?'#6a8074':'#9aab9b';ctx.lineWidth=1/scale;ctx.setLineDash([5/scale,5/scale]);ctx.stroke(r.path);ctx.setLineDash([]);
+      for(const r of this.territories)if(intersects(r.bounds,viewport)){
+        const border=new Path2D();
+        for(const polygon of r.polygons)for(const ring of polygon)for(let i=1;i<ring.length;i++){
+          const a=ring[i-1],b=ring[i];if(!intersects([Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.max(a[0],b[0]),Math.max(a[1],b[1])],viewport))continue;
+          border.moveTo(a[0],a[1]);border.lineTo(b[0],b[1]);
+        }
+        ctx.strokeStyle=colors.night?'#6a8074':'#9aab9b';ctx.lineWidth=1/scale;ctx.setLineDash([5/scale,5/scale]);ctx.stroke(border);ctx.setLineDash([]);
       }
       if(scale<=.08){
-        for(const r of this.territories){
-          const [px,py]=r.seed;ctx.font=`${13/scale}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+        const key=`${this.chapter}:${scale}`;ctx.font=`${13/scale}px system-ui`;
+        let labels=this.labelLayouts.get(key);
+        if(!labels){
+          labels=[];
+          for(const r of this.territories){
+            const text=`${r.name} · ${r.chapter>this.chapter?`第${r.chapter}章开放`:'已开放'}`,[px,py]=r.seed,half=ctx.measureText(text).width/2+4/scale;
+            const box=[px-half,py-10/scale,px+half,py+10/scale];
+            if(!labels.some(label=>intersects(label.box,box)))labels.push({text,px,py,box});
+          }
+          this.labelLayouts.set(key,labels);if(this.labelLayouts.size>12)this.labelLayouts.delete(this.labelLayouts.keys().next().value);
+        }
+        for(const {text,px,py,box} of labels)if(intersects(box,viewport)){
+          ctx.textAlign='center';ctx.textBaseline='middle';
           ctx.fillStyle=colors.night?'#d0d6ba':'#43554b';ctx.strokeStyle=colors.night?'#1a2c28':'#e4e3d8';ctx.lineWidth=3/scale;
-          const text=`${r.name} · ${r.chapter>this.chapter?`第${r.chapter}章开放`:'已开放'}`;ctx.strokeText(text,px,py);ctx.fillText(text,px,py);
+          ctx.strokeText(text,px,py);ctx.fillText(text,px,py);
         }
       }
       ctx.restore();

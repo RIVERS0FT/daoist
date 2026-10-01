@@ -21,9 +21,9 @@ with sync_playwright() as p:
   if '--url' not in sys.argv:perf.serve(page,ROOT/(sys.argv[sys.argv.index('--root')+1] if '--root' in sys.argv else 'public'))
   page.add_init_script(perf.PROBE);page.goto(sys.argv[sys.argv.index('--url')+1] if '--url' in sys.argv else perf.BASE)
   page.click('[data-ui="new-game"]');page.fill('#player-name-input','章节地图');page.click('#new-game-form button[type="submit"]');page.wait_for_selector('.player-marker');page.click('[data-ui="pause"]');ready(page)
-  assert page.locator('.region-chip').inner_text().endswith('1 / 12 区')
+  assert page.locator('.region-chip').inner_text().endswith('1 / 16 区')
   before=page.evaluate('()=>JSON.stringify(__perfMap.s)')
-  page.click('[data-panel="chapters"]');assert page.locator('.chapter-region').count()==12;assert page.locator('.chapter-region[data-open="true"]').count()==1
+  page.click('[data-panel="chapters"]');assert page.locator('.chapter-region').count()==16;assert page.locator('.chapter-region[data-open="true"]').count()==1
   page.screenshot(path=str(OUT/f'chapters-{width}.png'));page.click('#panel [data-ui="close"]')
   page.click('[data-ui="fit-map"]');ready(page);page.screenshot(path=str(OUT/f'overview-{width}.png'))
   assert page.evaluate('()=>JSON.stringify(__perfMap.s)')==before
@@ -43,10 +43,10 @@ with sync_playwright() as p:
   page.evaluate('''()=>{const G=NightCourier,m=__perfMap,s=m.s;s.player.realm=9;s.stats.delivered=150;
     s.flags.systemAwakened=true;s.flags.firstOrder=true;s.bonds.lin.met=true;s.bonds.chen.met=true;
     for(const k of G.STORY_FLAG_KEYS)s.flags[k]=true;m.render(s);m.transform();}''');ready(page)
-  assert page.locator('#city-map').get_attribute('data-chapter')=='12';assert page.locator('.map-region-hint').is_hidden()
+  assert page.locator('#city-map').get_attribute('data-chapter')=='16';assert page.locator('.map-region-hint').is_hidden()
   image=Image.open(BytesIO(page.screenshot())).convert('RGB');assert len(colors(image))>4
   page.screenshot(path=str(OUT/f'opened-{width}.png'))
-  assert not errors,errors;results.append({'viewport':f'{width}x{height}','regions':12,'initial_open':1,'fog_hidden_after_unlock':True,'errors':errors});ctx.close()
+  assert not errors,errors;results.append({'viewport':f'{width}x{height}','regions':16,'initial_open':1,'fog_hidden_after_unlock':True,'errors':errors});ctx.close()
  browser.close()
 (OUT/'report.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf8')
 print('2 viewports: territory list, no-spoiler fog, locked travel, read-only map preview, chapter repaint passed')

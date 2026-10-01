@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-01",
+  "mode": "built-in image_gen",
+  "transparent_background": true,
+  "style": "original restrained weathered bronze cloud-thunder ornaments inspired by Black Myth: Wukong UI",
+  "reference_urls": [
+    "https://interfaceingame.com/games/black-myth-wukong/",
+    "https://www.playstation.com/en-tw/games/black-myth-wukong/"
+  ],
+  "assets": [
+    {
+      "id": "panel_corners",
+      "path": "public/art/ui/panel-corners-v2.png",
+      "prompt": "Use case: stylized-concept\nAsset type: production-ready transparent raster corner ornament for a Chinese cultivation RPG UI.\nPrimary request: Draw one square hollow UI ornament made of exactly four matching corner pieces, with the understated dark Chinese fantasy art direction of Black Myth: Wukong menus: weathered ancient bronze, muted antique gold, austere engraved cloud-thunder motifs, fine hand-worked scratches. Original ornamental design for a modern urban cultivation game.\nComposition: square canvas, each corner a slim right angle formed by short horizontal and vertical arms; four corners symmetric rotations. Corner artwork occupies only the outer 22 percent at each corner, with a fully empty transparent center and long completely transparent gaps along all four sides. Leave 2 percent safety margin. Thin, elegant two-line geometric bronze engraving; one restrained curled cloud at each elbow. Readable when displayed at 32 pixels. Sparse graceful lines rather than thick carved blocks.\nMaterials and palette: lightly weathered old bronze and muted pale gold, tiny warm ivory edge highlights, faint charcoal engraved grooves; matte, not glossy. No colored jade, jewels or enamel.\nBackground: genuine transparent alpha outside the metal artwork, including the entire hollow center. No black rectangle, painted checkerboard, paper backdrop or solid panel.\nConstraints: no text, letters, numbers, characters, icons, faction symbols, monkeys, logos or watermark; no glow, sparks, drop-shadow halo, continuous side border or decorative elements in the center. This is one reusable UI asset, not a screenshot, sample sheet or labeled mockup.",
+      "width": 1254,
+      "height": 1254
+    },
+    {
+      "id": "title_ornament",
+      "path": "public/art/ui/title-ornament-v2.png",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent horizontal title ornament for a Chinese cultivation RPG interface, production raster asset.\nPrimary request: Draw one original, understated ancient bronze title ornament inspired by the austere ink-black and aged-gold mood of Black Myth: Wukong menus. In the exact center, a tiny engraved bronze lozenge and symmetrical cloud-thunder scrollwork, with long slender double lines tapering away on both sides. Weathered hand-worked metal with slight imperfections, quiet museum-antique character.\nComposition: landscape canvas exactly 3:1; a single slim horizontal ornament centered in the canvas, contained within the central 22 percent of canvas height, with generous transparent space above and below. The central lozenge no more than 5 percent of canvas width; total ornament width around 86 percent of canvas. No enclosing plaque, no filled background panel. Both ends taper to delicate thin metal strokes.\nPalette and surface: muted antique bronze-gold and warm ivory edge highlights, fine charcoal engraving, matte texture. No jade, turquoise, bright yellow gold, colored gems or flowers.\nBackground: genuine transparent alpha everywhere outside the ornament. No painted black background or checkerboard.\nConstraints: no title text, lettering, numbers, people, buildings, monkeys, logos, watermark, faction emblems, lotus, magic circles, aura or heavy shadows. One crest only, no variants or sprite grid. Designed for a 200-pixel-wide game panel header.",
+      "width": 2172,
+      "height": 724
+    },
+    {
+      "id": "divider",
+      "path": "public/art/ui/divider-v2.png",
+      "prompt": "Use case: stylized-concept\nAsset type: one transparent horizontal section divider for a Chinese urban cultivation RPG, production raster UI asset.\nPrimary request: Draw one very slender original antique-bronze section divider, borrowing the quiet stone-and-metal aesthetic of Black Myth: Wukong interfaces. A tiny hollow bronze diamond in the exact center, one fine slightly weathered horizontal line on each side, with subtle small angular cloud-thunder curls near the center and tapering ends. Far simpler and thinner than a title ornament. Delicate almost engraved linework; not a solid metallic bar.\nComposition: landscape canvas exactly 3:1; one symmetric horizontal divider centered vertically. Artwork occupies no more than the central 12 percent of height and 86 percent of width; all surrounding space completely transparent. Central diamond at most 3 percent of canvas width. No text space or solid banner, no leaf vines or lotus flowers.\nPalette and material: restrained aged-bronze gold, small warm ivory highlights and fine dark engraved scratches. Matte finish, no colored enamel or jewels.\nBackground: genuine transparent alpha outside every fine metal stroke, including inside the central hollow diamond. No paper, black background or drawn checkerboard.\nConstraints: no text, numbers, logos, watermark, characters, monkey imagery, bright glow, shadow halo, flourishes covering a paragraph or multiple variants. One reusable separator only.",
+      "width": 2172,
+      "height": 724
+    }
+  ]
+}

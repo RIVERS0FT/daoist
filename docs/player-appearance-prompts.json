@@ -1,0 +1,22 @@
+{
+  "purpose": "创建存档时仅选择原创成年男性玩家形象；图片只用于视觉展示，不改变属性、玩法或 NPC 身份。",
+  "tool": "built-in image_gen",
+  "mode": "generate",
+  "transparent_background": false,
+  "assets": [
+    {
+      "id": "male-rider",
+      "path": "public/art/player-male-rider-v1.png",
+      "width": 1086,
+      "height": 1448,
+      "prompt": "Use case: stylized-concept\nAsset type: original player appearance portrait for a modern Chinese urban cultivation RPG save-creation screen.\nPrimary request: one original adult male delivery rider, about 25 years old, ordinary human early in his journey.\nScene/backdrop: plain dark teal-gray painterly gradient with subtle brushed texture, no location.\nSubject: calm warm expression, an original oval-to-rectangular face with a longer straight nose, relaxed thinner eyebrows, deep brown eyes, warm medium skin and neat black short hair with a modest side part. Clearly adult, lean natural proportions, gently closed mouth smile. He must have an independent face, never resemble an existing NPC or a celebrity.\nStyle/medium: polished semi-realistic digital painting, restrained visible brushwork, natural modern clothing, elegant urban fantasy RPG portrait. Matte ink-teal delivery jacket over a dark gray shirt, subtle narrow antique-bronze trim on shoulder and seam, no symbols or branding.\nComposition/framing: exactly 3:4 upright portrait, one person from waist upward, eye-level, slight three-quarter stance, centered; full head with generous space above, both shoulders and elbows fully inside the image, small cropping margin. Both arms rest naturally at waist, hands simply resting on a plain closed dark gray motorcycle helmet held low in front of abdomen, no phone or extra props.\nLighting/mood: soft warm side light and restrained cool shadow, quiet dependable everyday rider.\nConstraints: opaque nontransparent background; no writing, letters, badges, logo, watermarks, UI frame, magical effects, weapons, halos, extra people, childlike appearance, orange delivery jacket or messy spiky hair. Do not crop the head, shoulders, hands or helmet; do not add intricate finger gestures."
+    },
+    {
+      "id": "male-rider-steady",
+      "path": "public/art/player-male-rider-steady-v1.png",
+      "width": 1086,
+      "height": 1448,
+      "prompt": "Use case: stylized-concept\nAsset type: second original male player appearance portrait for a modern Chinese urban cultivation RPG save-creation screen.\nPrimary request: one original adult male delivery rider, about 30 years old, ordinary human early in his journey.\nScene/backdrop: plain dark teal-gray painterly gradient with subtle brushed texture, no location.\nSubject: steady composed dependable expression, broad square face with a strong jaw, slightly darker warm tan skin, tidy black crew cut, deep brown eyes, medium straight eyebrows, clean shaven with at most extremely light natural stubble. Clearly adult around thirty, sturdier natural build. An original face with clearly different identity from a younger oval-faced male rider with longer side-parted hair; no celebrity likeness.\nStyle/medium: polished semi-realistic digital painting, restrained visible brushwork, natural modern clothing, elegant urban fantasy RPG portrait. Matte ink-teal delivery jacket over a charcoal gray shirt, subtle narrow antique-bronze trim on shoulder and seam, no symbols or branding.\nComposition/framing: exactly 3:4 upright portrait, one person from waist upward, eye-level, slight three-quarter stance, centered; full head with generous space above, both shoulders and elbows fully inside the image, small cropping margin. Both arms rest naturally at waist, hands simply resting on a plain closed dark gray motorcycle helmet held low in front of abdomen, no phone or extra props.\nLighting/mood: soft warm side light and restrained cool shadow, calm experienced everyday rider.\nConstraints: opaque nontransparent background; no writing, letters, badges, logo, watermarks, UI frame, magical effects, weapons, halos, extra people, childlike appearance, orange delivery jacket or messy spiky hair. Do not crop the head, shoulders, hands or helmet; do not add intricate finger gestures."
+    }
+  ]
+}

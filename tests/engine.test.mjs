@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -34,7 +35,7 @@ test('所有地点可达且跨区域路程对称',()=>{
   const home=G.place('home');
   for(const b of G.PLACES){const r=G.route(home.id,b.id);assert.ok(Number.isFinite(r.meters));assert.deepEqual(r.points[0],{x:home.x,y:home.y});assert.deepEqual(r.points.at(-1),{x:b.x,y:b.y});}
   // Cover every territory without evicting the bounded search cache for all N² pairs.
-  const anchors=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region));
+  const anchors=G.MAP_REGIONS.map(region=>G.PLACES.find(p=>G.placeRegion(p.id)===region)).filter(Boolean);
   for(const a of anchors)for(const b of anchors)near(G.route(a.id,b.id).meters,G.route(b.id,a.id).meters);
 });
 test('江面和地图外坐标不能作为行程起点',()=>{for(const p of [{x:-1,y:100},{x:2720,y:1450}])assert.throws(()=>G.route(p,'home'),/道路/);});
@@ -125,9 +126,11 @@ test('存储失败后返回菜单重新 load 不会丢失未写入的内存进�
 test('成长阶段随配送、境界、已结算剧情和人物关系连续推进',()=>{
   const s=G.newGame('渐行','classic',987654321);assert.equal(G.storyStage(s).id,'mortal');s.flags.firstOrder=true;s.stats.delivered=1;assert.equal(G.storyStage(s).id,'mortal');
   s.flags.systemAwakened=true;s.stats.delivered=10;assert.equal(G.storyStage(s).id,'bound');
-  s.stats.delivered=12;s.player.realm=1;assert.equal(G.storyStage(s).id,'bound');s.flags.storyStreetVein=true;assert.equal(G.storyStage(s).id,'second-city');
-  s.bonds.chen.met=true;s.bonds.lin.met=true;assert.equal(G.storyStage(s).id,'second-city');s.flags.storySecondCity=true;assert.equal(G.storyStage(s).id,'circle');
-  s.stats.delivered=18;s.player.realm=2;assert.equal(G.storyStage(s).id,'guardian');
+  s.stats.delivered=12;s.player.realm=1;assert.equal(G.storyStage(s).id,'bound');s.flags.storyStreetVein=true;assert.equal(G.storyStage(s).id,'westward');
+  s.flags.storyWestwardNote=true;s.stats.delivered=14;assert.equal(G.storyStage(s).id,'second-city');
+  s.bonds.chen.met=true;s.bonds.lin.met=true;s.flags.storySecondCity=true;s.stats.delivered=16;assert.equal(G.storyStage(s).id,'river-relay');
+  s.flags.storyRiverRelay=true;s.stats.delivered=18;assert.equal(G.storyStage(s).id,'circle');
+  s.stats.delivered=20;s.player.realm=2;assert.equal(G.storyStage(s).id,'guardian');
 });
 test('达到阈值后自动进入固定主线事件，AI 存档也不覆盖关键剧情',()=>{let s=fresh('ai');s.flags.firstOrder=true;s.stats.delivered=3;s=run(s,'rest');assert.equal(s.pending.templateId,'story-street-vein');assert.equal(s.pending.source,'classic');assert.equal(s.pending.aiStatus,'skip');assert.equal(s.flags.storyStreetVein,true);});
 test('主线标记和待选关键事件跨读档保留',()=>{let s=fresh();s.flags.firstOrder=true;s.stats.delivered=3;s=run(s,'rest');const restored=G.sanitizeSave(JSON.parse(JSON.stringify(s)));assert.equal(restored.flags.storyStreetVein,true);assert.equal(restored.pending.templateId,'story-street-vein');const done=run(restored,'choose',{eventId:restored.pending.id,index:0});assert.equal(done.pending,null);});

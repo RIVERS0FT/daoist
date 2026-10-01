@@ -12,47 +12,58 @@
     'storySecondCity',
     'storyLanternNetwork',
     'storySystemDoubt',
-    'storySystemTruth'
+    'storySystemTruth',
+    'storyWestwardNote',
+    'storyRiverRelay',
+    'storySharedLedger',
+    'storyCoastWatch'
   ];
 
   G.metNPCCount = s => G.NPCS.filter(n => s.bonds?.[n.id]?.met === true).length;
   G.isNPCMet = (s, id) => s.bonds?.[id]?.met === true;
   G.visibleNPCs = s => G.NPCS.filter(n => G.isNPCMet(s, n.id));
 
-  // 后五章按已完成的前章剧情逐章衔接；不把“已经触发”当作完成。
+  // 化神至渡劫的五境剧情按已完成的前章节点衔接；不把“已经触发”当作完成。
   G.storyEventComplete = (s, id) => {
     const event=G.EVENTS.find(e=>e.id===id&&e.kind==='story');
     return !!event?.flag && s.flags?.[event.flag]===true && s.pending?.templateId!==id &&
       s.activity?.params?.event?.templateId!==id;
   };
   G.HIGHER_STORY_CHAPTERS = [
-    {id:'divine',chapter:'第八章',title:'一念照千家',realm:5,deliveries:54,previous:'story-system-truth',
+    {id:'divine',chapter:'第十一章',title:'一念照千家',realm:5,deliveries:54,previous:'story-shared-ledger',
       desc:'化神让你听见更多，却也把“知道”与“有权介入”的差别推到面前。器灵开始学习先说明、再等待回应；你也重新认识那些从不需要被神识看穿，只需要被认真对待的人。',events:['story-divine-echo','story-divine-consent']},
-    {id:'void',chapter:'第九章',title:'虚隙有归途',realm:6,deliveries:68,previous:'story-divine-consent',
+    {id:'void',chapter:'第十二章',title:'虚隙有归途',realm:6,deliveries:68,previous:'story-divine-consent',
       desc:'炼虚后，你追到城外的不是敌人，而是一批数十年没有得到回答的旧连接。修复不再等于补满所有缺口：有人需要被记住，有些请求需要被确认已经结束。',events:['story-void-letter','story-void-return']},
-    {id:'unity',chapter:'第十章',title:'同道共此城',realm:7,deliveries:84,previous:'story-void-return',
+    {id:'unity',chapter:'第十三章',title:'同道共此城',realm:7,deliveries:84,previous:'story-void-return',
       desc:'合体境能让你承担更多，也暴露出“所有事都交给最强者”的脆弱。你把阵图、风险和决定权摊开，让愿意参与的人能轮换、质疑、退出，也让自己不再把独自扛住当成责任。',events:['story-unity-burden','story-unity-covenant']},
-    {id:'mahayana',chapter:'第十一章',title:'大道在烟火',realm:8,deliveries:102,previous:'story-unity-covenant',
+    {id:'mahayana',chapter:'第十四章',title:'大道在烟火',realm:8,deliveries:102,previous:'story-unity-covenant',
       desc:'大乘之后，真正困难的不是再证明自己多强，而是把走过的路说成后来者能用的经验。你开始允许别人笨拙、求助、修改答案，也允许许多善意不被系统记成成就。',events:['story-mahayana-rookie','story-mahayana-ordinary']},
-    {id:'tribulation',chapter:'第十二章',title:'劫尽见人间',realm:9,deliveries:122,previous:'story-mahayana-ordinary',
+    {id:'tribulation',chapter:'第十六章',title:'劫尽见人间',realm:9,deliveries:122,previous:'story-coast-watch',
       desc:'渡劫境把旧阵最深的选择重新摆在你面前：用绝对控制换取永不出错，还是接受不确定并共同承担。雷声之后仍有门铃，你最后要安放的不是修为，而是自己与人间的关系。',events:['story-tribulation-question','story-tribulation-dawn']}
   ];
   G.higherChapterReady = (s, chapter) => G.featureUnlocked(s,'system') &&
-    G.STORY_STAGES.slice(0,7).every(stage=>stage.ready(s)) &&
+    G.STORY_STAGES.slice(0,10).every(stage=>stage.ready(s)) &&
+    (chapter.id!=='tribulation'||G.storyEventComplete(s,'story-mahayana-ordinary')) &&
     s.player.realm>=chapter.realm && s.stats.delivered>=chapter.deliveries && G.storyEventComplete(s,chapter.previous);
 
   G.STORY_STAGES = [
     { id:'mortal', chapter:'第一章', title:'解锁外卖系统', desc:'你还只是为房租、饭钱和下一张订单奔忙的普通骑手。九次寻常送达让“抵达”慢慢有了重量；第十份热饭把问题摆到你面前：没有奖励时，你为什么仍愿意把一份饭送热。完成第十单固定剧情，在本章解锁外卖系统。', ready:()=>true },
     { id:'bound', chapter:'第二章', title:'初入仙途', desc:'外卖系统已经开启，但力量没有替你解决生活。你一边接单、领取第一份委托、学习吐纳，一边发现系统更像一个不会表达的记录者：它会计算连接，却还不懂每次抵达对人意味着什么。', ready:s=>G.featureUnlocked(s,'system') },
-    { id:'second-city', chapter:'第三章', title:'城有第二面', desc:'炼气后，门牌、桥墩与旧墙开始露出另一层纹理。你学着不把所有异常都叫作机缘，也不把所有陌生都当成危险；青岚城的背面首先是一段需要被求证的历史。', ready:s=>G.storyEventComplete(s,'story-street-vein') && s.stats.delivered>=12 && s.player.realm>=1 },
-    { id:'circle', chapter:'第四章', title:'夜路同行', desc:'你认识的夜行人越来越多：有人交班，有人守车，有人等末班车，也有人只是想吃完一顿不被打断的饭。修行圈不再是一张强者名单，而是一群各有疲惫、原则和牵挂的人。', ready:s=>G.storyEventComplete(s,'story-second-city') && G.metNPCCount(s)>=2 && s.player.realm>=1 },
-    { id:'guardian', chapter:'第五章', title:'阵眼苏醒', desc:'筑基以后，配送路线重新连接断裂城脉。你却逐渐明白，所谓阵点并不是可随意调度的资源；每盏灯后都有工作、家人、失误和休息，守护必须先承认这些具体生活。', ready:s=>s.stats.delivered>=18 && s.player.realm>=2 },
-    { id:'system', chapter:'第六章', title:'系统为何而来', desc:'金丹让你第一次能追问外卖系统本身。奖励、委托与“有效连接数”开始出现裂缝：它确实帮过你，却也在回避一个关键问题——它为什么如此害怕连接减少。', ready:s=>G.storyEventComplete(s,'story-lantern-network') && s.stats.delivered>=30 && s.player.realm>=3 },
-    { id:'truth', chapter:'第七章', title:'人间即阵心', desc:'元婴之后，你看清系统是旧护城阵残存的器灵，也看清自己从来不是唯一被选中的救世主。力量来自万家灯火，因此真正的问题变成：谁能解释、谁能拒绝、谁有权决定它往哪里流。', ready:s=>G.storyEventComplete(s,'story-system-doubt') && s.stats.delivered>=42 && s.player.realm>=4 }
+    { id:'westward', chapter:'第三章', title:'把路记清楚', desc:'西城的小巷让你重新学着认路。系统能记录距离，却不会替你知道哪扇门需要轻敲、哪条近路实际上并不相通。你把真正走过的路和仍需核实的线索分开，把帮助后来骑手的笔记写得足够清楚，也留下可以被修改的地方。', ready:s=>G.storyEventComplete(s,'story-street-vein') && s.stats.delivered>=12 && s.player.realm>=1 },
+    { id:'second-city', chapter:'第四章', title:'城有第二面', desc:'炼气后，门牌、桥墩与旧墙开始露出另一层纹理。你学着不把所有异常都叫作机缘，也不把所有陌生都当成危险；青岚城的背面首先是一段需要被求证的历史。', ready:s=>G.storyEventComplete(s,'story-westward-note') && s.stats.delivered>=14 && s.player.realm>=1 },
+    { id:'river-relay', chapter:'第五章', title:'交给下一双手', desc:'沿河街巷的晚饭总在不同的人手里接续。一次交班提醒你，帮助不能只靠某个人一直在线：接班的人需要知道做过什么、哪些事情尚未核实，以及什么时候可以拒绝。你尝试把相识的名字写成交接约定，让同行知道彼此仍有自己的生活。', ready:s=>G.storyEventComplete(s,'story-second-city') && G.metNPCCount(s)>=2 && s.stats.delivered>=16 && s.player.realm>=1 },
+    { id:'circle', chapter:'第六章', title:'夜路同行', desc:'你认识的夜行人越来越多：有人交班，有人守车，有人等末班车，也有人只是想吃完一顿不被打断的饭。修行圈不再是一张强者名单，而是一群各有疲惫、原则和牵挂的人。', ready:s=>G.storyEventComplete(s,'story-river-relay') && s.stats.delivered>=18 && s.player.realm>=1 },
+    { id:'guardian', chapter:'第七章', title:'阵眼苏醒', desc:'筑基以后，配送路线重新连接断裂城脉。你却逐渐明白，所谓阵点并不是可随意调度的资源；每盏灯后都有工作、家人、失误和休息，守护必须先承认这些具体生活。', ready:s=>s.stats.delivered>=20 && s.player.realm>=2 },
+    { id:'system', chapter:'第八章', title:'系统为何而来', desc:'金丹让你第一次能追问外卖系统本身。奖励、委托与“有效连接数”开始出现裂缝：它确实帮过你，却也在回避一个关键问题——它为什么如此害怕连接减少。', ready:s=>G.storyEventComplete(s,'story-lantern-network') && s.stats.delivered>=30 && s.player.realm>=3 },
+    { id:'truth', chapter:'第九章', title:'人间即阵心', desc:'元婴之后，你看清系统是旧护城阵残存的器灵，也看清自己从来不是唯一被选中的救世主。力量来自万家灯火，因此真正的问题变成：谁能解释、谁能拒绝、谁有权决定它往哪里流。', ready:s=>G.storyEventComplete(s,'story-system-doubt') && s.stats.delivered>=42 && s.player.realm>=4 },
+    { id:'shared-ledger', chapter:'第十章', title:'让每个人看得懂', desc:'北原的普通记录与系统的阵图并排放在桌上。器灵终于愿意说明，却仍习惯把所有事缩成一个总数。你把确认、疑问和不同意见分别留下，让没有神识的人也能看懂一项安排如何产生；解释不是一场宣告，而是允许别人核对、补充和提出异议。', ready:s=>G.storyEventComplete(s,'story-system-truth') && s.stats.delivered>=48 && s.player.realm>=4 }
   ];
   G.STORY_STAGES.push(...G.HIGHER_STORY_CHAPTERS.map(chapter=>({
     ...chapter,ready:s=>G.higherChapterReady(s,chapter)
   })));
+  G.STORY_STAGES.splice(14,0,{id:'coast-watch',chapter:'第十五章',title:'把明天也算进去',
+    desc:'海岸的雷雨提醒你，最完整的阵图也无法预先消除所有意外。你检查的不是一个人能扛住多少，而是有人临时退出时谁能接班、消息中断时怎样确认。把备用方案写给普通人看，把停下来的权利留给每个参与者，明天仍然有饭要送，也有自己的生活要过。',
+    ready:s=>G.storyEventComplete(s,'story-mahayana-ordinary')&&s.stats.delivered>=112&&s.player.realm>=8});
 
   // 章节侧写只读取已经结识的人物。它补充人物如何理解当前主线，不推进剧情、不发奖，也不提前泄露未结识人物。
   G.CHAPTER_CHARACTER_BEATS = Object.freeze([
@@ -122,7 +133,25 @@
       {npc:'qin',text:'秦观澜从不承诺天气一定照预报走。她会给概率、风险和备用方案，然后接受世界仍可能有偏差。'},
       {npc:'ye',text:'叶青岚说四季不会因为人舍不得就停住。选择一枝花，也意味着放过另外几枝；重要的是别假装自己没有做选择。'}
     ]}
-  ].map(chapter=>Object.freeze({...chapter,beats:Object.freeze(chapter.beats.map(beat=>Object.freeze(beat)))})));
+  ].concat([
+    {id:'westward',question:'一份认路笔记怎样既能帮到后来的人，又不把猜测写成已经确认的答案？',beats:[
+      {npc:'chen',text:'陈默把难找的门口画成一张小图，旁边特意写上确认日期。他说路会变，人会忘，一份说明也应当允许后来的人指出哪里不对。'},
+      {npc:'jiang',text:'江临把“看起来可以走”和“真的走过”分成两栏。你发现写清不知道的地方，比把每一处都说得很肯定更能帮助别人少绕一次路。'},
+      {npc:'tang',text:'唐梨在收工后替新人标出后门的位置，又补了一句先按门铃。她说熟悉路线，也不能替收到那份饭的人决定什么时候开门。'}]},
+    {id:'river-relay',question:'把一件事交给下一双手时，怎样让对方知道自己的责任，也能保留拒绝的权利？',beats:[
+      {npc:'lin',text:'林晚把交班表里的空白留着，等愿意接班的人自己写名字。她不再把“你最可靠”当作要求别人继续留下来的理由。'},
+      {npc:'han',text:'韩远舟提醒你，交接不能只说一切正常。做过的检查、仍待确认的问题和应当联系谁，都需要接班的人能够自己核对。'},
+      {npc:'song',text:'宋泊宁说末班车之后也要交还钥匙、确认车况。顺利结束一次工作，不是把所有问题放到下一个人的座位上再关门离开。'}]},
+    {id:'shared-ledger',question:'当记录不再只给最有力量的人看，怎样让普通人也能核对并提出自己的不同意见？',beats:[
+      {npc:'shen',text:'沈青禾把一段说明改成普通读者也能看懂的话。她说读懂不是让每个人点头，而是让别人知道自己具体同意或质疑什么。'},
+      {npc:'wen',text:'闻星在图旁边保留了修改记录和不同的署名。最后一笔不该抹去前面所有人的工作，也不该让尚未解决的问题失去踪迹。'},
+      {npc:'luo',text:'罗映秋坚持把负责人与退出方式写在同一页。她提醒你，公开一份漂亮的记录还不够，参与的人得知道自己怎样要求修正。'}]},
+    {id:'coast-watch',question:'面对无法完全预测的明天，备用方案怎样保护参与的人，而不是要求大家一直硬撑？',beats:[
+      {npc:'qin',text:'秦观澜把天气预报连同不确定范围一起说清楚。准备备用安排不是承认失败，而是让每个人知道局势变化时可以怎样停下来。'},
+      {npc:'yue',text:'岳长川先确认替班的人和撤离路线，再检查谁愿意留下。他说能平安交班比承诺一个人守到最后更能让同伴放心。'},
+      {npc:'zhao',text:'赵启明把复核人和隔离点写进备用方案，要求下一班能够照着检查。真正的可靠，应当在熟悉整张图的人离开以后仍然成立。'}]}
+  ]).sort((a,b)=>G.STORY_STAGES.findIndex(s=>s.id===a.id)-G.STORY_STAGES.findIndex(s=>s.id===b.id))
+    .map(chapter=>Object.freeze({...chapter,beats:Object.freeze(chapter.beats.map(beat=>Object.freeze(beat)))})));
 
   G.chapterCharacterNotes = (s, stageId=G.storyStage(s).id) => {
     const chapter=G.CHAPTER_CHARACTER_BEATS.find(entry=>entry.id===stageId);
@@ -204,7 +233,7 @@
     },
     {
       id:'story-second-city', kind:'story', flag:'storySecondCity',
-      ready:s=>G.chapterNumber(s)>=3 && s.player.realm>=1 && s.stats.delivered>=12,
+      ready:s=>G.chapterNumber(s)>=4 && s.player.realm>=1 && s.stats.delivered>=14,
       title:'城市的背面',
       text:'炼气之后，你开始看见以前看不见的东西：医院走廊尽头有褪色旧符，桥墩下面刻着阵号，某些深夜订单的门牌会在你眨眼时改变。你把这些异常逐一报给外卖系统，它只返回坐标、灵息强度和“待确认”，像一个会计算却不知道人会害怕的记录员。更奇怪的是，所有异常都沿着你的配送路线分布。青岚城的另一面并没有轰然开启，它只是从你每天经过的地方一点点露出来。',
       choices:[
@@ -215,7 +244,7 @@
     },
     {
       id:'story-lantern-network', kind:'story', flag:'storyLanternNetwork',
-      ready:s=>G.chapterNumber(s)>=5 && s.player.realm>=2 && s.stats.delivered>=18 && G.metNPCCount(s)>=2,
+      ready:s=>G.chapterNumber(s)>=7 && s.player.realm>=2 && s.stats.delivered>=20 && G.metNPCCount(s)>=2,
       title:'每个人都是一个阵点',
       text:'筑基后的某夜，系统第一次把“订单”改成了“阵点”。医馆、修车铺、书店、山门和无数普通住户之间被灯火连在一起。可当你真正望过去，看见的不是整齐节点：有人刚下班，有人在照顾家人，有人今天只想关门休息。旧阵法喜欢把这些差异抹平成同一种信号，你却已经认识了太多具体的人。阵法没有高高在上的唯一阵眼——每一个愿意回应别人的人都能成为阵点，但没有谁因此失去说“不”的权利。',
       choices:[
@@ -226,7 +255,7 @@
     },
     {
       id:'story-system-doubt', kind:'story', flag:'storySystemDoubt',
-      ready:s=>G.chapterNumber(s)>=6 && s.player.realm>=3 && s.stats.delivered>=30,
+      ready:s=>G.chapterNumber(s)>=8 && s.player.realm>=3 && s.stats.delivered>=30,
       title:'系统第一次拒绝回答',
       text:'金丹凝成后，你终于有能力查看系统更深的一层。后台没有商城，没有任务表，只有一条持续增长的记录：“有效连接数”。你追问为什么需要这么多连接，又问如果有人不想成为阵点会怎样。界面先闪过一次“请求越权”，随后直接关闭。几秒后，它又短暂亮起，像是想解释，却最终只留下一个不断跳动的数字。你第一次明确感觉到：这个帮助过你的东西并不只是神秘，它也有自己不愿触碰的恐惧。',
       choices:[
@@ -237,7 +266,7 @@
     },
     {
       id:'story-system-truth', kind:'story', flag:'storySystemTruth',
-      ready:s=>G.chapterNumber(s)>=7 && s.player.realm>=4 && s.stats.delivered>=42,
+      ready:s=>G.chapterNumber(s)>=9 && s.player.realm>=4 && s.stats.delivered>=42,
       title:'万家灯火，不属于任何人',
       text:'元婴之后，你终于看清系统的核心：它是旧护城阵残存的器灵。数十年前阵法破碎，许多守阵者和普通人失去联系；为了让自己继续运转，它一点点学习现代城市最熟悉的语言——订单、导航、奖励、确认送达——把“有人抵达”翻译成自己能够理解的连接。它选择过别人，也失败过、遗忘过，还把连接数量误当成安全本身。你从来不是唯一的救世主。看清这一点后，器灵第一次没有立刻弹出任务，只问：如果力量来自万家灯火，那么接下来该由谁决定它往哪里流？',
       choices:[
@@ -247,6 +276,31 @@
       ]
     }
   ];
+
+  const districtEvents=[
+    {id:'story-westward-note',flag:'storyWestwardNote',chapter:3,delivery:12,title:'路要真正走过才算',
+      text:'松风西城的一张订单写着后门收餐。你照着旧笔记绕过去，才发现那扇门已经停用，只能沿真实街道重新找入口。饭盒保温还在，时间却确实花掉了。收餐的人指了新的门铃位置，没有责怪，也没有替你的猜测兜底。回到街口，你把系统的细金线和自己的说明放在一起：亮过的路线不代表永远正确，画在纸上的近路也未必相通。你决定给下一位骑手留下什么，已经比给这张图起什么名字更重要。',choices:[
+        c('只记录实际走过的入口','你写下核实日期和门铃位置，把仍不确定的部分留白。下一个人拿到的不是保证永远正确的答案，而是一份可以核对的说明。',{qi:5,rep:1}),
+        c('请收餐人确认说明是否清楚','你先问对方是否愿意，再把写好的入口说明读了一遍。几处习以为常的省略被补上，路终于不只对熟悉的人才有意义。',{qi:4,karma:1}),
+        c('留出更正的位置，再继续送餐','你没有把一次修正写成自己的成就。纸角留下联系方法和更正空白，饭点里的路会继续变化，你也愿意继续学着认。',{qi:4})]},
+    {id:'story-river-relay',flag:'storyRiverRelay',chapter:5,delivery:16,title:'交班时留下的那一栏',
+      text:'杏花里一处值班室的饭放在门边，收餐人正把白板交给下一班。旧板上只写着“正常”，新来的人却连哪道门需要轻关都不知道。你想起自己看过的阵点：若有人离开，亮线是不是也会跟着断掉？对方说，离开并没有什么错，没人应该一直替所有人守着。真正需要留下的是做过的事、尚未确定的问题，以及接班者自己同意承担的范围。那一栏空白等着后来的人填写，没有哪个名字因为最可靠就被提前写进去。',choices:[
+        c('把尚待确认的事单独列出','你们把事实与猜测分开，接班的人能够自己复核。帮助没有因为交到下一双手就失去来处，也没有变成强加的任务。',{qi:6,insight:1}),
+        c('先问下一班愿意接哪一部分','白板上的名字由本人写下。有人接住一件事，有人说明今天做不到，交接因这些真实边界而比一句承诺更稳妥。',{qi:5,karma:1}),
+        c('送完饭，把休息也写进安排','你没有把自己添进每一处空缺。大家给离开的人留了完整的饭点，也给接班的人留下了能够说清楚的问题。',{qi:5})]},
+    {id:'story-shared-ledger',flag:'storySharedLedger',chapter:10,delivery:48,title:'阵图旁边的普通笔记',
+      text:'星河北原的一张桌上放着器灵的阵图，也放着一本普通纸册。前者只给出有效连接数，后者写着哪次回应经过确认、谁提出了不同意见、哪些名字尚未同意公开。器灵终于愿意解释，却发现自己的说明只有修士看得懂。你没有替所有人宣布一个结论，而是把图例、判断依据和修正方式分别写清楚。没有神识的人也应当能指出一处错误，参与的人也应该知道怎样收回同意。那本册子不发光，却第一次让阵图成为可以共同讨论的事情。',choices:[
+        c('让普通人也能核对每项说明','你把术语换成门牌、交接和真实回应，保留尚未确认的部分。器灵开始理解，说明的目的不是让人服从，而是让人能够判断。',{qi:12,insight:1}),
+        c('把不同意见和署名一起留下','阵图没有因此显得整齐，却更接近真实生活。最后整理的人不再把此前的贡献算成自己的，也不替别人抹去疑问。',{qi:10,karma:2}),
+        c('先写清怎样要求更正或退出','你把修正方法放在第一页。愿意参与的人知道自己如何改变意见，不愿回应的人仍然可以安静关门。',{qi:10})]},
+    {id:'story-coast-watch',flag:'storyCoastWatch',chapter:15,delivery:112,title:'雷雨来前的一次交接',
+      text:'南烛海岸的风把纸吹得翻了几页。预报说明了雷雨可能到来的时段，也留下无法确定的范围。器灵提出由你一个人守住所有连接，听上去最简单，却又回到了从前的老路。你翻开已有的阵图：有人得接班，有人可能临时退出，消息中断也需要普通人能用的确认办法。准备不是保证一切不会出错，而是承认每个人都有自己的疲惫和选择。你还记得明天的饭点，不打算让一份宏大的承诺抹去所有人平常的生活。',choices:[
+        c('把替班与复核办法写给所有人看','名单里没有永远在线的人。每一部分都有人能够接住，也留下停止和求助的方法；阵图第一次学着容纳持图者暂时离开。',{qi:24,insight:1}),
+        c('先确认谁愿意参与，再安排轮值','有人愿意多守一会，也有人说明明天必须照顾家人。你把这些回答认真写下，备用方案因尊重边界而成为可以实行的约定。',{qi:20,karma:2}),
+        c('检查完自己的车，按约定交班','你没有留下一个独自承担的誓言。车况、联系方法和退出时机都已确认，明天仍要有人平安把热饭送到门口。',{qi:20})]}
+  ].map(({chapter,delivery,...event})=>({...event,kind:'story',districtChapter:chapter,
+    ready:s=>G.chapterNumber(s)>=chapter&&s.stats.delivered>=delivery}));
+  storyEvents.push(...districtEvents);
 
   // 每章两段固定剧情，第二段的累计配送门槛高两单；数值效果仍由原规则引擎结算。
   const higherScenes = [
@@ -333,7 +387,7 @@
       const s = originalSanitize(raw);
       for (const key of G.STORY_FLAG_KEYS) s.flags[key] = raw?.flags?.[key] === true;
       // 可选标记缺失视为未触发，不补播、不补奖。
-      for(const event of higherEvents){
+      for(const event of [...districtEvents,...higherEvents]){
         const value=raw.flags?.[event.flag];
         if(value!==undefined&&typeof value!=='boolean')throw new Error('高境界主线标记损坏。');
         const waiting=s.pending?.templateId===event.id||s.activity?.params?.event?.templateId===event.id;
@@ -355,7 +409,7 @@
   function injectStoryEvent(s) {
     if (s.gameOver || s.pending || s.ending || s.activity || !G.featureUnlocked(s,'system')) return;
     const next = storyEvents.find(e => !s.flags[e.flag] && e.ready(s) &&
-      (!e.higherChapter||(!s.activeOrder&&!s.eventResult&&!s.placeUnlock&&!G.nextUnlockNotice(s))));
+      ((!e.higherChapter&&!e.districtChapter)||(!s.activeOrder&&!s.eventResult&&!s.placeUnlock&&!G.nextUnlockNotice(s))));
     if (!next) return;
     s.flags[next.flag] = true;
     s.pending = {

@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier;
-  G.STORAGE_KEY = 'night-courier:saves:v24';
-  G.BACKUP_KEY = 'night-courier:saves:v24:backup';
+  G.STORAGE_KEY = 'night-courier:saves:v25';
+  G.BACKUP_KEY = 'night-courier:saves:v25:backup';
   G.MAX_SAVES = 12;
   const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
   const num = (v, fallback, min=0, max=999999, integer=true) => Number.isFinite(v) ? G.clamp(integer?Math.floor(v):v,min,max) : fallback;
@@ -235,9 +235,11 @@
     if(!obj(raw)||!obj(raw.player))throw new Error('不是可识别的游戏存档。');
     const version=raw.schemaVersion;
     if(version!==G.VERSION)throw new Error(`不支持此存档版本：本程序仅支持 v${G.VERSION} 城市存档，请重新开局。`);
+    const appearanceId=Object.hasOwn(raw,'appearanceId')?raw.appearanceId:G.DEFAULT_APPEARANCE_ID;
+    if(!G.playerAppearance(appearanceId))throw new Error('玩家形象无效，请使用有效存档或备份。');
     const name=str(raw.name,'无名行者',64).trim();
     const mode=['classic','ai'].includes(raw.mode)?raw.mode:'classic';
-    const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1);
+    const s=G.newGame([...name].slice(0,16).join('')||'无名行者',mode,raw.seed||1,appearanceId);
     s.id=cleanId(raw.id);s.createdAt=num(raw.createdAt,Date.now(),0,1e15);s.updatedAt=num(raw.updatedAt,Date.now(),0,1e15);
     s.minutes=num(raw.minutes,480,0,1e8,false);s.turn=num(raw.turn,0,0,1e8);s.seed=num(raw.seed,1,1,4294967295);
     if(raw.position!==null&&!G.place(raw.position))throw new Error('角色地点无效。');

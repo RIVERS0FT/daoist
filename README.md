@@ -2,8 +2,8 @@
 
 白天送外卖，夜里修仙的单机 Web RPG。项目基于此前对话中的玩法需求重新实现，不是被封禁旧仓库的逐文件恢复。
 
-当前应用版本：**1.21.0**
-当前存档 schema：**v24**
+当前应用版本：**1.22.0**
+当前存档 schema：**v25**
 线上静态版：<https://mevius.riversoft.top/daoist/>
 
 ## 开始运行
@@ -34,19 +34,21 @@ npm run build
 
 生成结果位于 `dist/`，入口为 `index.html`，包含独立脚本、样式、本地 Leaflet 1.9.4 资源及 `asset-manifest.json` 校验清单。请完整复制或发布整个目录。不要直接修改 `dist`；源码以 `public/` 为准。
 
-地图使用 Leaflet 加载上海全市的真实街道、建筑、水系与海岸，全部游戏地名虚构。485 个配送地址包含原有 110 个固定坐标及新增 375 个道路可达地址；暂不加入轮渡。全图划为十二个区域，随章节依次开放，未开放区域不能进入或途经。数据随站点发布并分区加载，无在线瓦片、地图 API 密钥或 CDN 依赖。来源、ODbL 许可及导入方式见 [地图数据说明](docs/MAP_DATA.md)。新规则使用 v24 存档，须重新开局；旧存档文件及浏览器旧数据保留，不迁移、不删除。
+地图使用 Leaflet 加载上海全市的真实街道、建筑、水系与海岸，全部游戏地名虚构。485 个地址包含原有 110 个固定坐标及新增 375 个道路锚点；当前 484 个可沿市内道路抵达，另一个市外绕行地址暂不发单，不加入轮渡。地图按上海十六个真实行政区边界划分并保留虚构区名，与十六章一一对应，每章开放一个区，未开放区域不能进入或途经。数据随站点发布并分区加载，无在线瓦片、地图 API 密钥或 CDN 依赖。来源、ODbL 许可及导入方式见 [地图数据说明](docs/MAP_DATA.md)。新规则使用 v25 存档，须重新开局；旧存档文件及浏览器旧数据保留，不迁移、不删除。
 
 ## 文档入口
 
 仓库文档按职责拆分，不再把玩法、版本历史和技术实现混在 README 中：
 
 - [当前玩法设计](docs/GAME_DESIGN.md)：当前有效游戏规则、解锁顺序、系统与内容边界。
-- [十二章区域与创作大纲](docs/CHAPTER_OUTLINES.md)：每章风貌、三幕、支线、人物池、禁透范围与生成模板。
+- [十六章区域与创作大纲](docs/CHAPTER_OUTLINES.md)：每章风貌、三幕、支线、人物池、禁透范围与生成模板。
 - [五宗、功法与宗门剧情](docs/SECTS_AND_TECHNIQUES.md)：36 种功法、五个主修方向、宗际关系与固定剧情目录。
 - [版本记录](docs/VERSIONS.md)：应用版本历史；从下一版本起固定按“新增 / 修复 / 优化”记录。
 - [技术架构](docs/ARCHITECTURE.md)：模块、状态推进、存档、AI、安全边界与部署架构。
 - [项目记忆](PROJECT_MEMORY.md)：当前项目状态、关键约束和维护入口。
 - [NPC 设定与提示词](docs/NPC_PROMPTS.md)：21 位具名 NPC 的人设、画像和 AI 提示词。
+- [游戏美术与素材](docs/ART_DIRECTION.md)：主视觉、人物立绘、素材路径与制作规范。
+- [游戏图标清单](docs/ICON_ASSETS.md)：应用图标与功能入口的素材映射和显示规范。
 - [周野完整个人线](docs/ZHOU_STORY.md)：周野十段剧情的制作端剧透资料。
 - [恢复范围说明](docs/RECOVERY_NOTES.md)：重建来源、可恢复范围与已知限制。
 - `docs/TEST_REPORT*.md`：各阶段验证与回归记录。
@@ -61,9 +63,12 @@ npm run build
 python tests/browser-smoke.py --map-only
 python tests/browser-performance.py
 python tests/browser-chapter-regions.py
+python tests/browser-art-integration.py
 ```
 
 性能测试使用真实时钟，覆盖静止、拖动、滚轮缩放、行走和面板操作，记录实际帧长、所有加载脚本的采样耗时，以及布局、绘制、合成、栅格线程和 GPU 服务线程开销。阈值见 `tests/performance-budget.json`；超出阈值退出失败。逐帧 JSON、CPU profile 和 Chromium trace 保存在 `artifacts/performance/`。可用 `--root dist` 检查构建版、`--headed` 测量本机可见窗口、`--cpu-rate 4` 检查慢 CPU；`CHROMIUM_PATH` 可指定浏览器路径。
+
+美术接入可用 `python tests/browser-performance.py --scenes start-art,npc-art --output artifacts/performance-art-scenes` 专测开始页往返、人物图片加载解码与面板滚动；使用真实存读档和暂停的隔离进度，默认性能场景保持不变。
 
 推送前运行：
 
@@ -86,11 +91,13 @@ python tests/browser-performance.py --root dist
 public/index.html          页面骨架
 public/styles.css         响应式界面与地图样式
 public/js/data.js         世界、物品、事件、人物与静态配置
-public/js/chapters.js     十二章大纲、区域轮廓与通行权限
+public/js/chapters.js     十六章大纲、区域轮廓与通行权限
 public/js/engine.js       行动校验、规则与结算
 public/js/clock.js        连续时钟与暂停
 public/js/storage.js      当前存档校验、导入导出
 public/js/progression.js  解锁、主线与成长扩展
+public/js/art.js          本地美术白名单与人物阶段展示
+public/art/              主视觉、人物立绘与游戏图标
 public/js/map-art.js      街道、街区建筑与滨河景观的静态矢量制图
 public/js/map-tiles.js    本地瓦片绘制、分帧队列与有界缓存
 public/js/city-data.js    本地 OSM 道路、建筑、水系与来源信息

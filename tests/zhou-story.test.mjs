@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -25,11 +26,13 @@ const ack=s=>{
 };
 function state(stage=0,mode='classic'){
  const s=G.newGame('周野故事验证',mode,519);
- // Explicit high-progression fixture isolates this personal story from economics and the main plot.
+ // This ninth-chapter fixture completes only district stories its actual progression supports.
  s.position='market';s.location=null;s.unlockedPlaces.push('market');s.unlockedFeatures=['system','bonds'];
  s.player.money=20000;s.player.realm=4;s.stats.delivered=44;s.flags.firstOrder=true;s.flags.systemAwakened=true;
- for(const e of G.EVENTS)if(e.flag&&!e.higherChapter)s.flags[e.flag]=true;
+ s.bonds.lin.met=true;
+ for(const e of G.EVENTS)if(e.flag&&!e.higherChapter&&!e.districtChapter)s.flags[e.flag]=true;
  Object.assign(s.bonds.zhou,{met:true,stage,path:G.zhouPath(stage),affinity:stage>=9?0:60,trust:stage>=9?0:30});
+ for(const e of G.EVENTS)if(e.districtChapter&&e.ready(s))s.flags[e.flag]=true;
  G.syncFeatureUnlocks(s,true);return s;
 }
 const scene=(stage,mode)=>finish(act(state(stage,mode),'visit',{id:'zhou'}));
@@ -44,7 +47,7 @@ test('周野职业统一骑手、25岁、十段三选项，其他二十人仍四
  assert.equal(new Set(npc.arc.map(a=>a[0])).size,10);
  for(const a of npc.arc){assert.equal(a.length,5);assert.ok(a.slice(2).some(c=>!c.duration&&!G.effectBlock(G.newGame('可选'),c.effects,c.itemCost)));}
  assert.equal(G.getNPCProfile('zhou').role,'骑手');assert.doesNotMatch(JSON.stringify(G.getNPCProfile('zhou')),/夜班骑手/);
- assert.equal(G.VERSION,24);
+ assert.equal(G.VERSION,25);
 });
 for(const mode of ['classic','ai'])for(let stage=0;stage<10;stage++)test(`${mode} 周野第${stage+1}段：三个选项实际结算、读档和顺序关系`,()=>{
  for(let index=0;index<3;index++){

@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { StringDecoder } from 'node:string_decoder';
 
-const MAX = { files:250, total:10*1048576, file:5*1048576, chunk:256*1024 };
+const UPLOAD_CHUNK_BYTES = 256*1024;
 const extensions = new Set(['.html','.css','.js','.mjs','.json','.txt','.png','.jpg','.jpeg','.gif','.webp','.svg','.ico','.woff','.woff2','.ttf','.otf','.wasm','.mp3','.ogg','.wav','.mp4','.webm']);
 const sha = b => createHash('sha256').update(b).digest('hex');
 function within(root,p) { const r=relative(root,p); return r!== '..'&&!r.startsWith(`..${process.platform==='win32'?'\\':'/'}`)&&!isAbsolute(r); }
@@ -25,8 +25,7 @@ export async function collect(directory, root=directory) {
       const path=prefix+entry.name;if(path.length>180)throw Error('File path exceeds 180 characters.');
       if(info.isDirectory()){await walk(full,`${path}/`);continue;}
       if(!info.isFile()||!extensions.has(extname(path).toLowerCase()))throw Error(`Unsupported static file: ${path}`);
-      if(info.size>MAX.file||files.length>=MAX.files||bytes+info.size>MAX.total)throw Error('Free deployment limit: 250 files, 10 MiB total, 5 MiB per file.');
-      const data=await readFile(full);bytes+=data.length;if(bytes>MAX.total||data.length>MAX.file)throw Error('Files changed or exceeded quota while reading.');
+      const data=await readFile(full);bytes+=data.length;
       files.push({path,size:data.length,sha256:sha(data),data});
     }
   }
@@ -52,7 +51,7 @@ export async function publish(bundle, metadata, request) {
   try {
     for(let i=0;i<bundle.files.length;i++){
       const data=bundle.files[i].data;
-      for(let offset=0;offset<data.length;offset+=MAX.chunk)await request(`/deployments/${deploymentId}/files/${i}`,{offset,data:data.subarray(offset,offset+MAX.chunk).toString('base64')},'PUT');
+      for(let offset=0;offset<data.length;offset+=UPLOAD_CHUNK_BYTES)await request(`/deployments/${deploymentId}/files/${i}`,{offset,data:data.subarray(offset,offset+UPLOAD_CHUNK_BYTES).toString('base64')},'PUT');
     }
     return await request(`/deployments/${deploymentId}/commit`,{});
   }catch(error){await request(`/deployments/${deploymentId}`,undefined,'DELETE').catch(()=>{});throw error;}

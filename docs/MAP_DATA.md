@@ -4,7 +4,28 @@
 
 ## 章节区域
 
-`chapters.js` 使用固定种子将全市显示范围划成十二个凸多边形游戏区域，与真实行政区边界无关，不改 OSM 几何、地点 ID 或坐标。原 110 个地址全部位于首章青藤旧城，新增地址按坐标归区。区域按十二章连续开放，地图遮罩与道路段求交校验共用同一边界；未开放区不能进入或途经，开放区中暂时无法经开放道路抵达的地址不发单。制作大纲与各区地址数量见 [CHAPTER_OUTLINES.md](CHAPTER_OUTLINES.md)。
+`CITY_REGION.administrative` 使用上海十六区的真实 OSM 多面体边界，与上海市界求交，保留凹形轮廓、洞和离散部分；区名仍虚构，不改地点 ID、坐标或道路。原 110 个地址全部位于首章青藤旧城。十六章按配置与十六区一一对应；地图遮罩与道路段求交共用同一边界，市外不按最近中心补区域。未开放区与市外不可借道，暂时无法沿开放区道路抵达的地址不发单。当前 484 个地址可沿市内道路抵达，青禾水乡一个地址仅能借道市外，暂不生成订单；沧澜群洲没有现有路网可达地址。制作大纲与各区地址数量见 [CHAPTER_OUTLINES.md](CHAPTER_OUTLINES.md)。
+
+## 行政边界复现
+
+静安区（relation 398353）和宝山区（398374）的完整几何不在 PBF 的可导出 area 中，使用 Overpass 同一快照补齐；主数据与补充数据 SHA-256、查询日期保存在行政数据中。行政区含市外农场与海域，通行范围与上海市界求交，标注点落在显示范围内陆地。
+
+下载补充文件的查询：
+
+```overpass
+[out:xml][timeout:90][date:"2026-09-26T20:22:51Z"];
+relation(id:398353,398374);
+(._;>;);
+out body;
+```
+
+保存为 artifacts/shanghai-district-supplement.osm 后运行：
+
+```powershell
+python scripts/import-shanghai-districts.py artifacts/shanghai-260926.osm.pbf artifacts/shanghai-district-supplement.osm
+```
+
+重新生成全市背景后再次执行行政边界导入。行政导入只更新 city-region-data.js 的行政字段，不改背景几何、制图分块、原路网或地点。已发布数据保持厘米精度，运行时 2 厘米容差仅处理坐标量化。
 
 ## 全市扩展数据
 

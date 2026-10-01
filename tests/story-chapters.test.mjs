@@ -2,6 +2,7 @@ import {throughNine, awakeningPending, afterAwakening} from './helpers/opening.m
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -30,9 +31,9 @@ const label=(s,expected)=>assert.equal(G.storyStageLabel(s),expected);
 test('前七章配置保留既有 ID 与后五章顺序，系统正式名称统一为外卖系统',()=>{
   assert.equal(G.SYSTEM_NAME,'外卖系统');
   assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
-  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
-  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.chapter),['第一章','第二章','第三章','第四章','第五章','第六章','第七章']);
-  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.title),['解锁外卖系统','初入仙途','城有第二面','夜路同行','阵眼苏醒','系统为何而来','人间即阵心']);
+  assert.deepEqual(G.STORY_STAGES.filter(s=>!['westward','river-relay','shared-ledger','coast-watch'].includes(s.id)).slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
+  assert.deepEqual(G.STORY_STAGES.filter(s=>!['westward','river-relay','shared-ledger','coast-watch'].includes(s.id)).slice(0,7).map(s=>s.chapter),['第一章','第二章','第四章','第六章','第七章','第八章','第九章']);
+  assert.deepEqual(G.STORY_STAGES.filter(s=>!['westward','river-relay','shared-ledger','coast-watch'].includes(s.id)).slice(0,7).map(s=>s.title),['解锁外卖系统','初入仙途','城有第二面','夜路同行','阵眼苏醒','系统为何而来','人间即阵心']);
   assert.equal(G.EVENTS.filter(e=>e.kind==='delivery'&&!e.deliveryNpc).length,60);
 });
 
@@ -105,12 +106,14 @@ for(const version of [16,17])test(`v${version} 旧首单待选与已解锁存档
 
 test('第三至第七章必须连续通过前章固定剧情和成长门槛',()=>{
   const s=fresh();s.flags.systemAwakened=true;s.stats.delivered=12;s.player.realm=1;label(s,'第二章 · 初入仙途');
-  s.flags.storyStreetVein=true;label(s,'第三章 · 城有第二面');
-  s.flags.storySecondCity=true;s.bonds.chen.met=true;s.bonds.lin.met=true;label(s,'第四章 · 夜路同行');
-  s.stats.delivered=18;s.player.realm=2;label(s,'第五章 · 阵眼苏醒');
-  s.stats.delivered=30;s.player.realm=3;label(s,'第五章 · 阵眼苏醒');
-  s.flags.storyLanternNetwork=true;label(s,'第六章 · 系统为何而来');
-  s.stats.delivered=42;s.player.realm=4;s.flags.storySystemDoubt=true;label(s,'第七章 · 人间即阵心');
+  s.flags.storyStreetVein=true;label(s,'第三章 · 把路记清楚');
+  s.flags.storyWestwardNote=true;s.stats.delivered=14;label(s,'第四章 · 城有第二面');
+  s.flags.storySecondCity=true;s.bonds.chen.met=true;s.bonds.lin.met=true;s.stats.delivered=16;label(s,'第五章 · 交给下一双手');
+  s.flags.storyRiverRelay=true;s.stats.delivered=18;label(s,'第六章 · 夜路同行');
+  s.stats.delivered=20;s.player.realm=2;label(s,'第七章 · 阵眼苏醒');
+  s.stats.delivered=30;s.player.realm=3;label(s,'第七章 · 阵眼苏醒');
+  s.flags.storyLanternNetwork=true;label(s,'第八章 · 系统为何而来');
+  s.stats.delivered=42;s.player.realm=4;s.flags.storySystemDoubt=true;label(s,'第九章 · 人间即阵心');
 });
 
 

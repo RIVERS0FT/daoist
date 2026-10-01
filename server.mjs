@@ -17,9 +17,57 @@ import './public/js/sect-stories.js';
 const G=globalThis.NightCourier;
 const ROOT=dirname(fileURLToPath(import.meta.url));
 const PUBLIC=join(ROOT,'public');
+const ITEM_ART_FILES=[
+  'pill-heal-v1.png',
+  'pill-stamina-v1.png',
+  'pill-qi-v1.png',
+  'pill-foundation-v1.png',
+  'pill-spiritpill-v1.png',
+  'pill-bodypill-v1.png',
+  'pill-greatqi-v1.png',
+  'pill-marrowpill-v1.png',
+  'pill-bloodpill-v1.png',
+  'pill-vitalpill-v1.png',
+  'pill-harmonypill-v1.png',
+  'pill-spiritqi-v1.png',
+  'herb-grass-v1.png',
+  'herb-leaf-v1.png',
+  'herb-moss-v1.png',
+  'herb-vine-v1.png',
+  'herb-algae-v1.png',
+  'herb-root-v1.png',
+  'herb-flower-v1.png',
+  'herb-mushroom-v1.png',
+  'herb-fruit-v1.png',
+  'herb-branch-v1.png',
+  'herb-seed-v1.png',
+  'herb-mineral-v1.png',
+  'herb-essence-v1.png',
+  'herb-insect-v1.png',
+  'item-mana-v1.png',
+  'item-fragment-v1.png',
+  'item-charm-v1.png',
+  'item-jade-v1.png',
+  'item-robe-v1.png',
+  'manual-system-v1.png',
+  'manual-body-v1.png',
+  'manual-alchemy-v1.png',
+  'manual-sword-v1.png',
+  'manual-talisman-v1.png',
+  'manual-mind-v1.png'
+];
+const ART_FILES=[
+  'night-courier-keyart-v1.png','zhou-rider-v1.png','lin-office-v1.png','game-icon-v1.png',
+  'player-male-rider-v1.png','player-male-rider-steady-v1.png',
+  ...['panel-corners','title-ornament','divider'].map(key=>`ui/${key}-v1.png`),
+  ...['panel-corners','title-ornament','divider'].map(key=>`ui/${key}-v2.png`),
+  ...ITEM_ART_FILES.map(file=>`items/${file}`),
+  ...['delivery','cultivation','alchemy','auction','sect','system','inventory','bonds','vehicle','rest','regions','help'].map(key=>`icons/${key}-v1.png`)
+];
 const FILES=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],
-  ...['city-data','city-region-data','city-routes','data','chapters','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map-art','map-region','map-tiles','map','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`]),
+  ...['city-data','city-region-data','city-routes','data','chapters','sects','npc-profiles','engine','sect-engine','sect-stories','clock','storage','progression','map-art','map-region','map-tiles','map','art','app'].map(x=>[`/js/${x}.js`,`js/${x}.js`]),
+  ...ART_FILES.map(file=>[`/art/${file}`,`art/${file}`]),
   ...['fflate.js','LICENSE.txt','README.txt'].map(x=>[`/vendor/fflate/${x}`,`vendor/fflate/${x}`]),
   ...Object.values(G.CITY_REGION.levels).flatMap(level=>Object.values(level.files)).map(file=>[`/map/region/${file}`,`map/region/${file}`]),
   ...['leaflet.js','leaflet.css','LICENSE.txt','README.txt','images/layers.png','images/layers-2x.png','images/marker-icon.png','images/marker-icon-2x.png','images/marker-shadow.png'].map(x=>[`/vendor/leaflet/${x}`,`vendor/leaflet/${x}`])

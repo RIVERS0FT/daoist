@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-01",
+  "mode": "built-in image_gen",
+  "transparent_background": true,
+  "style": "hand-painted low-saturation jade and teal enamel with fine warm-gold metal",
+  "assets": [
+    {
+      "id": "panel_corners",
+      "path": "public/art/ui/panel-corners-v1.png",
+      "width": 1254,
+      "height": 1254,
+      "prompt": "Use case: stylized-concept\nAsset type: production-ready transparent raster UI decoration for an original Chinese urban cultivation RPG, not a screenshot or mockup.\nPrimary request: Draw ONE square hollow UI frame ornament consisting of exactly four matching corner pieces. Low-saturation dark jade and teal enamel, thin aged warm-gold metal filigree, small carved jade insets, delicate handmade painterly texture. Calm elegant Chinese fantasy style matching teal and gold hand-painted inventory icons.\nComposition: 1024x1024 square layout. Each corner ornament occupies only the outer 22 percent at its corresponding corner, with short horizontal and vertical arms forming a right angle. Four corners are symmetric rotations of the same design. The middle 56 percent and the long spaces between corners must be completely transparent, with no continuous side border. Ornament reaches near the canvas edge but leaves a tiny 2 percent safety margin. Keep corner decorations slender and readable when scaled to 40 pixels. All four ornaments are part of ONE frame asset, not separate labeled samples.\nBackground: genuinely transparent alpha everywhere outside the corner artwork, including the entire hollow center. No solid rectangle, black backdrop or drawn checkerboard.\nConstraints: no text, letters, numbers, icons for controls, characters, symbols of a faction, logos or watermarks; no exaggerated glow, heavy shadows, sparkles or animation; ornament never covers the central content area."
+    },
+    {
+      "id": "title_ornament",
+      "path": "public/art/ui/title-ornament-v1.png",
+      "width": 2172,
+      "height": 724,
+      "prompt": "Use case: stylized-concept\nAsset type: a single transparent horizontal title ornament for a Chinese urban cultivation RPG interface, production raster asset, not a mockup.\nPrimary request: One delicate, hand-painted decorative horizontal crest with a small pale jade lotus bud in the exact center, flanked by fine symmetrical warm-gold curled metal tracery and quiet teal enamel accents. Original calm cultivated style, matching muted deep-teal and warm-gold game UI, slightly antique texture, restrained highlights.\nComposition: landscape canvas roughly 3:1. Artwork is a single slim horizontal ornament centered in the canvas, no thicker than the central 25 percent of canvas height. Lotus is tiny, at most 8 percent of canvas width. Tracery tapers toward both ends, leaving clear transparent margins. No plaque or text box; designed to sit ABOVE a real HTML title without covering any letters.\nBackground: true transparent alpha, no white or black backdrop and no drawn checkerboard.\nConstraints: no title text, letters, numbers, logo, watermark, people, buildings, faction symbol, large magic ring or bright aura. Single crest only, no variants or sprite grid."
+    },
+    {
+      "id": "divider",
+      "path": "public/art/ui/divider-v1.png",
+      "width": 2172,
+      "height": 724,
+      "prompt": "Use case: stylized-concept\nAsset type: a single transparent horizontal section divider for an original Chinese urban cultivation RPG interface.\nPrimary request: Paint one extremely slim elegant separator, two fine aged warm-gold lines tapering away from a tiny central jade diamond and subtle cloud-scroll knots. Low-saturation teal and warm gold, handcrafted painterly texture, restrained metal highlights, readable at 8 to 12 CSS pixels high. It coordinates with jade-and-gold circular navigation icons and antique panel corners.\nComposition: wide horizontal canvas about 3:1. The entire decoration occupies only a narrow strip in the middle 10 percent of canvas height and about 86 percent of width; all remaining space is transparent. One complete symmetrical divider, without labels or additional samples.\nBackground: true transparent alpha everywhere outside the slender filigree and central jade, no solid backdrop or drawn checkerboard.\nConstraints: absolutely no text, letters, numbers, logo, watermark, people, faction emblems, thick plaque, long tassels, strong bloom or animated effects."
+    }
+  ]
+}

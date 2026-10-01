@@ -1316,7 +1316,7 @@ def higher_story_browser_checks(browser):
               s.flags.firstOrder=true;s.flags.systemAwakened=true;
               s.bonds.lin.met=true;s.bonds.chen.met=true;
               s.unlockedFeatures=['system','cultivation','practice'];s.claimed=['q1'];
-              for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'))s.flags[e.flag]=true;
+              for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'&&(!e.districtChapter||e.districtChapter<=10||i===4)))s.flags[e.flag]=true;
               for(const c of G.HIGHER_STORY_CHAPTERS.slice(0,i))for(const id of c.events)s.flags[G.EVENTS.find(e=>e.id===id).flag]=true;
               return s;
             }''', chapter_index)
@@ -1329,7 +1329,7 @@ def higher_story_browser_checks(browser):
             page.click('[data-ui="close"]')
             page.click('#game-nav [data-panel="help"]')
             page.click('#higher-story-help summary')
-            assert '第十二章' in page.locator('#higher-story-help').inner_text()
+            assert '第十六章' in page.locator('#higher-story-help').inner_text()
             assert '124' in page.locator('#higher-story-help').inner_text()
             page.click('[data-ui="close"]')
             page.click('#game-nav [data-panel="rest"]');page.click('[data-act="rest"]')
@@ -1669,7 +1669,7 @@ def male_npc_browser_checks(browser):
           s.schemaVersion=19;for(const id of G.NEW_MALE_NPC_IDS)delete s.bonds[id];return s;}''')
         assert page.evaluate('''s=>{try{NightCourier.sanitizeSave(s);return false;}catch(e){return e.message.includes('不支持此存档版本');}}''', legacy)
         fixture(page, current(page), unlock_gameplay=False)
-        assert current(page)['schemaVersion'] == 24
+        assert current(page)['schemaVersion'] == 25
         assert len(current(page)['bonds']) == 21
         assert all(not b['met'] for b in current(page)['bonds'].values())
         assert page.locator('#game-nav [data-panel="bonds"]').count() == 0
@@ -1772,9 +1772,11 @@ def zhou_story_browser_checks(browser):
             data = page.evaluate('''stage=>{const G=NightCourier,s=G.newGame('同路与歧路',window.__live.mode,519);s.id=window.__live.id;
               s.position='market';s.location=null;s.unlockedPlaces.push('market');s.player.money=20000;s.player.realm=4;
               s.stats.delivered=44;s.flags.firstOrder=true;s.flags.systemAwakened=true;
-              for(const e of G.EVENTS)if(e.flag&&!e.higherChapter)s.flags[e.flag]=true;
+              s.stats.trained=1;s.claimed=['q1'];s.bonds.lin.met=true;
+              // Completed ninth-chapter progress; 44 deliveries cannot finish later district scenes.
+              for(const e of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&!e.higherChapter&&e.id!=='story-sect-invitation'&&(!e.districtChapter||e.districtChapter<10)))s.flags[e.flag]=true;
               Object.assign(s.bonds.zhou,{met:true,stage,path:G.zhouPath(stage),affinity:stage>=9?0:60,trust:stage>=9?0:30});
-              G.syncFeatureUnlocks(s,true);return s;}''', stage)
+              G.syncFeatureUnlocks(s,true);return G.sanitizeSave(s);}''', stage)
             data.update(extra)
             fixture(page, data, unlock_gameplay=False)
         def card():
@@ -1874,8 +1876,10 @@ def five_sects_browser_checks(browser):
             new_game(page,'五宗试炼','ai')
             edits=page.evaluate('''(place)=>{const G=NightCourier,s=window.__live,flags={...s.flags,firstOrder:true,systemAwakened:true};
               for(const k of G.STORY_FLAG_KEYS.slice(0,6))flags[k]=true;
+              for(const k of ['storyWestwardNote','storyRiverRelay'])flags[k]=true;
               return {position:place,location:null,player:{...s.player,realm:4,money:100000,coins:10000},stats:{...s.stats,delivered:42,trained:1},claimed:['q1'],flags,
-                unlockedPlaces:G.PLACES.filter(p=>p.permanent).map(p=>p.id),unlockedFeatures:G.FEATURE_UNLOCKS.filter(f=>!['sect','bonds'].includes(f.id)).map(f=>f.id)};
+                bonds:{...s.bonds,lin:{...s.bonds.lin,met:true},chen:{...s.bonds.chen,met:true}},
+                unlockedPlaces:G.PLACES.filter(p=>p.permanent).map(p=>p.id),unlockedFeatures:G.FEATURE_UNLOCKS.filter(f=>f.id!=='sect').map(f=>f.id)};
             }''',place)
             fixture(page,edits,unlock_gameplay=False)
             assert page.locator('#game-nav [data-panel="sect"]').count()==0
@@ -1991,6 +1995,7 @@ def leaflet_browser_checks(browser):
         marker_before = player_anchor_snapshot(page)
         for multiplier in [1.2, 1.2, 1/1.2]:
             page.evaluate('(multiplier)=>window.__map.zoom(multiplier)', multiplier)
+            page.wait_for_function('!window.__map.zoomTween')
             marker_after = player_anchor_snapshot(page)
             for part in ['ground', 'core', 'hit']:
                 assert abs(marker_after[part]['width']-marker_before[part]['width']) <= .3
@@ -2075,6 +2080,7 @@ def leaflet_browser_checks(browser):
                     cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':pinch_points(radius)})
                 cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
             page.wait_for_function('(scale)=>window.__map.scale>scale',arg=scale_before)
+            page.wait_for_function('!window.__map.zoomTween')
             marker_after=player_anchor_snapshot(page)
             for part in ['ground','core','hit']:
                 assert abs(marker_after[part]['width']-marker_before[part]['width']) <= .3
@@ -2417,7 +2423,7 @@ def core_browser_checks(browser):
         assert bounds['y'] >= viewport['y'] and bounds['y']+bounds['height'] <= viewport['y']+viewport['height']+.5
         mobile.wait_for_function('!window.__map.baseOverlay.isLoading()')
         assert mobile.locator('.leaflet-tile-container canvas').count()>0
-        assert mobile.evaluate('window.__map.baseOverlay.region.territories.length') == 12
+        assert mobile.evaluate('window.__map.baseOverlay.region.territories.length') == 16
         mobile.screenshot(path=str(OUT/f'map-overview-{width}.png'))
         before_position = current(mobile)['position']
         mobile.click('[data-ui="locate"]')

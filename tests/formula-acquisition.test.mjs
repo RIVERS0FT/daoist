@@ -8,6 +8,7 @@ test('当前档已购的专属方保留，过去已完成剧情/羁绊的奖励�
 });
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';

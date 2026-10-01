@@ -22,6 +22,7 @@ test('当前档永久权限保持有效，新档独立保留第一章，取消�
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -48,7 +49,7 @@ const unlockPending=awakeningPending;
 test('外卖系统正式名称统一，保留首章配送与七章稳定ID',()=>{
   assert.equal(G.SYSTEM_NAME,'外卖系统');
   assert.equal(G.FEATURE_UNLOCKS.find(f=>f.id==='system').name,G.SYSTEM_NAME);
-  assert.deepEqual(G.STORY_STAGES.slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
+  assert.deepEqual(G.STORY_STAGES.filter(s=>!['westward','river-relay','shared-ledger','coast-watch'].includes(s.id)).slice(0,7).map(s=>s.id),['mortal','bound','second-city','circle','guardian','system','truth']);
   assert.equal(G.STORY_STAGES[0].title,'解锁外卖系统');
   assert.equal(G.STORY_STAGES[1].title,'初入仙途');
   assert.equal(G.EVENTS.find(e=>e.id==='system-awakening').title,'第一章 · 解锁外卖系统');

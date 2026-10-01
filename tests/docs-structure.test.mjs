@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -49,8 +50,8 @@ test('当前玩法设计与可信配置的核心规模保持同步',()=>{
   assert.ok(design.includes(`当前 schema：**v${G.VERSION}**`));
   assert.ok(design.includes(`${G.PLACES.length} 个地点`));
   assert.ok(design.includes(`当前共有 ${G.NPCS.length} 位具名羁绊 NPC`));
-  assert.ok(design.includes(`当前固定主线共十二章`));
-  assert.equal(G.STORY_STAGES.length,12);
+  assert.ok(design.includes(`当前固定主线共十六章`));
+  assert.equal(G.STORY_STAGES.length,16);
   assert.ok(design.includes(`${G.ALCHEMY_MATERIALS.length} 种药材`));
   assert.ok(design.includes(`${G.ALCHEMY_RECIPES.length} 张丹方`));
   assert.ok(design.includes(`${G.CAULDRONS.length-1} 口可拥有药鼎`));

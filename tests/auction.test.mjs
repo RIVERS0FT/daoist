@@ -2,6 +2,7 @@ import {ackUnlocks} from './unlock-helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../public/js/city-data.js';
+import '../public/js/city-region-data.js';
 import '../public/vendor/fflate/fflate.js';
 import '../public/js/city-routes.js';
 import '../public/js/data.js';
@@ -18,12 +19,13 @@ const read=s=>G.sanitizeSave(G.clone(s));
 const finish=s=>{for(let i=0;s.activity&&!s.gameOver&&i<2000;i++)s=G.advance(s,1);return s;};
 const choose=(s,index)=>act(s,'choose',{eventId:s.pending.id,index});
 const atomic=(s,action,p={})=>{const before=JSON.stringify(s),r=G.perform(s,action,p);assert.equal(r.ok,false);assert.equal(r.state,s);assert.equal(JSON.stringify(s),before);return r.error;};
-// Auction-isolated fixtures suppress unrelated story prompts but do not grant goods or auction wins.
+// Legal auction prerequisites keep later chapters incomplete, even for catalog realm samples.
 function eligible(seed=123,realm=0){
-  const s=G.newGame('万宝客','classic',seed);s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);s.unlockedFeatures=G.FEATURE_UNLOCKS.map(f=>f.id);
+  const s=G.newGame('万宝客','classic',seed);s.unlockedPlaces=G.PLACES.filter(p=>!p.regional).map(p=>p.id);
   s.position='market';s.minutes=1080;s.player.money=10000;s.player.realm=realm;
-  s.flags.firstOrder=true;for(const e of G.EVENTS.filter(e=>e.kind==='story'&&!e.higherChapter))s.flags[e.flag]=true;
-  G.syncFormulaRewards(s);return s;
+  s.stats.delivered=10;s.stats.trained=1;s.claimed=['q1'];
+  s.flags.firstOrder=true;s.flags.systemAwakened=true;s.flags.storyStreetVein=true;
+  G.syncFormulaRewards(s);G.syncFeatureUnlocks(s,true);return read(s);
 }
 const catalog=(seed=123,realm=0)=>act(eligible(seed,realm),'auctionCatalog');
 function budgets(s,index=0,steps=8,spec={}){
@@ -32,6 +34,19 @@ function budgets(s,index=0,steps=8,spec={}){
 }
 const bid=(s,index=0,raise=1)=>act(s,'auctionBid',{id:s.auction.lots[index].id,raise});
 function win(s,index=0){s=bid(s,index);for(let i=0;i<12;i++){s=finish(s);if(!s.pending)return s;s=choose(s,0);}throw new Error('竞拍未在预算内结束');}
+
+test('拍卖隔离夹具满足十单与炼药前置，高境界商品样本不提前完成后续主线',()=>{
+  for(let realm=0;realm<6;realm++){
+    const s=eligible(123,realm);
+    assert.equal(s.stats.delivered,10);assert.equal(s.flags.systemAwakened,true);
+    assert.ok(s.claimed.includes('q1'));assert.equal(s.stats.trained,1);
+    assert.equal(G.storyEventComplete(s,'story-street-vein'),true);
+    assert.equal(G.featureUnlocked(s,'alchemy'),true);assert.equal(G.featureUnlocked(s,'auction'),true);
+    assert.equal(G.chapterNumber(s),2);
+    for(const event of G.EVENTS.filter(e=>e.kind==='story'&&e.flag&&e.id!=='story-street-vein'))assert.notEqual(s.flags[event.flag],true,event.id);
+    assert.deepEqual(read(s).flags,s.flags);assert.equal(s.auction.wins,0);
+  }
+});
 
 test('拍卖场需要已开放炼药与十单，未开启指令原子失败',()=>{
   const s=G.newGame('新客','classic',1);s.position='market';s.minutes=1080;s.player.money=99999;

@@ -2,12 +2,18 @@
 (function (root) {
   'use strict';
   const G = root.NightCourier = root.NightCourier || {};
-  G.VERSION = 24;
-  G.APP_VERSION = '1.21.0';
+  G.VERSION = 25;
+  G.APP_VERSION = '1.22.0';
   G.SYSTEM_UNLOCK_DELIVERIES = 10;
   G.STARTING_PLACES = Object.freeze(['home','garage']);
   G.TITLE = '外卖修仙录';
   G.SYSTEM_NAME = '外卖系统';
+  G.PLAYER_APPEARANCES = Object.freeze([
+    Object.freeze({id:'male-rider',name:'清朗骑手'}),
+    Object.freeze({id:'male-rider-steady',name:'沉稳骑手'})
+  ]);
+  G.DEFAULT_APPEARANCE_ID = 'male-rider';
+  G.playerAppearance = id => typeof id==='string' ? G.PLAYER_APPEARANCES.find(a=>a.id===id)||null : null;
   G.WORLD = {width:G.CITY_DATA.width,height:G.CITY_DATA.height,metersPerUnit:1};
   G.CHARGE = Object.freeze({ minutes: 10, cost: 8 });
   G.ALCHEMY_REALM_BY_TIER = Object.freeze([0,0,0,1,1,2,3,3,4,5]);
